@@ -1,0 +1,108 @@
+{
+ "part": "dev",
+ "commit": "23e3e9215d723eeb47d30edd4b819d6dbec6aa1c",
+ "config_sha256": "506ce620d041373c6b312ead25deed6221e79704fe3ce2fa60d24add0ea31c1e",
+ "main_method": "unet",
+ "threshold": 0.37,
+ "threshold_status": "calibrated (platt) and chosen on validation, D-029",
+ "n_chips": 69,
+ "valid_mask_sha256": {
+  "USA": "cf89ac0b49f7819ea5581c1a8e19aed53fe9f4451a11d1472361f62e5a465bbc",
+  "ALL": "cf89ac0b49f7819ea5581c1a8e19aed53fe9f4451a11d1472361f62e5a465bbc"
+ },
+ "bootstrap_delta_iou": {
+  "USA": {
+   "delta": 0.07575173273600988,
+   "ci95": [
+    0.04677920918454042,
+    0.10706801913572528
+   ],
+   "share_gt_0": 1.0,
+   "n": 2000,
+   "n_used": 2000
+  },
+  "ALL": {
+   "delta": 0.07575173273600988,
+   "ci95": [
+    0.04677920918454042,
+    0.10706801913572528
+   ],
+   "share_gt_0": 1.0,
+   "n": 2000,
+   "n_used": 2000
+  }
+ },
+ "calibration": {
+  "USA": {
+   "ece": 0.05097939976100897,
+   "brier": 0.028915340371401102
+  },
+  "ALL": {
+   "ece": 0.05097939976100897,
+   "brier": 0.028915340371401102
+  }
+ },
+ "uncertainty": {
+  "USA": {
+   "n_error": 794189,
+   "n_correct": 16844641,
+   "mean_u_error": 0.7023857447354318,
+   "mean_u_correct": 0.196296146525889,
+   "auroc": 0.8635130361837985
+  },
+  "ALL": {
+   "n_error": 794189,
+   "n_correct": 16844641,
+   "mean_u_error": 0.7023857447354318,
+   "mean_u_correct": 0.196296146525889,
+   "auroc": 0.8635130361837985
+  }
+ },
+ "jrc_iou": {
+  "main": {
+   "jrc_1": 0.9908463570369097,
+   "jrc_0": 0.35163201831752006
+  },
+  "baseline": {
+   "jrc_1": 0.9615691923340948,
+   "jrc_0": 0.2660701770205301
+  }
+ },
+ "proxy_check": {
+  "status": "planned",
+  "test_chip": "USA_1010394",
+  "control_points": "10 точек портфеля тем же правилом `python -m floodvalue assets` (seed 20260925, только валидность S1; прогноз и метки не читаются); оцениваются точки со статусом ok и меткой 0/1",
+  "fixed_v_q": "configs/assets.yaml (учебные V и q, те же, что в asset_loss.csv)",
+  "n_points": 10,
+  "error_metric": "MAE и сумма |EL − EL_ref|, руб.; EL = p·V·q, EL_ref = y·V·q",
+  "result": {
+   "demo_chip": {
+    "n_placed": 10,
+    "n_points": 10,
+    "n_excluded_label_invalid": 0,
+    "n_excluded_no_data": 0,
+    "mae_rub": 93195.38665,
+    "sum_abs_error_rub": 931953.8665,
+    "sum_el_rub": 931953.8665,
+    "sum_el_ref_rub": 0.0
+   },
+   "all_chips_of_part": {
+    "n_placed": 690,
+    "n_points": 689,
+    "n_excluded_label_invalid": 1,
+    "n_excluded_no_data": 0,
+    "mae_rub": 260944.63289226417,
+    "sum_abs_error_rub": 179790852.06277,
+    "sum_el_rub": 273304620.50577,
+    "sum_el_ref_rub": 145700000.0
+   },
+   "note": "прокси по ручной метке воды, не фактические потери",
+   "independent": false
+  }
+ },
+ "error_maps": [
+  "USA_1010394",
+  "USA_955053"
+ ],
+ "baseline_crosscheck": "совпадает (TP/FP/FN/TN и valid_mask_sha256)"
+}
