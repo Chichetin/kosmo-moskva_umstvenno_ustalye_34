@@ -206,6 +206,8 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
 `assets_metadata.json` модуля `assets` (D-018) экспорт переносит так: `seed`,
 `placement_rule` → `portfolio`; `el_model`, `p_extraction_rule`, `status_rule` →
 `expected_loss`; `uncertainty` → `uncertainty` (пока `binary_entropy_bits`, биты, временно).
+Необязательный `inspection_priority` (D-035: очерёдность осмотра рядом с `rank`, который
+не меняется) → `expected_loss.inspection_priority`; в прогоне до D-035 — `null`.
 
 ## 9. `source_manifest.json` (схема `SourceManifest`)
 

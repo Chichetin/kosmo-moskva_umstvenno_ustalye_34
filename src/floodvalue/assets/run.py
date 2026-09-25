@@ -17,10 +17,19 @@ from floodvalue.assets.portfolio import (
     P_EXTRACTION_RULE,
     PLACEMENT_RULE,
     STATUS_RULE,
+    UNCERTAINTY_NAME,
     UNCERTAINTY_RULE,
     assess_assets,
     load_asset_types,
     place_assets,
+)
+from floodvalue.assets.priority import (
+    P_DRY,
+    RULE,
+    SOCIAL_CLASSES,
+    SOCIAL_MAX_POSITION,
+    UNCERTAINTY_HIGH,
+    inspection_order,
 )
 from floodvalue.assets.sensitivity import (
     P_RULE,
@@ -28,6 +37,7 @@ from floodvalue.assets.sensitivity import (
     SENSITIVITY_FIELDS,
     V_RULE,
     el_sensitivity,
+    inspection_order_changes,
 )
 from floodvalue.paths import data_dir, output_dir
 
@@ -105,6 +115,15 @@ def run(args) -> int:
     _write_csv(out / "asset_loss.csv", LOSS_FIELDS, [{**r, "chip_id": chip_id} for r in loss_rows])
 
     sensitivity_rows = el_sensitivity(assets, loss_rows)
+    # flood_mask.tif threshold, only to explain "dry on the map but at risk" in the reasons;
+    # a prediction.json of another chip is ignored (same chip_id rule as export).
+    prediction_path = out / "prediction.json"
+    prediction = (json.loads(prediction_path.read_text(encoding="utf-8"))
+                  if prediction_path.is_file() else {})
+    mask_threshold = (prediction.get("threshold")
+                      if prediction.get("chip_id") in (None, chip_id) else None)
+    order = inspection_order(loss_rows, {a.asset_id: a.asset_class for a in assets},
+                             mask_threshold=mask_threshold)
     _write_csv(out / "assets_sensitivity.csv", SENSITIVITY_FIELDS, sensitivity_rows)
 
     meta = {
@@ -116,13 +135,24 @@ def run(args) -> int:
         "p_extraction_rule": P_EXTRACTION_RULE,
         "el_model": "EL = p_flood * asset_value_rub * vulnerability_coef",
         "status_rule": STATUS_RULE,
-        "uncertainty": {"name": "binary_entropy_bits", "status": "temporary_unverified",
+        "uncertainty": {"name": UNCERTAINTY_NAME, "status": "temporary_unverified",
                         "rule": UNCERTAINTY_RULE},
         "unassessed_asset_ids": [r["asset_id"] for r in loss_rows if r["status"] != "ok"],
         "sensitivity": {"p_rule": P_RULE, "v_rule": V_RULE, "q_rule": Q_RULE,
                         "n_scenarios": len(sensitivity_rows),
                         "note": "assets_sensitivity.csv only; budget/rate scenarios are "
                                 "procurement_sensitivity.csv (P18b)"},
+        "inspection_priority": {
+            "decision": "D-035", "rule": RULE, "p_dry": P_DRY,
+            "uncertainty_measure": UNCERTAINTY_NAME, "uncertainty_high": UNCERTAINTY_HIGH,
+            "social_classes": list(SOCIAL_CLASSES), "social_max_position": SOCIAL_MAX_POSITION,
+            "mask_threshold": mask_threshold,
+            "n_not_assessed": sum(o["group"] == "not_assessed" for o in order),
+            "order": order,
+            "scenario_changes": inspection_order_changes(assets, loss_rows),
+            "scenario_note": "очерёдность пересчитана тем же правилом в каждом сценарии p/V/q "
+                             "assets_sensitivity.csv; пустой список — без изменений",
+        },
     }
     (out / "assets_metadata.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1),
                                               encoding="utf-8")
