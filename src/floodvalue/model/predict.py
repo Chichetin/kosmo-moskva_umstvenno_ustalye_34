@@ -21,7 +21,8 @@ import rasterio
 from floodvalue.paths import MODELS_DIR, data_dir, output_dir
 
 METHODS = {"unet": "floodvalue.model.unet.predict",
-           "baseline": "floodvalue.baseline.predict"}
+           "baseline": "floodvalue.baseline.predict",
+           "pixel": "floodvalue.model.pixel.predict"}
 DEFAULT_METHOD = "unet"
 P_NODATA = -9999.0
 MASK_NODATA = 255
