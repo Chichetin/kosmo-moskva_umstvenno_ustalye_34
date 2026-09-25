@@ -118,6 +118,29 @@ Mekong, Bolivia) не используются нигде, кроме будущ
 раздел «Ограничения и развитие»). Полный сквозной путь до 12 файлов на другом чипе —
 подраздел ниже.
 
+### Любой S1-файл вне HandLabeled (например S1Weak)
+
+- любой из 446 HandLabeled: `make all CHIP=<chip_id> BUDGET=<руб>` (подраздел ниже);
+- любой S1-файл: `python -m floodvalue predict --s1 <path>` (или `make predict S1=<path>`).
+
+`--s1` принимает любой 2-канальный S1 GeoTIFF (VV, VH в dB, NaN = нет данных), например
+официальный `WeaklyLabeled/S1Weak/<chip>_S1Weak.tif`, и пишет `flood_probability.tif`,
+`flood_mask.tif`, `uncertainty.tif`, `flood_probability_range.tif`, `prediction.json` на
+сетке входного файла в `$FLOODVALUE_OUTPUT_DIR/<chip_id>` (`chip_id` — имя файла до
+`_S1`; `--out` переопределяет каталог). Метод, калибратор и порог — те же, что у
+`--chip`; метка не читается, метрики не считаются, в `prediction.json` —
+`"label_status": "no_label"`. Проверено на `India_1029501_S1Weak.tif` (train-событие) —
+`docs/verification/predict-s1.md`:
+
+```bash
+uv run --frozen python -m floodvalue predict --s1 data/raw/WeaklyLabeled/S1Weak/India_1029501_S1Weak.tif
+# {"chip_id": "India_1029501", "method": "unet", "s1_file": "India_1029501_S1Weak.tif", ..., "threshold": 0.37, ..., "valid_pixels": 262144, ..., "label_status": "no_label"}
+```
+
+Граница: `assets`/`procure`/`export` (и `make all`) пока читают S1 только из
+`HandLabeled/S1Hand` — сквозной путь до 12 файлов на файле вне HandLabeled не
+поддержан, только карта `predict`.
+
 ### Полный запуск на другом официальном чипе
 
 Жюри может самостоятельно повторить inference на любом другом официальном S1-чипе
