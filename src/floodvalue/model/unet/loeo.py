@@ -310,10 +310,14 @@ def markdown_table(rows: list[dict]) -> str:
     for r in rows:
         delta = "—" if not r.get("delta_iou_vs") else (
             f"{_num(r['delta_iou'])} [{_num(r['delta_ci95_lo'])}; {_num(r['delta_ci95_hi'])}]")
-        lines.append(f"| {r['event']} | {r['method']} | {_num(r['iou'])} "
+        # USA*: D-019 hyperparameters, the VH channel and epoch 19 were chosen on USA (dev).
+        event = r["event"] + ("*" if r["event"] == "USA" else "")
+        lines.append(f"| {event} | {r['method']} | {_num(r['iou'])} "
                      f"[{_num(r['iou_ci95_lo'])}; {_num(r['iou_ci95_hi'])}] | {_num(r['f1'])} | "
                      f"{_num(r['precision'])} | {_num(r['recall'])} | {delta} | "
                      f"{r['n_pixels']} |")
+    lines.append("\n\\* USA — dev D-019: гиперпараметры, канал VH и эпоха 19 выбраны на нём, "
+                 "фолд не полностью независим.")
     return "\n".join(lines) + "\n"
 
 
@@ -331,6 +335,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--table-from", default=None,
                    help="print the markdown table of <dir>/loeo-metrics.csv and exit")
     return p.parse_args(argv)
+
+
+def git_commit() -> str:
+    """Commit of the code that produced the numbers (FLOODVALUE_COMMIT or `git rev-parse`)."""
+    import os
+    import subprocess
+
+    if os.environ.get("FLOODVALUE_COMMIT"):
+        return os.environ["FLOODVALUE_COMMIT"]
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True,
+                                       cwd=Path(__file__).parent).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return ""
 
 
 def limit_per_event(ids: list[str], n: int) -> list[str]:
@@ -389,7 +407,7 @@ def main(argv: list[str] | None = None) -> int:
                               else "cpu"),
                    "versions": {"python": platform.python_version(), "torch": torch.__version__,
                                 "numpy": np.__version__},
-                   "command": command}
+                   "command": command, "commit": git_commit()}
         (out / "loeo-summary.json").write_text(json.dumps(summary, indent=2) + "\n", "utf-8")
     print(f"done in {round(time.time() - t_all)}s -> {out}", flush=True)
     return 0

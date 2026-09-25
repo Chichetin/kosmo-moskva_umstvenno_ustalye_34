@@ -202,7 +202,8 @@ def test_limit_per_event_and_markdown_table():
            "delta_iou_vs": "baseline_fold", "delta_iou": "0.1", "delta_ci95_lo": "",
            "delta_ci95_hi": "0.2", "n_pixels": "10"}
     table = loeo.markdown_table([row])
-    assert "| USA | unet_e19 | 0,500 [0,400; 0,600] |" in table
+    assert "| USA* | unet_e19 | 0,500 [0,400; 0,600] |" in table
+    assert "USA — dev D-019" in table
     assert "0,100 [—; 0,200]" in table
 
 
@@ -236,3 +237,10 @@ def test_held_out_features_use_the_fold_training_normalization(monkeypatch):
     (train_ids, m_tr, s_tr), (held_ids, m_h, s_h) = calls
     assert train_ids == fold["train"] and held_ids == fold["held_out"]
     assert (m_h, s_h) == (m_tr, s_tr)
+
+
+def test_git_commit_is_recorded(monkeypatch):
+    monkeypatch.setenv("FLOODVALUE_COMMIT", "abc123")
+    assert loeo.git_commit() == "abc123"
+    monkeypatch.delenv("FLOODVALUE_COMMIT")
+    assert len(loeo.git_commit()) in (0, 40)
