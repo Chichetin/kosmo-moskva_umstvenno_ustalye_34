@@ -147,7 +147,9 @@ def test_validation_run_writes_report_on_identical_pixels(data_root, tmp_path, m
     assert 0 <= s["calibration"]["ALL"]["ece"] <= 1
     md = (out / "eval-validation.md").read_text(encoding="utf-8")
     assert "не фактические потери" in md and "Test не читался" in md
-    assert "сырая p" in md                                  # calibration not wired yet
+    calibrated = (E.MODELS_DIR / "unet" / "calibration.json").exists()   # #20, D-029
+    assert ("Калибровка: применена в predict" in md) == calibrated
+    assert ("сырая p" in md) == (not calibrated)
     with open(out / "eval-validation-proxy.csv", newline="", encoding="utf-8") as f:
         proxy = list(csv.DictReader(f))
     for r in proxy:                                         # EL_ref = y·V·q on scored points
