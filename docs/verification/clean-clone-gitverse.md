@@ -4,7 +4,33 @@
 `make all`. Демо-чип до `eval-test` — `Sri-Lanka_713926` (validation, D-010); другой чип —
 `Nigeria_1095404` (validation, не train, не демо). Test-чипы не читались.
 
-## Прогон 2 — 25.09 23:46, GitVerse @ `6fe66f0`, путь жюри без обходов — ✅ (действующий статус)
+## Прогон 3 — 26.09 00:30, GitVerse @ `6d8e99d`, путь жюри без обходов — ✅ (действующий статус)
+
+GitVerse `main`, `master` и `lfs-probe` = `6d8e99d` (синхронизация с загрузкой LFS через PUT с
+Content-Length, #98; `--verify` прошёл). Обычный клон с включённым git lfs, данные из `make data` с нуля (прогон 1b).
+
+```bash
+git clone https://gitverse.ru/hackrus.experts/kosmo-moskva_umstvenno_ustalye_34.git j2 && cd j2
+# HEAD=6d8e99d91b75…, ветка по умолчанию lfs-probe, 265 файлов
+git lfs ls-files -s   # 6 файлов, все «*»: models/pixel/model.joblib (488 KB), member_0..4.pt (7.8 MB)
+sha256sum models/unet/member_*.pt models/pixel/model.joblib   # 6c2df137…, e077be95…, 8ff688ab…, 80745de0…, 6aa23270…, 6672fa09… = OID LFS
+uv sync --frozen && uv run --frozen pytest -o addopts="" -q   # 612 passed in 176.74s
+```
+
+| Шаг | Команда | Результат |
+|---|---|---|
+| Сквозной путь | `make all` | A 0,00; B 42 465,93 руб. (`в бюджете False`); C 4 905,96 руб., `Z-A02`, `Z-A10`; `validate` 12/12 |
+| Смена бюджета | `make all BUDGET=20000` | C 15 939,51 руб., 6 зон (`E-1`, `E-2`, `Z-A03`, `Z-A06`, `Z-A07`, `U-3`); `validate` 12/12 |
+| p/маска/порог не меняются | `sha256sum …/flood_{probability,mask}.tif`, `threshold` в `run_metadata.json` (5000 и 20000) | `b767ad16cf4c3c88…`, `f38ec062c6736074…`, 0,37 в обоих — те же, что в прогонах 0–2 |
+| Другой чип | `make all CHIP=Nigeria_1095404` | `validate` 12/12 |
+| Интерфейс | `make app` | ❌ `stage 'app' not implemented yet` — #83 |
+
+План C при 20 000 руб. отличается от прогона 2 (19 272,96 руб., 8 зон): между `6fe66f0` и `6d8e99d`
+менялся `src/floodvalue/procurement/` (#99); p, маска и порог те же. На момент записи GitVerse
+`6d8e99d` отстаёт от `origin/main` (в том числе `predict --s1` #113, `src/floodvalue/app/`) — после
+следующей синхронизации прогон повторяется.
+
+## Прогон 2 — 25.09 23:46, GitVerse @ `6fe66f0`, путь жюри без обходов — ✅
 
 Веса дозалиты в LFS GitVerse (PUT с Content-Length вместо chunked). Обычный клон, git lfs
 включён, без `GIT_LFS_SKIP_SMUDGE` и без remote GitHub.
