@@ -38,7 +38,7 @@
   "input_model_sha256": "504944cd880c0b2e94acf2481e6ddc4db985ddbd64d550a3591321e8b0cc1bb3",
   "calibration_sha256": "3e5bad6c4c9da303aaece5cda47b468807dedceb92527b341b2e6b6a255ee60f",
   "split_sha256": "0098346e0f87297501409a1a8522afab6209e35f56e8cf1b68996909c8b63c75",
-  "created_at": "2026-09-25T17:25:14+00:00",
-  "commit": "b678051ec8b648f8729c5c799f94faf9b05e9e90",
+  "created_at": "2026-09-25T20:59:31+00:00",
+  "commit": "9d7201d5955c09ecf58993d866ac794181dde01a",
   "report": "docs/verification/uncertainty-val.md"
 }

@@ -98,9 +98,10 @@ def uncertainty_meta(has_raster: bool, has_range: bool, pred_unc: dict) -> dict:
         meta = {"name": "binary_entropy_bits", "units": "биты, 0…1",
                 "status": "temporary_unverified", "rule": UNCERTAINTY_FALLBACK_RULE}
     meta["el_range_rule"] = EL_RANGE_RULE if has_range else "не рассчитан: нет flood_probability_range.tif"
-    meta["priority_note"] = ("rank — по EL (обязательное поле); для очерёдности осмотра с учётом "
-                             "неопределённости — el_high_rub и mask_unstable (docs/verification/"
-                             "uncertainty-val.md, раздел 8)")
+    meta["priority_note"] = ("rank — по EL (обязательное поле); очерёдность осмотра — "
+                             "inspection_priority (D-035); el_high_rub и mask_unstable — "
+                             "дополнительно: где EL выше при другом seed и где маска неустойчива "
+                             "(docs/verification/uncertainty-val.md, раздел 8)")
     return meta
 
 
