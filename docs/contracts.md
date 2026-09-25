@@ -220,23 +220,51 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
 с `<chip_id>_S1Hand` в `id` или `file`; `id` уникальны; `observation_date` позже
 `run_metadata.event_date` — только с непустым `after_event_note`.
 
-## 10. Пересчёт бюджета для интерфейса (D-005, D-013)
+## 10. Пересчёт бюджета для интерфейса (D-005, D-013, D-038)
 
 ```python
-# floodvalue.procurement.plan — чистая функция, реализует area:procurement
-def plan(run_dir: Path, budget_rub: float) -> dict:
-    """Читает candidate_orders.geojson, asset_loss.csv, assets.geojson, run_metadata.json
-    из run_dir; ничего не пишет, растры, p, порог и портфель не меняет; детерминирована.
-    Возвращает:
-      "plans":      {"A": [], "B": [candidate_id…], "C": [candidate_id…]}  # = strategy_plans.json
-      "plan_rows":  [dict строки procurement_plan.csv]                     # поля §6
-      "comparison": [dict строки strategy_comparison.csv, A/B/C]          # budget_rub = аргумент
-      "reasons":    {candidate_id: "почему выбрана / исключена"}           # для интерфейса
+# floodvalue.procurement.plan — реализует area:procurement
+def plan(run_dir: Path, budget_rub: float, social: bool | None = None) -> dict:
+    """Читает assets.csv, asset_loss.csv и растры комплекта (flood_probability.tif,
+    uncertainty.tif — если есть) из run_dir и конфиги (configs/run.yaml, configs/pricing.yaml);
+    каталог зон строится заново из текущих входов (устаревший candidate_orders.geojson
+    не читается). Ничего не пишет; растры, p, маску, порог и портфель не меняет;
+    детерминирована при тех же входах.
+
+    social — социальное ограничение стратегии C (D-038), необязательный аргумент:
+      None  — как в configs/run.yaml → social_constraint.enabled (по умолчанию false);
+      True  — C сначала покрывает объекты классов social_constraint.asset_classes;
+      False — ограничение выключено независимо от конфига.
+
+    Возвращает dict ровно с ключами верхнего уровня:
+      "plans":       {"A": [], "B": [candidate_id…], "C": [candidate_id…]}  # = strategy_plans.json
+      "plan_rows":   [dict]  # строки procurement_plan.csv (поля §6) БЕЗ "reason":
+                             #   reason подставляет procure из reasons["B"|"C"]
+      "comparison":  [dict]  # строки strategy_comparison.csv для A, B, C (поля §6);
+                             #   значения — Python-типы (Decimal/float/bool/None), не строки CSV;
+                             #   budget_rub = аргумент, округлённый до 0,01
+      "reasons": {
+          "B":              {candidate_id: правило B},
+          "C":              {candidate_id: "шаг k: новый охват …, цена корзины …"},
+          "not_selected_C": {candidate_id: почему не выбрана в C},  # все прочие позиции каталога
+          "chosen_any":     [candidate_id…],  # B ∪ C, отсортировано
+          "B_empty":        str,              # только если B пуста
+      }
+      "social_constraint": {"required_asset_ids": [asset_id…]}      # ограничение выключено
+                         | {"required_asset_ids": […], "satisfied": bool,
+                            "uncovered_required": [asset_id…], "note": str}  # включено
+      "c_selection": {"variant": "greedy" | "start:<candidate_id>",
+                      "alternatives": {variant: {"chosen": […], "data_cost_rub": str,
+                                                 "covered_expected_loss_rub": число}}}
     """
 ```
 
-`app` вызывает её при смене бюджета; `procure` пишет результат в файлы комплекта.
-Результат, записанный в файлы, обязан проходить валидатор.
+`app` вызывает её при смене бюджета (и переключателе социального ограничения);
+`procure` (`procurement/run.py: write_outputs`) пишет тот же пересчёт при `social=None` в
+файлы комплекта, а `social_constraint` и `c_selection` — в `procurement_metadata.json`;
+`export` читает только файлы и `procurement_metadata.json`, не вызывает `plan()`. Результат,
+записанный в файлы, обязан проходить валидатор. Ключи верхнего уровня и необязательность
+`social` зафиксированы тестом `tests/procurement/test_plan_contract.py`.
 
 ## 11. Валидатор (критерий 12, D-014)
 
