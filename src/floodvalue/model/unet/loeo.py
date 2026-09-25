@@ -62,6 +62,36 @@ P_EDGES = np.round(np.arange(0.0, 1.0 + 1e-9, 0.01), 2)
 Reader = Callable[[str], tuple[np.ndarray, np.ndarray]]
 
 
+# D-016: weak data (S1Weak + S2IndexLabelWeak) of dev, validation, test events and Colombia are
+# never used; only these train events may contribute weakly-labeled chips.
+WEAK_EVENTS = ("Ghana", "India", "Pakistan", "Paraguay", "Somalia")
+WEAK_LABEL = "S2IndexLabelWeak"
+
+
+def weak_chip_ids(events: set[str]) -> list[str]:
+    """Weakly-labeled chips (label from the Sentinel-2 index, an independent sensor) of the
+    given fold-training events, restricted to WEAK_EVENTS; sorted chip ids."""
+    root = io.raw_dir() / "WeaklyLabeled" / WEAK_LABEL
+    ids = sorted(p.name[: -len(f"_{WEAK_LABEL}.tif")] for p in root.glob(f"*_{WEAK_LABEL}.tif"))
+    return [c for c in ids if D.event_of(c) in events and D.event_of(c) in WEAK_EVENTS]
+
+
+def read_weak_chip(chip_id: str) -> tuple[np.ndarray, np.ndarray]:
+    """S1Weak (2, H, W) float32 dB with NaN and the weak label mapped to the LabelHand codes
+    (1 water, 0 not water, -1 no label)."""
+    import rasterio
+
+    root = io.raw_dir() / "WeaklyLabeled"
+    with rasterio.open(root / "S1Weak" / f"{chip_id}_S1Weak.tif") as f:
+        s1 = f.read().astype(np.float32)
+    with rasterio.open(root / WEAK_LABEL / f"{chip_id}_{WEAK_LABEL}.tif") as f:
+        raw = f.read(1)
+    lab = np.full(raw.shape, -1, np.int16)
+    lab[raw == 0] = 0
+    lab[raw == 1] = 1
+    return s1, lab
+
+
 def pool_chip_ids() -> list[str]:
     """Chips of train+dev (the LOEO pool); never validation or test."""
     ids: list[str] = []
@@ -200,20 +230,31 @@ def train_fold(x, y, m, cfg: dict, eval_epochs=EVAL_EPOCHS, device: str = "cpu",
                                                 total_steps=cfg["epochs"] * steps)
     gen = torch.Generator().manual_seed(cfg["seed"])
     jstd = jitter_std(channels, cfg["std"]).to(device)
-    x, y, m = x.to(device), y.to(device), m.to(device)
+    weak_w = cfg.get("weak_weight")
+    if weak_w is None:  # D-019 path: everything on the device, boolean mask
+        x, y, m = x.to(device), y.to(device), m.to(device)
     amp = device.startswith("cuda")
     states = {}
     for epoch in range(1, cfg["epochs"] + 1):
         model.train()
         te, losses = time.time(), []
         for _ in range(steps):
-            idx = torch.randint(0, len(x), (cfg["batch"],), generator=gen).to(device)
-            xb, yb, mb = augment(x[idx], y[idx], m[idx], cfg["crop"], cfg["db_jitter"], jstd,
+            idx = torch.randint(0, len(x), (cfg["batch"],), generator=gen)
+            if weak_w is None:
+                idx = idx.to(device)
+                xs, ys, ms = x[idx], y[idx], m[idx]
+            else:  # data stay in host memory; only the batch goes to the device
+                xs, ys, ms = (t[idx].to(device, non_blocking=True) for t in (x, y, m))
+            xb, yb, mb = augment(xs, ys, ms, cfg["crop"], cfg["db_jitter"], jstd,
                                  len(channels), gen)
             with torch.autocast(device_type=device.split(":")[0], dtype=torch.bfloat16,
                                 enabled=amp):
                 logits = model(xb)
-            loss = masked_loss(logits, yb, mb.bool(), cfg["dice_weight"])
+            if weak_w is None:
+                weight = mb.bool()
+            else:  # mask codes: 2 hand label, 1 weak label, 0 excluded
+                weight = torch.where(mb == 2, 1.0, torch.where(mb == 1, float(weak_w), 0.0))
+            loss = masked_loss(logits, yb, weight, cfg["dice_weight"])
             opt.zero_grad(set_to_none=True)
             loss.backward()
             opt.step()
@@ -240,7 +281,16 @@ def run_fold(fold: dict, cfg: dict, read: Reader = read_chip, baseline_t: float 
     mean, std = fold_stats(fold["train"], read, channels)
     t_fold, t_fold_iou = fit_vh_threshold([read(c) for c in fold["train"]])
     x, y, m = build_tensors(fold["train"], read, channels, mean, std)
-    log(f"fold {fold['event']}: train {len(fold['train'])} chips, held-out "
+    n_weak = 0
+    if cfg.get("weak_weight") is not None:
+        wids = weak_chip_ids({D.event_of(c) for c in fold["train"]})
+        if fold["event"] in {D.event_of(c) for c in wids}:
+            raise ValueError("weak chips of the held-out event leaked into the fold")
+        xw, yw, mw = build_tensors(wids, read_weak_chip, channels, mean, std)
+        x, y, m = torch.cat([x, xw]), torch.cat([y, yw]), torch.cat([m * 2, mw])
+        n_weak = len(wids)
+        del xw, yw, mw
+    log(f"fold {fold['event']}: train {len(fold['train'])} chips + weak {n_weak}, held-out "
         f"{len(fold['held_out'])}; mean {np.round(mean, 2)} std {np.round(std, 2)}; "
         f"VH t {t_fold} dB; loaded {time.time() - t0:.0f}s")
     model, states, steps = train_fold(x, y, m, cfg | {"std": std}, eval_epochs, device, log)
@@ -353,6 +403,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         p.add_argument(f"--{key.replace('_', '-')}", type=float, default=DEFAULTS[key])
     p.add_argument("--steps-mult", type=int, default=1,
                    help="multiply optimizer steps per epoch (D-019: 2 x chips / batch)")
+    p.add_argument("--weak-weight", type=float, default=None,
+                   help=f"add weakly-labeled chips ({WEAK_LABEL}) of the fold's training events "
+                        f"among {', '.join(WEAK_EVENTS)} with this loss weight (hand = 1)")
     p.add_argument("--tta", action="store_true",
                    help="also score the mean of 8 rot90/flip predictions at each eval epoch")
     p.add_argument("--events", default="", help="comma list: run only these folds (smoke)")
@@ -404,7 +457,7 @@ def main(argv: list[str] | None = None) -> int:
     cfg |= {k: getattr(args, k) for k in ("base", "dropout", "batch", "lr", "weight_decay",
                                           "dice_weight", "db_jitter")}
     cfg |= {"epochs": args.epochs, "crop": args.crop, "seed": args.seed,
-            "steps_mult": args.steps_mult, "tta": args.tta}
+            "steps_mult": args.steps_mult, "tta": args.tta, "weak_weight": args.weak_weight}
     shipped = shipped_baseline_rule()
     only = {e.strip() for e in args.events.split(",") if e.strip()}
     command = "python -m floodvalue.model.unet.loeo " + " ".join(
