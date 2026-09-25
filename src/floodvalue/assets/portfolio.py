@@ -39,10 +39,23 @@ STATUS_RULE = (
 )
 UNCERTAINTY_NAME = "binary_entropy_bits"
 UNCERTAINTY_RULE = (
-    "Temporary: binary entropy of p_flood in bits, H(p) = -p*log2(p) - (1-p)*log2(1-p), "
-    "0 at p in {0, 1}, 1 at p = 0.5. Measures only the model's own indecision at the pixel, "
-    "not calibration error and not uncertainty of V/q; to be replaced by the calibration/"
-    "uncertainty stage."
+    "uncertainty = value of uncertainty.tif (written by predict next to flood_probability.tif; "
+    "measure, units and verification status in prediction.json / run_metadata.uncertainty, "
+    "D-039) at the asset pixel, no interpolation; empty if that pixel is nodata. Without "
+    "uncertainty.tif: binary entropy of p_flood in bits, H(p) = -p*log2(p) - (1-p)*log2(1-p), "
+    "unverified. Either way it describes the flood map at the pixel, not the uncertainty of V/q."
+)
+UNCERTAINTY_FALLBACK_RULE = (
+    "Fallback (no uncertainty.tif): binary entropy of p_flood in bits, 0 at p in {0, 1}, 1 at "
+    "p = 0.5; model indecision only, not verified against errors."
+)
+EL_RANGE_RULE = (
+    "p_low/p_high = flood_probability_range.tif (min/max over the ensemble members of the "
+    "calibrated member p) at the asset pixel; el_low_rub = p_low*V*q, el_high_rub = p_high*V*q "
+    "rounded to 0.01 rub (EL spread of the seed ensemble, not a confidence interval of actual "
+    "losses); "
+    "mask_unstable = p_low < threshold <= p_high (the mask may flip for another seed). Empty "
+    "without the range raster or for status != ok."
 )
 
 
@@ -98,6 +111,20 @@ def place_assets(
     return assets
 
 
+def extract_values(raster: np.ndarray, points: list[tuple[int, int]]) -> list[float | None]:
+    """Value of a float raster at each (row, col); None for nodata (-9999/NaN) or outside."""
+    h, w = raster.shape
+    out: list[float | None] = []
+    for row, col in points:
+        if not (0 <= row < h and 0 <= col < w):
+            out.append(None)
+            continue
+        v = raster[row, col]
+        x = float(np.format_float_positional(v)) if v.dtype == np.float32 else float(v)
+        out.append(None if not math.isfinite(x) or x == PROB_NODATA else x)
+    return out
+
+
 def extract_p(
     prob_raster: np.ndarray, points: list[tuple[int, int]]
 ) -> list[tuple[float | None, str]]:
@@ -139,22 +166,46 @@ def rank_assets(losses: dict[str, float | None]) -> dict[str, int | None]:
     return ranks
 
 
-def assess_assets(assets: list[Asset], prob_raster: np.ndarray) -> list[dict]:
-    """Rows of asset_loss.csv (without chip_id) in asset order."""
-    ps = extract_p(prob_raster, [(a.row, a.col) for a in assets])
+def assess_assets(assets: list[Asset], prob_raster: np.ndarray,
+                  uncertainty_raster: np.ndarray | None = None,
+                  p_range: tuple[np.ndarray, np.ndarray] | None = None) -> list[dict]:
+    """Rows of asset_loss.csv (without chip_id) in asset order. Optional rasters (same grid):
+    uncertainty.tif (else binary entropy of p) and (p_low, p_high) of the member range."""
+    points = [(a.row, a.col) for a in assets]
+    ps = extract_p(prob_raster, points)
+    unc = extract_values(uncertainty_raster, points) if uncertainty_raster is not None else None
+    lows = extract_values(p_range[0], points) if p_range is not None else [None] * len(assets)
+    highs = extract_values(p_range[1], points) if p_range is not None else [None] * len(assets)
     losses = {
         a.asset_id: None if p is None else expected_loss(p, a.asset_value_rub, a.vulnerability_coef)
         for a, (p, _) in zip(assets, ps)
     }
     ranks = rank_assets(losses)
-    return [
-        {
+    rows = []
+    for i, (a, (p, status)) in enumerate(zip(assets, ps)):
+        lo, hi = (lows[i], highs[i]) if p is not None else (None, None)
+        has_range = lo is not None and hi is not None
+        rows.append({
             "asset_id": a.asset_id,
             "p_flood": p,
             "expected_loss_rub": losses[a.asset_id],
-            "uncertainty": None if p is None else binary_entropy(p),
+            "uncertainty": None if p is None else (unc[i] if unc is not None else binary_entropy(p)),
             "rank": ranks[a.asset_id],
             "status": status,
-        }
-        for a, (p, status) in zip(assets, ps)
-    ]
+            "p_low": lo if has_range else None,
+            "p_high": hi if has_range else None,
+            # rubles to the kopeck: a spread for ranking, not an exact amount
+            "el_low_rub": round(expected_loss(lo, a.asset_value_rub, a.vulnerability_coef), 2)
+            if has_range else None,
+            "el_high_rub": round(expected_loss(hi, a.asset_value_rub, a.vulnerability_coef), 2)
+            if has_range else None,
+        })
+    return rows
+
+
+def mask_unstable(row: dict, threshold: float | None) -> bool | None:
+    """p_low < threshold <= p_high: members disagree on the mask at the asset (EL is unaffected:
+    EL = p*V*q never uses the threshold). None without a range or a threshold."""
+    if threshold is None or row.get("p_low") is None or row.get("p_high") is None:
+        return None
+    return bool(row["p_low"] < threshold <= row["p_high"])

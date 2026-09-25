@@ -7,16 +7,17 @@
 
 Приглашения IR630 и fafakaj приняты — оба в `gh api
 repos/Chichetin/kosmo-moskva_umstvenno_ustalye_34/collaborators` рядом с Chichetin,
-Ivana-banana, M1hairu (проверено в PR #30). Открытый блокер:
+Ivana-banana, M1hairu (проверено в PR #30). Блокер GitVerse «LFS PUT → 403» снят — см.
+итоги, «25.09 GitVerse LFS». Открытых блокеров нет.
 
 | Дата | Что | Кто нужен |
 |---|---|---|
-| 2026-09-25 | GitVerse: код = `6fe66f0` (25.09 ~23:30, `--no-verify`), веса не залиты: LFS PUT → 403 на токен chichetin (push:true по API). Дальше — `bash scripts/sync-gitverse.sh --code-only` до получения прав (GIT.md «GitVerse») | токен с записью в LFS / проверка прав у admin hackrus.experts |
 
 ## Итоги вех
 
 | Веха | Итог | Commit |
 |---|---|---|
+| 25.09 GitVerse LFS | Снят блокер «LFS PUT → 403»: причина не права токена — git-lfs шлёт тело chunked (так велит `upload.header` GitVerse), GitVerse отвечает 403. Веса (5 × U-Net) залиты в LFS GitVerse 25.09 ~23:50 PUT с Content-Length; sync использует `scripts/gitverse_lfs_push.py` (GIT.md «GitVerse»). Код GitVerse = `6fe66f0`; сверка чистого клона (`bash scripts/sync-gitverse.sh --verify`) — после восстановления сети | 6fe66f0 |
 | 25.09 GitVerse | `hackrus.experts/kosmo-moskva_umstvenno_ustalye_34`: `scripts/sync-gitverse.sh` (#31), LFS-проба 2 МБ прошла; ветка по умолчанию `lfs-probe` = main (сменить может только admin) | 0ff5f08 |
 | 25.09 каркас | каркас, план v2, 35 issues (#2–#36); collaborators добавлены, git-lfs стоит, кейс № 3 | 20ad6e3 |
 | 25.09 сквозной путь | 16 PR (#41–#57, ветка `worktree-XX-…` → `main`), см. список ниже: split заморожен, официальный baseline (VH ≤ −23,0 dB, validation IoU 0,580), основной метод U-Net (ансамбль 5 seed, dev IoU 0,584 против baseline 0,391), портфель 10 объектов и чувствительность p/V/q, зоны+A/B/C+ПП 840 (редакция проверена), контракты v1 и валидатор, экспорт: `make all CHIP=Sri-Lanka_713926 BUDGET=5000` → 12/12 файлов. Ещё не реализованы на этой вехе: `calibrate`, `eval-test`, `app` | 56288a4 |
