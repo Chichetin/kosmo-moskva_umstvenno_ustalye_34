@@ -14,7 +14,8 @@ run fails.
 
 Test is sealed (D-010): `--part test` (the default of `make eval-test`) reads test chips only
 when FLOODVALUE_EVAL_TEST_CONFIRM equals the sha256 of the frozen configuration and the
-tracked code/configs are committed; every such run writes a row to
+tracked code/configs are committed, and only for the final method (predict.DEFAULT_METHOD;
+FLOODVALUE_METHOD naming a candidate is refused, D-025); every such run writes a row to
 docs/verification/test-log.md. Outputs: docs/verification/eval-<part>*.{md,csv,json,png}, for
 test — test-eval*.
 """
@@ -115,7 +116,14 @@ def who() -> str:
 
 
 def open_test_gate() -> tuple[str, str]:
-    """Raise EvalGateError unless test may be read now; returns (config hash, commit)."""
+    """Raise EvalGateError unless test may be read now; returns (config hash, commit).
+    The method check comes first, before the hash: test opens only for the final method."""
+    method = main_method()
+    if method != main_predict.DEFAULT_METHOD:
+        raise C.EvalGateError(
+            f"test открывается только для итогового метода {main_predict.DEFAULT_METHOD!r}; "
+            f"FLOODVALUE_METHOD={method!r} — кандидат, его сравнение только на dev/validation "
+            "(D-025, D-040). Уберите FLOODVALUE_METHOD или задайте итоговый метод.")
     expected = frozen_config_hash()
     C.check_test_confirmation(os.environ.get(CONFIRM_ENV), expected)
     dirty = uncommitted_frozen_paths()
