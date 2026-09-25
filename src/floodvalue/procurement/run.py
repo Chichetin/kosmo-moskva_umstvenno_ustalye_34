@@ -23,7 +23,9 @@ from floodvalue.procurement import strategies, zones
 from floodvalue.procurement.pricing import load_pricing
 
 SENS_BUDGETS = (0, 1000, 2500, 5000, 10000, 20000, 50000)
-SENS_RATE_FACTORS = (Decimal("0.5"), Decimal("1.5"))
+SENS_RATE_FACTORS = tuple(map(Decimal, ("0.5", "0.75", "1.25", "1.5", "2.0")))
+# decision_deadline = decision_at + h (D-001: 6–12 h window; 24/48 h — later decision).
+SENS_DEADLINE_HOURS = (6, 12, 24, 48)
 
 PLAN_FIELDS = ["strategy", "candidate_id", "area_km2", "base_rate_rub_km2", "base_rate_status",
                "processing_level", "usage_type", "guaranteed_purchase", "processing_coef",
@@ -237,7 +239,9 @@ def write_outputs(run_dir: Path, budget_rub: float) -> dict[str, Any]:
                                   sorted({*map(Decimal, map(str, SENS_BUDGETS)),
                                           Decimal(str(budget_rub))}),
                                   SENS_RATE_FACTORS, other_cfg=ctx["rc"]["other_cost"],
-                                  required=ctx["required"], social_ids=ctx["social_ids"])
+                                  required=ctx["required"], social_ids=ctx["social_ids"],
+                                  decision_at=ctx["decision_at"],
+                                  deadline_hours=SENS_DEADLINE_HOURS)
     _write_csv(run_dir / "procurement_sensitivity.csv", SENS_FIELDS, sens)
     denom = sum(float(r["expected_loss_rub"]) for r in ctx["loss"] if r["status"] == "ok")
     kinds: dict[str, int] = {}
