@@ -1,7 +1,7 @@
 {
  "method": "threshold_baseline",
  "rule": "water <=> VH <= threshold_db (dB)",
- "proba": "p = sigmoid((threshold_db - x) / scale_db), x = channel in dB; p >= prob_threshold <=> x <= threshold_db",
+ "proba": "p = sigmoid((threshold_db - x) / scale_db), x = channel in dB; p >= threshold <=> x <= threshold_db",
  "channel": "VH",
  "channel_chosen_on": "dev",
  "threshold_db": -23.0,
@@ -18,9 +18,12 @@
    "dev_iou": 0.390798
   }
  },
- "prob_threshold": 0.5,
+ "threshold": 0.5,
+ "threshold_status": "fixed 0.5 (= baseline rule), not chosen on validation; temporary main method D-009, calibration replaces it",
+ "weights_sha256": "f8198988eda6131833e11f75f4968591949333e34bcfd065017669295d14cb84",
+ "weights_note": "no weight file: sha256 of canonical JSON {channel, threshold_db, scale_db}",
  "fitted_on": "train",
  "split_sha256": "0098346e0f87297501409a1a8522afab6209e35f56e8cf1b68996909c8b63c75",
  "created_at": "2026-09-25",
- "commit": "95c334fcb5fe"
+ "commit": "57f432cc5f12"
 }
