@@ -474,7 +474,7 @@ def run(args=None) -> int:
     no_date = sorted({r["event_id"] for r in rows if event_s1_date(r["event_id"], dates) is None})
     if no_date:
         print(f"data: нет даты S1 для событий {no_date}", flush=True)
-    meta = json.loads((raw / METADATA_REL).read_text())
+    meta = json.loads((raw / METADATA_REL).read_text(encoding="utf-8"))
     per_event: dict[str, int] = {}
     for r in rows:
         per_event[r["event_id"]] = per_event.get(r["event_id"], 0) + 1

@@ -274,7 +274,7 @@ def test_manifest_entries_pass_contract_and_carry_event_dates(raw, offline):
     from floodvalue.contracts.schemas import SourceManifest
 
     assert fetch.run(None) == 0
-    doc = json.loads((raw.parent / "interim/source_manifest_s1.json").read_text())
+    doc = json.loads((raw.parent / "interim/source_manifest_s1.json").read_text(encoding="utf-8"))
     SourceManifest.model_validate(doc)  # the contract validator, entries as export copies them
     for e in doc["sources"]:
         SourceManifest.model_validate({"sources": [e]})
@@ -302,10 +302,10 @@ def test_event_table_from_metadata():
 def test_run_fails_when_manifest_breaks_contract(raw, offline):
     # No publication date for the S1 object -> SourceEntry has neither published_at nor
     # available_date -> the stage must fail rather than write an invalid manifest.
-    manifest = json.loads((raw / "bucket_manifest.json").read_text())
+    manifest = json.loads((raw / "bucket_manifest.json").read_text(encoding="utf-8"))
     for m in manifest.values():
         m.pop("updated")
-    (raw / "bucket_manifest.json").write_text(json.dumps(manifest))
+    (raw / "bucket_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     assert fetch.run(None) == 1
 
 

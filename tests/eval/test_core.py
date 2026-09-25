@@ -142,14 +142,14 @@ def test_lonlat_to_rowcol_inverts_pixel_centre():
 
 
 def test_config_sha256_tracks_file_bytes_and_method(tmp_path):
-    (tmp_path / "a.json").write_text("1")
+    (tmp_path / "a.json").write_text("1", encoding="utf-8")
     h1 = C.config_sha256(tmp_path, ["a.json", "b.json"], "unet")
     assert h1 == C.config_sha256(tmp_path, ["b.json", "a.json"], "unet")
     assert h1 != C.config_sha256(tmp_path, ["a.json", "b.json"], "baseline")
-    (tmp_path / "b.json").write_text("2")          # a missing file that appears changes it
+    (tmp_path / "b.json").write_text("2", encoding="utf-8")          # a missing file that appears changes it
     h2 = C.config_sha256(tmp_path, ["a.json", "b.json"], "unet")
     assert h2 != h1
-    (tmp_path / "a.json").write_text("3")
+    (tmp_path / "a.json").write_text("3", encoding="utf-8")
     assert C.config_sha256(tmp_path, ["a.json", "b.json"], "unet") != h2
 
 
