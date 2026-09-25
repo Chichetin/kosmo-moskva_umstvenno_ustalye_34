@@ -19,27 +19,65 @@ Sentinel-1 чипу Sen1Floods11 строит вероятностную кар�
 
 ```bash
 pipx install uv            # или https://docs.astral.sh/uv/
-git lfs install            # веса моделей хранятся в Git LFS
-make setup                 # uv sync --frozen + git-хук стража данных
-cp .env.example .env       # FLOODVALUE_DATA_DIR, FLOODVALUE_OUTPUT_DIR
+git lfs install             # веса моделей — через Git LFS (models/README.md, D-011)
+make setup                  # uv sync --frozen + git-хук стража данных
+cp .env.example .env        # FLOODVALUE_DATA_DIR, FLOODVALUE_OUTPUT_DIR
 ```
+
+`git lfs install` включает автоскачивание содержимого LFS при `git clone`/`git pull`;
+вручную — `git lfs pull`. Зависимости `uv.lock` — **CPU-сборка torch**, inference
+одного чипа работает без GPU (D-003). Обучение на GPU — раздел «Обучение» ниже.
+
+Сырые данные Sen1Floods11 (не в git) — отдельной командой, до `make data`:
+
+```bash
+python3 scripts/download_sen1floods11.py            # HandLabeled + perm_water + сплиты, ~3,8 ГБ
+```
+
+Подробности и режимы (`--no-s2`, `--with-weak`) — `docs/data.md` §3а. Повторный запуск
+только сверяет md5, ничего не качает заново.
+
+## Обучение: GPU локально или Colab
+
+Одна и та же команда `python -m floodvalue train` (`docs/decisions.md` D-009);
+различается только окружение — обучение вне `uv.lock`, инференс строго по нему:
+
+- **GPU локально** (например RTX 4080): `make gpu-env` — `scripts/setup_gpu_env.sh`
+  создаёт отдельный venv **вне репозитория** (по умолчанию
+  `$HOME/.cache/floodvalue-gpu`, переопределяется `FLOODVALUE_GPU_VENV`), ставит
+  GPU-сборку torch (индекс `cu128`) и `floodvalue -e .` поверх; `uv.lock` не трогает.
+  Идемпотентно — повторный запуск на готовом окружении ничего не ломает и не качает
+  заново. Затем обучение — `make train GPU=1` (через python из этого venv) вместо
+  `make train` (CPU, `uv run --frozen`, для проверки на машине без GPU).
+- **Colab**: `notebooks/train_colab.ipynb` — обёртка над `python -m floodvalue train`
+  (issue P10b, ставит свой GPU-torch внутри ноутбука, `uv.lock` не касается).
+
+Веса — `models/<method>/`, через Git LFS, sha256 в `run_metadata.json` — `models/README.md`.
 
 ## Воспроизведение
 
+Статусы: **не реализовано** — команда падает с `stage '<этап>' not implemented yet`;
+**в работе** — модуль есть, часть цепочки уже проходит, полный прогон ещё не собран;
+**готово** — код завершён и проверен (`docs/decisions.md`, тесты модуля).
+
 | Этап | Команда | Статус |
 |---|---|---|
-| Получение данных и QC | `make data` | не реализовано |
-| Split (заморожен) | `make split` | не реализовано |
+| Получение данных и QC | `make data` | не реализовано (сырые данные — `scripts/download_sen1floods11.py`, см. выше) |
+| Split (заморожен) | `make split` | готово (D-016, `pytest tests/split`) |
 | Baseline: порог на train/val | `make baseline` | не реализовано |
-| Обучение основного метода | `make train` (Colab: `notebooks/train_colab.ipynb`) | не реализовано |
+| Обучение основного метода | `make train` (GPU: `make train GPU=1`; Colab: `notebooks/train_colab.ipynb`) | не реализовано |
 | Калибровка и порог на validation | `make calibrate` | не реализовано |
 | Inference на чипе (S1-only) | `make predict CHIP=<chip_id>` | не реализовано |
 | Финальная оценка на test | `make eval-test` | не реализовано |
-| 10 объектов и ущерб | `make assets` | не реализовано |
-| Зоны, цена, A/B/C | `make procure BUDGET=<руб>` | не реализовано |
+| 10 объектов и ущерб | `make assets CHIP=<chip_id>` | в работе (портфель и EL готовы, `pytest tests/assets`; ждёт p-растра от `predict`) |
+| Зоны, цена, A/B/C | `make procure BUDGET=<руб>` | не реализовано (геометрия и цена по ПП 840 — чистые функции готовы, `pytest tests/procurement`; CLI-этап собирается) |
 | 12 обязательных файлов | `make export && make validate` | не реализовано |
 | Интерфейс оператора | `make app` | не реализовано |
-| Всё на готовых весах | `make all CHIP=<chip_id> BUDGET=<руб>` | не реализовано |
+| Всё на готовых весах | `make all CHIP=<chip_id> BUDGET=<руб>` | не реализовано (цепочка ждёт `data`/`predict`/`export`) |
+
+`make check` (`test` + `hooks-test` + `validate`) — обязателен перед каждым push; пока
+`floodvalue.export.validate` не реализован, `check` печатает причину и не роняет
+остальные проверки (Makefile, issue area:export/contracts).
 
 ## Результаты
 
