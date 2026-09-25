@@ -1,4 +1,4 @@
-"""Sensitivity of EL to p, V, q separately (task.md "Чувствительность", criteria 14, D-024).
+"""Sensitivity of EL to p, V, q separately (task.md "Чувствительность", criteria 14, D-028).
 
 Pure function on an already computed portfolio: no raster I/O, no procurement/budget logic
 (that is issue P18b in `floodvalue.procurement`, writing `procurement_sensitivity.csv`; export
@@ -11,7 +11,7 @@ and returns rows in the `sensitivity.csv` field order.
 .SENSITIVITY_REQUIRED_KEYS` (`p_flood`, `asset_value_rub`, `vulnerability_coef` are this
 module's share; `budget_rub`, `base_rate_rub_km2` belong to procurement/P18b) so that
 `floodvalue.export.validate` finds, per required key, at least one row that changes only it
-(docs/contracts.md §7a, D-014, D-024).
+(docs/contracts.md §7a, D-014, D-028).
 """
 
 import json
@@ -30,7 +30,7 @@ SENSITIVITY_FIELDS = [
 
 # strategy is Literal["A", "B", "C"] in the contract (floodvalue.contracts.schemas.SensitivityRow);
 # these rows probe the loss model itself, not any procurement basket, so "A" (no paid data) is the
-# closest fit -- D-024.
+# closest fit -- D-028.
 STRATEGY = "A"
 
 # The key each Python-side parameter maps to in changed_inputs_json (contract-mandated names).
@@ -40,7 +40,7 @@ REQUIRED_KEY = {"p": "p_flood", "V": "asset_value_rub", "q": "vulnerability_coef
 PORTFOLIO_FACTORS = (0.5, 0.8, 1.2, 1.5)
 # Factors applied to exactly one asset, to show rank movement that a uniform factor cannot
 # produce (a single k applied to every ok asset scales every EL by the same k and never
-# reorders them -- reviewer skeptic 2026-09-25, D-024).
+# reorders them -- reviewer skeptic 2026-09-25, D-028).
 SINGLE_ASSET_DOWN_FACTOR = 0.2
 SINGLE_ASSET_UP_FACTOR = 3.0
 
@@ -121,6 +121,7 @@ def _interpretation(
     base_total: float,
     new_total: float,
     clipped: list[str],
+    highlight: str | None,
 ) -> str:
     parts = []
     if base_total:
@@ -142,7 +143,13 @@ def _interpretation(
         parts.append("ранжирование не изменилось")
     else:
         parts.append("топ-3 не изменился" if base_top3 == new_top3 else "топ-3 изменился")
-        aid, old_r, new_r = max(moves, key=lambda m: abs((m[1] or 99) - (m[2] or 99)))
+        # On a tie (e.g. a challenger overtakes a neighbour, both move by the same margin),
+        # name the asset this scenario actually changed (`highlight`, single-asset scope),
+        # not whichever tied asset happens first in loss_rows order (reviewer PR #55, D-028).
+        aid, old_r, new_r = max(
+            moves,
+            key=lambda m: (abs((m[1] or 99) - (m[2] or 99)), m[0] == highlight),
+        )
         cls = base[aid]["asset_class"]
         direction = "поднялся" if (new_r or 99) < (old_r or 99) else "опустился"
         parts.append(f"{cls} ({aid}) {direction} с {old_r} на {new_r}")
@@ -194,10 +201,10 @@ def _scenario_row(
         "decision_cost_rub": None,
         # "covered" means EL in event_observation zones available by the deadline (contracts.md);
         # there is no zone/plan here, so this field does not apply and stays empty. The
-        # recomputed portfolio EL lives in changed_inputs_json instead (D-024).
+        # recomputed portfolio EL lives in changed_inputs_json instead (D-028).
         "covered_expected_loss_rub": None,
         "result_status": "ok" if any(v is not None for v in new_els.values()) else "no_data",
-        "interpretation": _interpretation(base, new_ranks, base_total, new_total, clipped),
+        "interpretation": _interpretation(base, new_ranks, base_total, new_total, clipped, target),
     }
 
 

@@ -63,7 +63,7 @@ def test_row_fields_match_sensitivity_csv_contract():
     assert rows, "no scenarios produced"
     for r in rows:
         assert list(r) == SENSITIVITY_FIELDS
-        assert r["strategy"] == STRATEGY == "A"  # closest fit: no paid data (D-024)
+        assert r["strategy"] == STRATEGY == "A"  # closest fit: no paid data (D-028)
         assert r["decision_cost_rub"] is None  # plan is not recomputed here
         assert r["covered_expected_loss_rub"] is None  # not a zone-coverage number
         assert r["result_status"] in ("ok", "no_data")
@@ -176,6 +176,20 @@ def test_challenger_scenario_can_enter_top_three():
     assert new_el == pytest.approx(900_000.0)
     assert "road_unit (A03) поднялся с 4 на 3" in row["interpretation"]
     assert "топ-3 изменился" in row["interpretation"]
+
+
+def test_interpretation_names_the_changed_asset_not_the_first_in_loss_rows_order():
+    # Adversarial ordering (reviewer PR #55): put the *displaced* neighbour (A04, rank 3) before
+    # the *target* (A03, rank 4, actually scaled up) in loss_rows. Both end up with an equal
+    # |old_rank - new_rank| = 1 swap. Without preferring `target` on a tie, max() would return
+    # the first-encountered tied move (A04) -- the bystander, not the asset this scenario changed.
+    reordered = [LOSS_ROWS[0], LOSS_ROWS[1], LOSS_ROWS[3], LOSS_ROWS[2]]  # A01, A02, A04, A03
+    assert [r["asset_id"] for r in reordered] == ["A01", "A02", "A04", "A03"]
+    rows = rows_by_scenario(el_sensitivity(ASSETS, reordered))
+    row = rows[f"q_challenger_x{SINGLE_ASSET_UP_FACTOR}"]
+    assert changed(row)["asset_id"] == "A03"
+    assert "road_unit (A03) поднялся с 4 на 3" in row["interpretation"]
+    assert "facility (A04)" not in row["interpretation"]
 
 
 def test_single_asset_scenario_leaves_other_assets_at_baseline_value():
