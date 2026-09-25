@@ -1,6 +1,6 @@
 # Неопределённость основного метода: выбор показателя и проверка на ошибках
 
-Сгенерировано `python -m floodvalue.calibration.uncertainty_val --assets-run outputs/Sri-Lanka_713926_5000_9d7201d` (commit `9d7201d5955c`, 2026-09-25). Числа — из результата прогона, `uncertainty/uncertainty-scopes.csv`, `uncertainty/uncertainty-deciles.csv`; решение — D-038. Test не читался (D-010).
+Сгенерировано `python -m floodvalue.calibration.uncertainty_val --assets-run outputs/Sri-Lanka_713926_5000_9d7201d` (commit `9d7201d5955c`, 2026-09-25). Числа — из результата прогона, `uncertainty/uncertainty-scopes.csv`, `uncertainty/uncertainty-deciles.csv`; решение — D-039. Test не читался (D-010).
 
 - Метод: `unet`, членов ансамбля: 5; калибратор и порог — `models/unet/calibration.json` (D-029), порог маски p ≥ 0,37.
 - Чипов: validation 60, dev 69. Валидный пиксель: S1 конечен и LabelHand ≠ −1. **Ошибка** — маска основного метода ≠ метке. **Нестабильный результат** — члены ансамбля расходятся по маске: min q_k < порог ≤ max q_k.

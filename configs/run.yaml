@@ -11,3 +11,17 @@ budget_rub: 5000                  # лимит на платные данные 
 # Дата S1 события Sri-Lanka — 2017-05-30 (docs/data.md §5); время суток — сценарное.
 decision_at: "2017-05-30T12:00:00+00:00"
 decision_deadline: "2017-05-31T00:00:00+00:00"
+# Прочие затраты решения C_other = C_compute + C_review × число купленных позиций
+# (task.md: C_decision = C_data + C_compute + C_review + …); потребитель — procurement
+# (strategy_comparison.csv other_cost_rub). Сценарные ставки команды, не измерены (D-023, D-038).
+other_cost:
+  compute_rub: 1000.00            # обработка S1 и выпуск карты — одинаково для A/B/C
+  review_per_zone_rub: 500.00     # 0,5 ч аналитика × 1000 руб/ч на дешифрирование одной позиции
+  status: scenario
+  basis: "C_other = C_compute (1000 руб: обработка S1 и выпуск карты, одинаково для A/B/C) + C_review (500 руб × число купленных позиций: 0,5 ч аналитика × 1000 руб/ч); сценарные ставки команды; выезды (C_field) и ошибки действий (C_action_errors) не оцениваются — нет модели действия"
+# Социальное ограничение стратегии C (task.md: отдельное явное ограничение, не множитель
+# рублей EL): enabled=true — C сначала покрывает объекты этих классов. По умолчанию выключено;
+# эффект — строка social_constraint_on (выключено) или social_constraint_off (включено) в procurement_sensitivity.csv (D-038).
+social_constraint:
+  enabled: false
+  asset_classes: [clinic, school]

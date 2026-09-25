@@ -41,7 +41,7 @@ UNCERTAINTY_NAME = "binary_entropy_bits"
 UNCERTAINTY_RULE = (
     "uncertainty = value of uncertainty.tif (written by predict next to flood_probability.tif; "
     "measure, units and verification status in prediction.json / run_metadata.uncertainty, "
-    "D-038) at the asset pixel, no interpolation; empty if that pixel is nodata. Without "
+    "D-039) at the asset pixel, no interpolation; empty if that pixel is nodata. Without "
     "uncertainty.tif: binary entropy of p_flood in bits, H(p) = -p*log2(p) - (1-p)*log2(1-p), "
     "unverified. Either way it describes the flood map at the pixel, not the uncertainty of V/q."
 )

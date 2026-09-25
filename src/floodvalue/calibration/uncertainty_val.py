@@ -1,7 +1,7 @@
 """`python -m floodvalue.calibration.uncertainty_val [--assets-run <dir>]`: choose and verify the
-per-pixel uncertainty measure (issue #21, criterion 10, D-038). Test chips are never read.
+per-pixel uncertainty measure (issue #21, criterion 10, D-039). Test chips are never read.
 
-Protocol (fixed before the numbers, D-038):
+Protocol (fixed before the numbers, D-039):
   * candidates: `floodvalue.calibration.uncertainty.MEASURES` on the delivered pipeline —
     members of `predict_members` (or the single p of `predict_proba`), calibrator and threshold
     of `models/<method>/calibration.json`;

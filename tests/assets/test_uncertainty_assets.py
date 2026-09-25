@@ -1,4 +1,4 @@
-"""assets reads uncertainty.tif and flood_probability_range.tif written by predict (D-038)."""
+"""assets reads uncertainty.tif and flood_probability_range.tif written by predict (D-039)."""
 
 import argparse
 import csv

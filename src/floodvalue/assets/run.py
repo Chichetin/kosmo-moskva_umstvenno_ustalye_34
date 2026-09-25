@@ -2,7 +2,7 @@
 
 Reads the S1 chip (only for its validity mask and grid) and flood_probability.tif from the
 results directory, plus — if `predict` wrote them — uncertainty.tif, flood_probability_range.tif
-and prediction.json (measure, threshold; D-038); writes assets.geojson, assets.csv, asset_loss.csv, assets_sensitivity.csv
+and prediction.json (measure, threshold; D-039); writes assets.geojson, assets.csv, asset_loss.csv, assets_sensitivity.csv
 (p/V/q scenarios, P18a/D-028; export merges it with procurement_sensitivity.csv into
 sensitivity.csv) and assets_metadata.json (seed and rules for run_metadata.json).
 """
