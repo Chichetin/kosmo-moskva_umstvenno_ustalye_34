@@ -22,9 +22,12 @@ GOOD = HERE.parent / "fixtures" / "good"
 
 
 def _close(a, b) -> bool:
-    """Structural equality; floats equal up to 1e-12 relative (PROJ last-bit differences)."""
-    if isinstance(a, float) or isinstance(b, float):
-        return isinstance(a, (int, float)) and isinstance(b, (int, float)) and math.isclose(a, b, rel_tol=1e-12)
+    """Structural equality with the same types; floats equal up to 1e-12 relative (PROJ
+    last-bit differences). Key order is not compared."""
+    if type(a) is not type(b):
+        return False
+    if isinstance(a, float):
+        return math.isclose(a, b, rel_tol=1e-12)
     if isinstance(a, dict):
         return isinstance(b, dict) and a.keys() == b.keys() and all(_close(a[k], b[k]) for k in a)
     if isinstance(a, list):
