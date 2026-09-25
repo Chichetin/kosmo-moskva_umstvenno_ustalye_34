@@ -8,7 +8,7 @@
 | № | Критерий | Артефакт | Проверка (команда) | Статус |
 |---|---|---|---|---|
 | 1 | Подготовка исходных геоданных | `src/floodvalue/data/`, `docs/data.md` §11, `interim/qc.csv`, `interim/source_manifest_s1.json` → `source_manifest.json` | `make data` → 446/446 QC формата (md5, VV/VH float32, int16, EPSG:4326, сетка S1 = метка через allclose, dB, метка ⊂ {−1,0,1}), 6 чипов без валидных пикселей; `uv run --frozen pytest tests/data` | ✅ QC и манифест S1; 🟡 перенос в `source_manifest.json` — `export` |
-| 2 | Пороговый baseline | `src/floodvalue/baseline/`, порог в `models/baseline/` | `make baseline` → порог выбран на train/val; метрики IoU/F1/P/R | ⬜ |
+| 2 | Пороговый baseline | `src/floodvalue/baseline/`, `models/baseline/config.json`, `docs/verification/baseline-val.md`, `baseline-metrics.csv`, `baseline-threshold-curve.csv` | `make baseline` → VH ≤ −23,0 dB (порог на train, канал на dev, D-021), IoU/F1/P/R/пиксели по событиям train/dev/validation; `uv run --frozen python -m floodvalue.baseline.predict --chip Sri-Lanka_713926` → `baseline_mask.tif` и временные p/маска на сетке S1; `uv run --frozen pytest tests/baseline` | ✅ validation IoU 0,580; на test — при `eval-test` (критерий 4) |
 | 3 | Основной метод | `src/floodvalue/model/`, `models/<main>/`, `notebooks/` | `make train`, `make predict CHIP=…`; описание в README | ⬜ |
 | 4 | Сравнение методов | `docs/verification/test-comparison.md` | `make eval-test` → оба метода, идентичные валидные пиксели, по событиям, FP/FN | ⬜ |
 | 5 | Итоговая карта и порог | `flood_probability.tif`, `flood_mask.tif`, кривая порога на val | `make validate` (mask = p ≥ threshold); `docs/verification/threshold.md` | ⬜ |
