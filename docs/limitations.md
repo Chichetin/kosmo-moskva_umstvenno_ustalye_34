@@ -273,7 +273,7 @@ validation поэтому оптимистичны (validation — настро�
   Sri-Lanka, Nigeria, Spain, Mekong, Bolivia) отдельно по этому эффекту не
   диагностирован — это декларируемое, не измеренное на этом наборе ограничение.
 - **Экстремальные и нетипичные dB, не встреченные в train.** Порог и вход модели
-  калибруются по распределению train (8,9 % воды, `docs/verification/baseline-val.md`);
+  калибруются по распределению train (8,8 % воды, `docs/verification/baseline-val.md`);
   событие с сильно отличным распределением яркости или доли воды (как dev/USA — 4,6 %,
   или validation — 15,2 %) систематически смещает p, что и объясняет разницу P/R между
   dev и validation (`docs/verification/unet-metrics.md`: на validation при пороге 0,5
