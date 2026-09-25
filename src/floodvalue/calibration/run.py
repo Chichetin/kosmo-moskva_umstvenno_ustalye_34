@@ -71,8 +71,11 @@ def load_chips(method: str, part: str = "validation") -> list[Chip]:
             import rasterio
             with rasterio.open(jrc_path) as src:
                 jrc = src.read(1) == 1
-        chips.append(Chip(cid, io.parse_chip_id(cid)[0], predict_proba(s1), label, jrc,
-                          io.valid_mask(s1, label)))
+        p_raw = predict_proba(s1)
+        valid = io.valid_mask(s1, label)
+        if not np.isfinite(p_raw[valid]).all():
+            raise ValueError(f"{cid}: method returned non-finite p on valid pixels (contracts §3)")
+        chips.append(Chip(cid, io.parse_chip_id(cid)[0], p_raw, label, jrc, valid))
     return chips
 
 

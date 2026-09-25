@@ -168,8 +168,20 @@ def test_load_chips_uses_shared_s1_and_label_valid_mask(monkeypatch, tmp_path):
     chip = R.load_chips("finite-probability")[0]
 
     expected = np.array([[True, False], [False, True]])
-    np.testing.assert_array_equal(R.io.valid_mask(s1, label), expected)
     np.testing.assert_array_equal(chip.valid, expected)
+
+
+def test_load_chips_rejects_nan_p_on_valid_pixels(monkeypatch, tmp_path):
+    mod = types.ModuleType("nan_probability_method")
+    mod.predict_proba = lambda _s1: np.full((2, 2), np.nan, np.float32)
+    monkeypatch.setitem(sys.modules, mod.__name__, mod)
+    monkeypatch.setitem(R.METHOD_MODULES, "nan-probability", mod.__name__)
+    monkeypatch.setattr(R, "chip_ids", lambda part: ["Nigeria_1"])
+    monkeypatch.setattr(R.io, "load_s1", lambda cid: (np.full((2, 2, 2), -20, np.float32), {}))
+    monkeypatch.setattr(R.io, "load_label", lambda cid: (np.zeros((2, 2), np.int16), {}))
+    monkeypatch.setattr(R.io, "layer_path", lambda cid, layer: tmp_path / "absent.tif")
+    with pytest.raises(ValueError, match="non-finite"):
+        R.load_chips("nan-probability")
 
 
 def test_mean3x3_keeps_nan_and_ignores_it():
