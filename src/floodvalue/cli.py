@@ -15,7 +15,7 @@ STAGES = {
     "baseline": ("floodvalue.baseline.run", "подобрать порог baseline на train/val, метрики val"),
     "train": ("floodvalue.model.train", "обучить основной метод (локально или Colab)"),
     "calibrate": ("floodvalue.calibration.run", "калибровка и порог на validation"),
-    "predict": ("floodvalue.model.predict", "p-растр и маска для чипа: --chip <id>"),
+    "predict": ("floodvalue.model.predict", "p-растр и маска: --chip <id> или --s1 <любой S1 GeoTIFF>"),
     "assets": ("floodvalue.assets.run", "10 объектов, p, EL, неопределённость, приоритеты"),
     "procure": ("floodvalue.procurement.run", "зоны, цена ПП 840, A/B/C: --budget <руб>"),
     "export": ("floodvalue.export.run", "собрать 12 обязательных файлов"),
@@ -33,6 +33,9 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--chip", help="chip_id, например Ghana_103272")
         p.add_argument("--budget", type=float, help="бюджет платных данных, руб.")
         p.add_argument("--out", help="каталог результатов (по умолчанию FLOODVALUE_OUTPUT_DIR)")
+        if name == "predict":
+            p.add_argument("--s1", help="любой 2-канальный S1 GeoTIFF (VV, VH, dB), например "
+                                        "S1Weak вне HandLabeled; метка не читается")
         if name == "eval-test":
             p.add_argument("--part", choices=["dev", "validation", "test"], default="test",
                            help="часть split; test — только с FLOODVALUE_EVAL_TEST_CONFIRM")
