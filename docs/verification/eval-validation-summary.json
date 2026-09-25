@@ -1,0 +1,131 @@
+{
+ "part": "validation",
+ "commit": "af52cc72a2d687053b332255f70704cf3e45f6d6",
+ "config_sha256": "506ce620d041373c6b312ead25deed6221e79704fe3ce2fa60d24add0ea31c1e",
+ "main_method": "unet",
+ "threshold": 0.37,
+ "threshold_status": "calibrated (platt) and chosen on validation, D-029",
+ "n_chips": 60,
+ "valid_mask_sha256": {
+  "Nigeria": "7eb3b2e2c9833a320b1e3e9e9421c1f27b995e337008daf9acd5adeb71cf7917",
+  "Sri-Lanka": "e301068027c8669a5e4391e429b3f0a837903d3d5ab08ceaf715372351e459c6",
+  "ALL": "eab3f6c640aa679a6dbad639bca820e2dec7739412452fd126f8f7624b23b415"
+ },
+ "bootstrap_delta_iou": {
+  "Nigeria": {
+   "delta": 0.20575808688040542,
+   "ci95": [
+    0.1465419328933813,
+    0.2499902954152614
+   ],
+   "share_gt_0": 1.0,
+   "n": 2000,
+   "n_used": 2000
+  },
+  "Sri-Lanka": {
+   "delta": 0.03502794968640055,
+   "ci95": [
+    -0.010087326462575411,
+    0.07906362699374819
+   ],
+   "share_gt_0": 0.936,
+   "n": 2000,
+   "n_used": 2000
+  },
+  "ALL": {
+   "delta": 0.1046030309235777,
+   "ci95": [
+    0.04971620088860118,
+    0.1525251436511211
+   ],
+   "share_gt_0": 1.0,
+   "n": 2000,
+   "n_used": 2000
+  }
+ },
+ "calibration": {
+  "Nigeria": {
+   "ece": 0.022902600395548776,
+   "brier": 0.04570755819890228
+  },
+  "Sri-Lanka": {
+   "ece": 0.010652133581221263,
+   "brier": 0.03850214572472017
+  },
+  "ALL": {
+   "ece": 0.007479134472099166,
+   "brier": 0.04057379535175402
+  }
+ },
+ "uncertainty": {
+  "Nigeria": {
+   "n_error": 228297,
+   "n_correct": 3792221,
+   "mean_u_error": 0.5635308285444498,
+   "mean_u_correct": 0.16083795693301106,
+   "auroc": 0.8931112397774176
+  },
+  "ALL": {
+   "n_error": 796723,
+   "n_correct": 13187056,
+   "mean_u_error": 0.6722052010936189,
+   "mean_u_correct": 0.18301759352989086,
+   "auroc": 0.9024556090740498
+  },
+  "Sri-Lanka": {
+   "n_error": 568426,
+   "n_correct": 9394835,
+   "mean_u_error": 0.7158521018860835,
+   "mean_u_correct": 0.1919703940500763,
+   "auroc": 0.9065234787290867
+  }
+ },
+ "jrc_iou": {
+  "main": {
+   "jrc_1": 0.95070759554249,
+   "jrc_0": 0.5354798260568774
+  },
+  "baseline": {
+   "jrc_1": 0.8916267847524525,
+   "jrc_0": 0.38972489500143503
+  }
+ },
+ "proxy_check": {
+  "status": "planned",
+  "test_chip": "Sri-Lanka_713926",
+  "control_points": "10 точек портфеля тем же правилом `python -m floodvalue assets` (seed 20260925, только валидность S1; прогноз и метки не читаются); оцениваются точки со статусом ok и меткой 0/1",
+  "fixed_v_q": "configs/assets.yaml (учебные V и q, те же, что в asset_loss.csv)",
+  "n_points": 10,
+  "error_metric": "MAE и сумма |EL − EL_ref|, руб.; EL = p·V·q, EL_ref = y·V·q",
+  "result": {
+   "demo_chip": {
+    "n_placed": 10,
+    "n_points": 10,
+    "n_excluded_label_invalid": 0,
+    "n_excluded_no_data": 0,
+    "mae_rub": 274285.6581999999,
+    "sum_abs_error_rub": 2742856.581999999,
+    "sum_el_rub": 16842207.718000002,
+    "sum_el_ref_rub": 18000000.0
+   },
+   "all_chips_of_part": {
+    "n_placed": 600,
+    "n_points": 536,
+    "n_excluded_label_invalid": 64,
+    "n_excluded_no_data": 0,
+    "mae_rub": 284926.43660130596,
+    "sum_abs_error_rub": 152720570.0183,
+    "sum_el_rub": 311392794.9373,
+    "sum_el_ref_rub": 311300000.0
+   },
+   "note": "прокси по ручной метке воды, не фактические потери",
+   "independent": false
+  }
+ },
+ "error_maps": [
+  "Sri-Lanka_713926",
+  "Nigeria_81933",
+  "Sri-Lanka_120804"
+ ],
+ "baseline_crosscheck": "совпадает (TP/FP/FN/TN и valid_mask_sha256)"
+}

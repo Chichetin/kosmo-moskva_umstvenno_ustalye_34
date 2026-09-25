@@ -108,8 +108,17 @@ def _work_dir(args, chip_id: str) -> Path:
 def _metrics(work_prediction: dict, dest: Path, warnings: list[str]) -> list[str]:
     base_path = REPO_ROOT / BASELINE_METRICS
     method = str(work_prediction.get("method", "main"))
-    main_rel = next((rel for rel in (f"docs/verification/{method}-metrics.csv", MAIN_METRICS)
-                     if (REPO_ROOT / rel).is_file()), MAIN_METRICS)
+    calibration = work_prediction.get("calibration")
+    calibrated_rel = f"docs/verification/calibration/{method}-metrics.csv"
+    if calibration and (REPO_ROOT / calibrated_rel).is_file():
+        main_rel = calibrated_rel  # mask threshold comes from the same calibrator (D-029, #62)
+    else:
+        if calibration:
+            warnings.append(f"калибратор применён ({calibration.get('file')}), но нет "
+                            f"{calibrated_rel}: строки main взяты из сырых метрик, порог может "
+                            "не совпасть с маской (перезапустить make calibrate)")
+        main_rel = next((rel for rel in (f"docs/verification/{method}-metrics.csv", MAIN_METRICS)
+                         if (REPO_ROOT / rel).is_file()), MAIN_METRICS)
     main_path = REPO_ROOT / main_rel
     if not base_path.is_file():
         warnings.append(f"нет {BASELINE_METRICS}: metrics.csv без baseline (make baseline)")
@@ -224,6 +233,9 @@ def export(chip_id: str, work: Path, dest: Path | None = None,
     main_cfg_path = MODELS_DIR / str(prediction.get("method", "")) / "config.json"
     main_config = (_read_json(main_cfg_path) if main_cfg_path.is_file()
                    and not assemble.is_baseline_prediction(prediction) else None)
+    main_cal_path = MODELS_DIR / str(prediction.get("method", "")) / "calibration.json"
+    main_calibration = (_read_json(main_cal_path) if prediction.get("calibration")
+                        and main_cal_path.is_file() else None)
     budget_arg = assemble.budget_label(budget)
     reproduce = [
         f"git checkout {commit}",
@@ -241,7 +253,7 @@ def export(chip_id: str, work: Path, dest: Path | None = None,
         commit_dirty=dirty, prediction=prediction, baseline_config=baseline_config,
         baseline_config_path=str(BASELINE_CONFIG.relative_to(REPO_ROOT)),
         baseline_config_sha256=_sha256(BASELINE_CONFIG), main_config=main_config,
-        assets_meta=assets_meta,
+        main_calibration=main_calibration, assets_meta=assets_meta,
         procurement_meta=proc_meta, pricing=pricing, split=split,
         split_file=str(SPLIT_FILE.relative_to(REPO_ROOT)), run_config=run_config,
         uncertainty_raster="uncertainty.tif" if (dest / "uncertainty.tif").is_file() else None,

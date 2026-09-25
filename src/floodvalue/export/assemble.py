@@ -242,7 +242,7 @@ def _method_info(name: str, version: str, weights: list[dict], threshold: float,
 def run_metadata(*, run_id: str, chip_id: str, event_id: str, event_date: str, created_at: str,
                  commit: str, commit_dirty: bool, prediction: dict, baseline_config: dict,
                  baseline_config_path: str, baseline_config_sha256: str,
-                 main_config: dict | None = None,
+                 main_config: dict | None = None, main_calibration: dict | None = None,
                  assets_meta: dict, procurement_meta: dict, pricing: dict, split: dict,
                  split_file: str, run_config: dict, uncertainty_raster: str | None,
                  metrics_files: list[str], reproduce: list[str], versions: dict,
@@ -271,6 +271,14 @@ def run_metadata(*, run_id: str, chip_id: str, event_id: str, event_date: str, c
         weights = [{"path": f"models/{name}/{m['file']}", "sha256": m["sha256"]}
                    for m in cfg.get("members", []) if m.get("file") and m.get("sha256")]
         arch = cfg.get("arch")
+        cal_info = prediction.get("calibration")
+        calibration = None
+        if cal_info and main_calibration:
+            calibration = {**main_calibration.get("calibrator", {}),
+                           "threshold": main_calibration.get("threshold"),
+                           "file": cal_info.get("file"), "sha256": cal_info.get("sha256"),
+                           "fit_on": (main_calibration.get("fitted_on") or {}).get(
+                               "part", "validation")}
         main = _method_info(
             name, f"{name}@{str(prediction.get("weights_sha256") or cfg.get("weights_sha256") or "")[:12]}", weights,
             float(prediction["threshold"]), "p",
@@ -278,7 +286,8 @@ def run_metadata(*, run_id: str, chip_id: str, event_id: str, event_date: str, c
                 or "prediction.json"),
             weights_sha256=prediction.get("weights_sha256") or cfg.get("weights_sha256"),
             config=f"models/{name}/config.json" if cfg else None,
-            ensemble=cfg.get("ensemble"), selection=cfg.get("selection"), arch=arch)
+            ensemble=cfg.get("ensemble"), selection=cfg.get("selection"), arch=arch,
+            calibration=calibration)
     unc = assets_meta.get("uncertainty", {})
     zones = procurement_meta.get("zones", {})
     split_hash = split_sha256(split)

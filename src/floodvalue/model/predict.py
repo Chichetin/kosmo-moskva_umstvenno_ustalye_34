@@ -5,8 +5,10 @@ and writes on the S1 grid (§2):
   flood_probability.tif  Float32, p in [0, 1], nodata -9999
   flood_mask.tif         UInt8, 1 <=> p >= threshold, nodata 255
   prediction.json        method, weights sha256, threshold and its status, timing
-Method name: env `FLOODVALUE_METHOD` (default `unet`). The threshold is the method's stored
-one until calibration (#20) supplies the validation-chosen threshold.
+Method name: env `FLOODVALUE_METHOD` (default `unet`). If `models/<method>/calibration.json`
+exists (written by `calibrate`, #20, D-029), the raw p is passed through its calibrator and the
+mask uses its validation-chosen threshold; the file must name the same weights sha256.
+Otherwise the method's stored threshold is used.
 """
 
 import importlib
@@ -69,11 +71,23 @@ def run(args) -> int:
     seconds = time.time() - t0
     config = json.loads((MODELS_DIR / method / "config.json").read_text(encoding="utf-8"))
     threshold = float(config["threshold"])
+    threshold_status = config.get("threshold_status", "")
+    calibration = None
+    cal_path = MODELS_DIR / method / "calibration.json"
+    if cal_path.exists():
+        from floodvalue.calibration import calibrator  # p_raw -> p, contracts §3
+        cal = calibrator.load(cal_path, config["weights_sha256"])
+        p = calibrator.apply(cal["calibrator"], p)
+        threshold = float(cal["threshold"])
+        threshold_status = cal.get("threshold_status", "calibrated on validation")
+        calibration = {"file": f"models/{method}/calibration.json",
+                       "sha256": calibrator.file_sha256(cal_path),
+                       "kind": cal["calibrator"]["kind"]}
     out = Path(args.out) if args.out else output_dir() / args.chip
     write_rasters(p, threshold, profile, out)
     meta = {"chip_id": args.chip, "method": method, "s1_file": src_path.name,
             "weights_sha256": config["weights_sha256"], "threshold": threshold,
-            "threshold_status": config.get("threshold_status", ""),
+            "threshold_status": threshold_status, "calibration": calibration,
             "valid_pixels": int(np.isfinite(p).sum()), "seconds": round(seconds, 2)}
     (out / "prediction.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False) + "\n",
                                          encoding="utf-8")
