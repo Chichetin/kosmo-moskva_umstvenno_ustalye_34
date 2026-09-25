@@ -36,7 +36,12 @@ data split baseline calibrate predict assets procure export validate app eval-te
 	$(PY) $@ $(STAGE_ARGS)
 
 train:              ## GPU=1 — обучение через python из GPU-venv (make gpu-env), иначе CPU по uv.lock
-	$(if $(filter 1,$(GPU)),$(GPU_PY) train $(STAGE_ARGS),$(PY) train $(STAGE_ARGS))
+ifeq ($(filter 1,$(GPU)),1)
+	@[ -x "$(GPU_VENV)/bin/python" ] || { echo "train: нет GPU-venv в $(GPU_VENV) — сначала make gpu-env"; exit 1; }
+	$(GPU_PY) train $(STAGE_ARGS)
+else
+	$(PY) train $(STAGE_ARGS)
+endif
 
 # Сквозной путь без обучения: веса и порог уже в репо (models/), бюджет меняется без переобучения.
 all: data predict assets procure export validate

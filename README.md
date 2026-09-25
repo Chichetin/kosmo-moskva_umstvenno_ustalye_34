@@ -66,20 +66,20 @@ python3 scripts/download_sen1floods11.py            # HandLabeled + perm_water +
 |---|---|---|
 | Получение данных и QC | `make data` | готово (QC 446/446 чипов, `pytest tests/data`; сырые файлы — `scripts/download_sen1floods11.py`, см. выше) |
 | Split (заморожен) | `make split` | готово (D-016, `pytest tests/split`) |
-| Baseline: порог на train/val | `make baseline` | не реализовано |
+| Baseline: порог на train/val | `make baseline` | готово (VH ≤ −23,0 dB, D-021, validation IoU 0,580; `pytest tests/baseline`) |
 | Обучение основного метода | `make train` (GPU: `make train GPU=1`; Colab: `notebooks/train_colab.ipynb`) | не реализовано |
 | Калибровка и порог на validation | `make calibrate` | не реализовано |
 | Inference на чипе (S1-only) | `make predict CHIP=<chip_id>` | не реализовано |
 | Финальная оценка на test | `make eval-test` | не реализовано |
 | 10 объектов и ущерб | `make assets CHIP=<chip_id>` | в работе (портфель и EL готовы, `pytest tests/assets`; ждёт p-растра от `predict`) |
-| Зоны, цена, A/B/C | `make procure BUDGET=<руб>` | не реализовано (геометрия и цена по ПП 840 — чистые функции готовы, `pytest tests/procurement`; CLI-этап собирается) |
-| 12 обязательных файлов | `make export && make validate` | не реализовано |
+| Зоны, цена, A/B/C | `make procure BUDGET=<руб>` | в работе (зоны v0 и A/B/C готовы, D-023, `pytest tests/procurement`; зависит от `assets`) |
+| 12 обязательных файлов | `make export && make validate` | в работе (валидатор готов — `make validate` → 12/12 на эталоне `tests/fixtures/good`, `pytest tests/contracts`; `export`, который соберёт реальный комплект, ещё нет) |
 | Интерфейс оператора | `make app` | не реализовано |
-| Всё на готовых весах | `make all CHIP=<chip_id> BUDGET=<руб>` | не реализовано (цепочка ждёт `predict`/`export`; `data` уже готов) |
+| Всё на готовых весах | `make all CHIP=<chip_id> BUDGET=<руб>` | не реализовано (цепочка ждёт `model`/`predict`/`export`; `data`, `split`, `baseline` уже готовы) |
 
-`make check` (`test` + `hooks-test` + `validate`) — обязателен перед каждым push; пока
-`floodvalue.export.validate` не реализован, `check` печатает причину и не роняет
-остальные проверки (Makefile, issue area:export/contracts).
+`make check` (`test` + `hooks-test` + `validate`) — обязателен перед каждым push; без
+`OUT=` `validate` проверяет эталон `tests/fixtures/good` (12/12), `make validate
+OUT=<комплект>` — реальный собранный комплект.
 
 ## Результаты
 

@@ -9,7 +9,7 @@
 ```
 models/
   baseline/
-    config.json        # порог, метод подбора (Otsu/…), метрики val — без бинарных весов
+    config.json        # канал, порог (VH ≤ −23,0 dB, D-021), метрики dev/val — без бинарных весов
   pixel/
     config.json         # признаки, гиперпараметры, метрики dev/val
     weights.joblib        # или .pkl — через LFS
@@ -20,6 +20,11 @@ models/
     config.json              # метод калибровки (Platt/isotonic/…), параметры, порог
     calibrator.joblib          # через LFS, если бинарный
 ```
+
+У `baseline` бинарного файла весов нет — параметры (канал, порог, масштаб сигмоиды)
+целиком в `config.json`, а `weights_sha256` в нём — sha256 канонического JSON этих
+параметров, не файла (см. `models/baseline/config.json`). У методов с обученными
+весами (`pixel`, `unet`, калибратор) — обычный файл через LFS, как показано выше.
 
 `models/<method>/` — по одному каталогу на метод, который производит `predict_proba`
 или калибратор (`area:baseline`, `area:model-pixel`, `area:model-unet`,

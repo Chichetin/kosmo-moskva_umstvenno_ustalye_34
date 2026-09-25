@@ -50,10 +50,15 @@ if [ -n "$CURRENT_TARGET" ] && [ "$CURRENT_TARGET" != "$REPO_ROOT" ]; then
 fi
 
 echo "setup_gpu_env: floodvalue -e . (torch уже поставлен выше — pip его не понижает до CPU-сборки)"
-uv pip install --python "$GPU_PYTHON" -e "$REPO_ROOT"
+# --no-sources: игнорировать [tool.uv.sources] из pyproject.toml (там torch привязан к
+# CPU-индексу для uv.lock, D-003) — иначе uv может учесть его при разрешении версий
+# и здесь, хотя сейчас cu128-сборка и так не переустанавливается (удовлетворяет torch>=2.4).
+uv pip install --python "$GPU_PYTHON" -e "$REPO_ROOT" --no-sources
 
 echo "setup_gpu_env: проверка CUDA"
 "$GPU_PYTHON" - <<'PY'
+import sys
+
 import torch
 
 print(f"torch {torch.__version__}")
@@ -62,6 +67,14 @@ if torch.cuda.is_available():
     print(f"device: {torch.cuda.get_device_name(0)}")
 else:
     print("предупреждение: CUDA недоступна в этом окружении — обучение пойдёт на CPU")
+
+if "+cu" not in torch.__version__:
+    print(
+        "setup_gpu_env: ОШИБКА — torch в этом venv не cu128-сборка "
+        f"({torch.__version__}); GPU-torch подменился CPU-сборкой, обучение на GPU не пойдёт",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 PY
 
 echo "setup_gpu_env: готово. Обучение: $GPU_PYTHON -m floodvalue train ...  (или make train GPU=1)"
