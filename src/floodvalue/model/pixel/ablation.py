@@ -4,7 +4,7 @@
 
 Everything except the feature set is fixed: train sample (same pixels, seed), clip bounds,
 classifier and its hyperparameters (models/pixel/config.json `params`, else train.FIXED
-with 127 leaves, water weight 3), threshold 0.5. Scored by pooled IoU on dev (USA) with a
+with 31 leaves, water weight 1), threshold 0.5. Scored by pooled IoU on dev (USA) with a
 chip bootstrap CI and a paired bootstrap against the full set. Validation and test are
 not read. Writes docs/verification/pixel-ablation.md and pixel-ablation.csv.
 """
@@ -48,7 +48,7 @@ def run(args=None) -> int:
         cfg = json.loads(cfg_path.read_text())
         params, chosen = cfg["params"], cfg["features"]
     else:
-        params = {**train.FIXED, "max_leaf_nodes": 127, "water_weight": 3.0}
+        params = {**train.FIXED, "max_leaf_nodes": 31, "water_weight": 1.0}
     ref = next((lab for lab, fs in SETS if fs == chosen), FULL_LABEL)
     names = superset()
     parts = {p: chip_ids(p) for p in ("train", "dev")}

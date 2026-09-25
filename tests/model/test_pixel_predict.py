@@ -93,6 +93,8 @@ def test_predict_chip_writes_on_s1_grid(tmp_path, monkeypatch, model_dir):
         ok = p != -9999
         assert np.array_equal(m[ok] == 1, p[ok] >= 0.5)
     assert meta["threshold"] == 0.5 and meta["inputs"].startswith("S1 only")
+    # same naming as the dispatcher, so export finds models/pixel/config.json
+    assert meta["method"] == "pixel" and len(meta["weights_sha256"]) == 64
 
 
 def test_published_model_matches_its_config():

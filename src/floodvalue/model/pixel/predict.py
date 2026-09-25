@@ -100,11 +100,12 @@ def predict_chip(chip_id: str, out_dir: Path, config_path: Path = CONFIG_PATH) -
                 "nodata": P_NODATA if is_p else MASK_NODATA, "compress": "deflate", **grid}
         with rasterio.open(out_dir / f"{name}.tif", "w", **prof) as dst:
             dst.write(arr, 1)
-    meta = {"chip_id": chip_id, "method": config["method"], "threshold": config["threshold"],
+    meta = {"chip_id": chip_id, "method": "pixel", "model": config["method"],
+            "threshold": config["threshold"],
             "threshold_status": config.get("threshold_status", ""),
             "features": config["features"],
             "config_sha256": sha256_file(Path(config_path)),
-            "model_sha256": config["model_sha256"],
+            "weights_sha256": config["model_sha256"],
             "s1_file": layer_path(chip_id, "S1Hand").name, "inputs": "S1 only (VV, VH dB)",
             "seconds": round(time.perf_counter() - t0, 2)}
     (out_dir / "prediction.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1) + "\n")

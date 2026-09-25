@@ -1,6 +1,6 @@
 # Основной метод A: пиксельный классификатор S1 — dev и validation
 
-Сгенерировано `python -m floodvalue.model.pixel.train` (commit `56288a48c682`, 2026-09-25). Числа — из `docs/verification/pixel-metrics.csv`. Test не читался (D-010).
+Сгенерировано `python -m floodvalue.model.pixel.train` (commit `56288a48c682-dirty (обучено из незакоммиченного кода; код — коммит 876bc64)`, 2026-09-25). Числа — из `docs/verification/pixel-metrics.csv`. Test не читался (D-010).
 
 ## Метод
 
@@ -75,7 +75,7 @@
 
 ## Порог → IoU (диагностика, не выбор)
 
-IoU при маске p ≥ t. Порог здесь не выбирается: порог основного метода задаёт этап калибровки на validation (D-012). Таблица показывает, что ранжирование пикселей у A лучше, чем его порог 0,5 на новых событиях. Полная кривая — `docs/verification/pixel-threshold-curve.csv`.
+IoU при маске p ≥ t. Порог здесь не выбирается: порог основного метода задаёт этап калибровки на validation (D-012). При другом t IoU на validation выше, чем при 0,5, но это оракульная оценка (t и IoU — на одной validation). Полная кривая — `docs/verification/pixel-threshold-curve.csv`.
 
 | split | событие | t=0.1 | t=0.2 | t=0.3 | t=0.4 | t=0.5 | t=0.6 | t=0.7 | t=0.8 | t=0.9 | лучший t (IoU) |
 |---|---|---|---|---|---|---|---|---|---|---|---|

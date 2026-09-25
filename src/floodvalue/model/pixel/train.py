@@ -310,9 +310,14 @@ def read_chip(chip_id: str) -> tuple[np.ndarray, np.ndarray]:
 
 
 def git_commit() -> str:
+    """HEAD, with -dirty when the pixel code differs from it (trained from uncommitted code)."""
     try:
-        return subprocess.run(["git", "rev-parse", "--short=12", "HEAD"], cwd=REPO_ROOT,
+        head = subprocess.run(["git", "rev-parse", "--short=12", "HEAD"], cwd=REPO_ROOT,
                               capture_output=True, text=True, check=True).stdout.strip()
+        dirty = subprocess.run(["git", "status", "--porcelain", "--", "src/floodvalue/model/pixel"],
+                               cwd=REPO_ROOT, capture_output=True, text=True,
+                               check=True).stdout.strip()
+        return head + ("-dirty" if dirty else "")
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
 
@@ -412,8 +417,8 @@ def render_report(cfg: dict, rows: list[dict], ci: dict, deltas: dict, grid: lis
     if curve:
         out += ["", "## Порог → IoU (диагностика, не выбор)", "",
                 ("IoU при маске p ≥ t. Порог здесь не выбирается: порог основного метода "
-                 "задаёт этап калибровки на validation (D-012). Таблица показывает, что "
-                 "ранжирование пикселей у A лучше, чем его порог 0,5 на новых событиях. "
+                 "задаёт этап калибровки на validation (D-012). При другом t IoU на validation "
+                 "выше, чем при 0,5, но это оракульная оценка (t и IoU — на одной validation). "
                  "Полная кривая — `docs/verification/pixel-threshold-curve.csv`."), "",
                 "| split | событие | " + " | ".join(f"t={t:.1f}" for t in CURVE_T[1::2]) + " | лучший t (IoU) |",
                 "|---|---|" + "---|" * (len(CURVE_T[1::2]) + 1)]
