@@ -1,7 +1,7 @@
 # Baseline (issue #5, D-021): независимая сверка «было → стало»
 
 Проверка выполнена независимым запуском `make baseline` в worktree `5-baseline`, commit
-`0689648` (полный `068964818dba...`), 2026-09-25. Каталог данных —
+`0689648` (полный `068964818dba...`), 2026-09-25 (между `0689648` и веткой PR #52 менялся только `src/floodvalue/procurement/`, код baseline тот же). Каталог данных —
 `FLOODVALUE_DATA_DIR=<repo>/data`,
 каталог выходов — временный scratch-каталог сессии (для `predict`, в git не попадает).
 Test не читался, `make eval-test` не запускался.
@@ -58,7 +58,7 @@ validation IoU 0.580 F1 0.734 P 0.838 R 0.653 n 13983779
 baseline: VH <= -23.0 dB, s = 2.1315 -> models/baseline/config.json
 ```
 
-Полный лог: `<scratch>/baseline-run.log`. Полные значения по событиям (Ghana, India,
+Лог не сохранён, консольный вывод приведён выше. Полные значения по событиям (Ghana, India,
 Pakistan, Paraguay, Somalia — train; USA — dev; Nigeria, Sri-Lanka — validation) —
 сверены по `docs/verification/baseline-metrics.csv`: после `make baseline` файл
 байт-в-байт не изменился (`git diff --stat` — пусто), т.е. числа по событиям в моём
