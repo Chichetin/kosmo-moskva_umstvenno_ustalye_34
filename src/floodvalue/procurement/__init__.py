@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Any
 
 
-def plan(run_dir: Path, budget_rub: float) -> dict[str, Any]:
-    """Recompute strategies A/B/C for ``budget_rub``; keys: plans, plan_rows, comparison, reasons."""
+def plan(run_dir: Path, budget_rub: float, social: bool | None = None) -> dict[str, Any]:
+    """Recompute strategies A/B/C for ``budget_rub``; keys: plans, plan_rows, comparison,
+    reasons, social_constraint. ``social`` switches the C social-coverage constraint
+    (None — as in configs/run.yaml)."""
     from floodvalue.procurement.run import plan as _plan
-    return _plan(run_dir, budget_rub)
+    return _plan(run_dir, budget_rub, social)
