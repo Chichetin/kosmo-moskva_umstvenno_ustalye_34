@@ -40,7 +40,7 @@ def test_run_id_follows_contract():
 
 
 def test_split_hash_matches_frozen_split():
-    split = json.loads((SPLITS_DIR / "split_v1.json").read_text())
+    split = json.loads((SPLITS_DIR / "split_v1.json").read_text(encoding="utf-8"))
     assert assemble.split_sha256(split) == split["sha256"]
     assert assemble.chip_split(split, "Sri-Lanka_713926") == "validation"
     assert assemble.chip_split(split, "Nowhere_1") == "none"

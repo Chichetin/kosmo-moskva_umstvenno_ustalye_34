@@ -99,8 +99,8 @@ def write_json(path: Path, obj) -> None:
 def build(out: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
     types = {t["asset_class"]: t for t in
-             yaml.safe_load((ROOT / "configs/assets.yaml").read_text())["asset_types"]}
-    pricing = yaml.safe_load((ROOT / "configs/pricing.yaml").read_text())
+             yaml.safe_load((ROOT / "configs/assets.yaml").read_text(encoding="utf-8"))["asset_types"]}
+    pricing = yaml.safe_load((ROOT / "configs/pricing.yaml").read_text(encoding="utf-8"))
 
     # rasters
     rr, cc = np.mgrid[0:SIZE, 0:SIZE]

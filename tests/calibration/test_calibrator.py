@@ -120,13 +120,13 @@ def test_load_checks_model_hash_and_threshold(tmp_path):
     path = tmp_path / "calibration.json"
     good = {"calibrator": {"kind": "platt", "a": 1.0, "b": 0.0}, "threshold": 0.4,
             "input_model_sha256": "abc"}
-    path.write_text(json.dumps(good))
+    path.write_text(json.dumps(good), encoding="utf-8")
     assert C.load(path, "abc")["threshold"] == 0.4
     with pytest.raises(RuntimeError, match="make calibrate"):
         C.load(path, "other")
-    path.write_text(json.dumps({**good, "threshold": 1.5}))
+    path.write_text(json.dumps({**good, "threshold": 1.5}), encoding="utf-8")
     with pytest.raises(ValueError):
         C.load(path)
-    path.write_text(json.dumps({**good, "calibrator": {"kind": "magic"}}))
+    path.write_text(json.dumps({**good, "calibrator": {"kind": "magic"}}), encoding="utf-8")
     with pytest.raises(ValueError):
         C.load(path)
