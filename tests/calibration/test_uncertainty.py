@@ -133,14 +133,18 @@ def _chips(sep_by_event, n_chips=6, n=400, seed=0):
 
 def test_select_uses_worst_event_and_prefers_simpler_on_near_tie():
     per_chip = {
-        # good on A, useless on B -> worst event decides against it
-        "entropy_p": _chips({"A": 3.0, "B": 0.0}, seed=1),
+        # excellent on A, weak on B: better on the mean of events, worse on the worst event
+        "entropy_p": _chips({"A": 4.0, "B": 0.5}, seed=1),
         # clearly best in the worse event
-        "member_std": _chips({"A": 1.5, "B": 1.5}, seed=2),
+        "member_std": _chips({"A": 1.0, "B": 1.0}, seed=2),
         # indistinguishable from member_std but later in the simplicity order
-        "mutual_info": _chips({"A": 1.5, "B": 1.5}, seed=3),
+        "mutual_info": _chips({"A": 1.0, "B": 1.0}, seed=3),
     }
     res = U.select(per_chip, n_boot=200)
+    per_event = lambda m, ev: U.auroc_hist(  # noqa: E731
+        sum(e for x, e, _ in per_chip[m] if x == ev), sum(c for x, _, c in per_chip[m] if x == ev))
+    mean_auc = {m: np.mean([per_event(m, ev) for ev in ("A", "B")]) for m in per_chip}
+    assert mean_auc["entropy_p"] > mean_auc["member_std"]      # a mean rule would pick entropy
     assert res["scores"]["entropy_p"] < res["scores"]["member_std"]
     assert res["chosen"] == "member_std"          # simpler of the two tied, not entropy_p
     assert res["vs_best"]["entropy_p"]["ci_lo"] > 0
@@ -233,8 +237,12 @@ def test_predict_writes_chosen_measure_and_range(ensemble_method, tmp_path):
     assert unc["n_members"] == 3 and unc["validation"] == {"ALL": {"auroc": 0.9}}
 
 
-def test_predict_without_choice_writes_unverified_entropy_of_delivered_p(ensemble_method, tmp_path):
+def test_predict_without_choice_writes_unverified_entropy_of_delivered_p(ensemble_method, tmp_path,
+                                                                       monkeypatch):
     _, s1 = ensemble_method
+    # the method's p need not be the plain mean of its members: u follows the delivered p
+    monkeypatch.setattr(sys.modules["fake_ens_mod"], "predict_proba",
+                        lambda s: _fake_members(s).mean(0) ** 0.8)
     p, u, _, _, meta = _predict(tmp_path)
     ok = np.isfinite(s1).all(0)
     # the same measure eval-test reports: entropy of flood_probability.tif
