@@ -234,3 +234,17 @@ for f in d["features"]: print(f["properties"])
 - **Bolivia_129334**: вода 59.8%, −1 9.3%, NaN 0.29%, JRC 1.6%. Это авторский hold-out, хорош для рассказа «новое событие», но надо показать работу с −1 и NaN.
 
 Запасной вариант с большой долей воды — Spain_7387658 (вода 58.4%, −1 0%, JRC 6.8%, авторский test). S1 для него не скачан и не проверен.
+
+## 10. Принятый split v1 (D-016)
+
+Предложение §9 принято с одной правкой из D-012: событие USA выделено из train в **dev**. Файл `splits/split_v1.json`, описание и команды в `splits/README.md`.
+
+| Часть | События | Чипов |
+|---|---|---|
+| train | Ghana, India, Pakistan, Paraguay, Somalia | 237 |
+| dev | USA | 69 |
+| validation | Sri-Lanka, Nigeria | 60 |
+| test | Spain, Mekong, Bolivia | 75 |
+| excluded | 5 чипов Ghana, все пиксели −1 (§5) | 5 |
+
+Ghana_83483 в авторском split лежит в test, но событие Ghana у нас в train, поэтому его метку можно читать. Метки test-событий при построении split не открываются.

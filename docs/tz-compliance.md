@@ -12,7 +12,7 @@
 | 3 | Основной метод | `src/floodvalue/model/`, `models/<main>/`, `notebooks/` | `make train`, `make predict CHIP=…`; описание в README | ⬜ |
 | 4 | Сравнение методов | `docs/verification/test-comparison.md` | `make eval-test` → оба метода, идентичные валидные пиксели, по событиям, FP/FN | ⬜ |
 | 5 | Итоговая карта и порог | `flood_probability.tif`, `flood_mask.tif`, кривая порога на val | `make validate` (mask = p ≥ threshold); `docs/verification/threshold.md` | ⬜ |
-| 6 | Split без утечки | `splits/split_v1.json`, `docs/decisions.md` D-006, `test-log.md` | `make split` → хеш = decisions; `pytest tests/split` (события не пересекаются) | ⬜ |
+| 6 | Split без утечки | `splits/split_v1.json`, `splits/README.md`, `docs/decisions.md` D-006/D-012/D-016, `test-log.md` | `make split` → хеш = decisions (D-016); `uv run --frozen pytest tests/split` (события не пересекаются, 446 чипов учтены, test запечатан) | ✅ split заморожен; журнал test — при `eval-test` |
 | 7 | Перенос и неполные данные | test на новых событиях, S1-only, другой чип | `make predict CHIP=<другой>`; `docs/verification/transfer.md` | ⬜ |
 | 8 | Контролируемый эксперимент | `docs/verification/experiment-*.md` | таблица на validation (признаки / вариант / постобработка) | ⬜ |
 | 9 | Надёжность вероятностей | калибратор, reliability на test | `make calibrate`; ECE/Brier до и после; параметры опубликованы | ⬜ |
