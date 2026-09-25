@@ -31,7 +31,7 @@ def predict_proba(s1_db: np.ndarray) -> np.ndarray:
 ```
 
 - Реализуют: `baseline` (временно как основной — p = сигмоида от расстояния до порога,
-  D-009), `model`. Калибратор `calibration` — функция `p_raw → p` на том же интерфейсе.
+  D-009), `model.pixel`, `model.unet`. Калибратор `calibration` — функция `p_raw → p` на том же интерфейсе.
 - Нормализация, веса, порог — из `models/<name>/` (`config.json` с sha256 весов).
 - Работает на CPU, только S1 (режим S1-only обязателен).
 
@@ -76,7 +76,7 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
 ## 7. Метрики методов (для критериев 2, 4, 5, 12)
 
 `metrics.csv` (доп. файл комплекта и `docs/verification/`): `method` (baseline/main),
-`split` (validation/test), `event` (или `ALL`), `iou`, `f1`, `precision`, `recall`,
+`split` (dev/validation/test), `event` (или `ALL`), `iou`, `f1`, `precision`, `recall`,
 `tp`, `fp`, `fn`, `tn`, `n_pixels`, `threshold`, `valid_mask_sha256`. Оба метода — на
 одной маске валидных пикселей (`valid_mask_sha256` совпадает). `threshold_curve.csv` —
 «порог → метрики» на validation.

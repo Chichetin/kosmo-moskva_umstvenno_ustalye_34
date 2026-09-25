@@ -66,7 +66,7 @@
 - **Test запечатан.** Никакой код, кроме `make eval-test` для замороженной
   конфигурации, test-чипы не читает. **До заморозки сквозной путь и интерфейс гоняются
   на чипе из validation** (`Sri-Lanka_713926`); демо-чип из test (`Spain_7370579`)
-  подставляется после заморозки, его метки читают только `eval-test` и прокси-проверка. Каждый запуск — строка в
+  подставляется после заморозки, его метки читает только `eval-test` (включая прокси-проверку). Каждый запуск — строка в
   `docs/verification/test-log.md` (commit, хеш конфигурации). Повторная настройка
   после просмотра test — новый эксперимент с новым test.
 - **Спор решает validation**, не голосование: PR в метод, порог, калибровку,
@@ -170,7 +170,8 @@ jury), `sonnet` — механика (прогоны, README, проход ин�
 ## Код и архитектура
 
 - Python 3.12, uv (`uv.lock` — единственный источник версий). Пакет
-  `src/floodvalue/`: `data`, `baseline`, `model`, `calibration`, `assets`,
+  `src/floodvalue/`: `data`, `baseline`, `model` (подкаталоги `pixel`, `unet`, модуль
+  `eval_test` — `area:model-pixel`/`model-unet`/`eval`), `calibration`, `assets`,
   `procurement`, `export`, `app` — без взаимных внутренних импортов; общее — только
   `floodvalue.contracts` и `floodvalue.paths`.
 - **Одна команда на этап и одна на всё** (`make <этап>` = `python -m floodvalue
