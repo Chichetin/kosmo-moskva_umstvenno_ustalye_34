@@ -584,8 +584,9 @@ def test_zone_outside_chip_fails(run_dir):
 
 def test_zone_ring_not_closed_fails(run_dir):
     # GeoJSON (RFC 7946 §3.1.6): the first and last positions of a ring are identical
-    edit_json(run_dir / F.CANDIDATE_ORDERS,
-              lambda d: zone(d, "Z1")["geometry"]["coordinates"][0].pop() and None)
+    def unclose(doc):
+        zone(doc, "Z1")["geometry"]["coordinates"][0].pop()
+    edit_json(run_dir / F.CANDIDATE_ORDERS, unclose)
     assert "объект 0: кольцо 0 не замкнуто" in only(failing(run_dir), F.CANDIDATE_ORDERS)
 
 
