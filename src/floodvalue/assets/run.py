@@ -69,9 +69,7 @@ def run(args) -> int:
         ):
             print(f"assets: сетка {prob_path} не совпадает с S1 {chip_id}")
             return 1
-        prob = src.read(1).astype("float32")
-        if src.nodata is not None and np.isfinite(src.nodata):
-            prob[prob == src.nodata] = np.nan
+        prob = src.read(1).astype("float32")  # nodata -9999/NaN is handled by extract_p
 
     s1_valid = np.isfinite(s1).all(axis=0)
     assets = place_assets(s1_valid, transform, PORTFOLIO_SEED, load_asset_types())
@@ -107,7 +105,7 @@ def run(args) -> int:
         "p_extraction_rule": P_EXTRACTION_RULE,
         "el_model": "EL = p_flood * asset_value_rub * vulnerability_coef",
         "status_rule": STATUS_RULE,
-        "uncertainty": {"name": "binary_entropy_bits", "status": "temporary",
+        "uncertainty": {"name": "binary_entropy_bits", "status": "temporary_unverified",
                         "rule": UNCERTAINTY_RULE},
         "unassessed_asset_ids": [r["asset_id"] for r in loss_rows if r["status"] != "ok"],
     }

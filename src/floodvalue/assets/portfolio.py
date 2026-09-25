@@ -107,7 +107,9 @@ def extract_p(
         if not (0 <= row < h and 0 <= col < w):
             out.append((None, "no_data"))
             continue
-        p = float(prob_raster[row, col])
+        v = prob_raster[row, col]
+        # float32 raster: keep the shortest decimal that round-trips (0.4, not 0.4000000059604645)
+        p = float(np.format_float_positional(v)) if v.dtype == np.float32 else float(v)
         if not math.isfinite(p) or p == PROB_NODATA:
             out.append((None, "no_data"))
             continue

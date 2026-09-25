@@ -73,6 +73,7 @@ def test_run_writes_three_files_by_contract(setup):
         assert np.isfinite(s1[:, int(r), int(c)]).all()
     for r in loss:
         assert r["status"] == "ok"
+        assert r["p_flood"] == "0.4"
         v = float(by_id[r["asset_id"]]["asset_value_rub"])
         q = float(by_id[r["asset_id"]]["vulnerability_coef"])
         assert float(r["expected_loss_rub"]) == pytest.approx(0.4 * v * q, rel=1e-6)
@@ -96,3 +97,24 @@ def test_run_no_data_asset_has_empty_fields(setup):
     assert row["p_flood"] == row["expected_loss_rub"] == row["rank"] == row["uncertainty"] == ""
     # placement unchanged by the p-raster
     assert read_csv(out / "assets.csv")[0] == first
+
+
+def test_run_places_only_where_both_vv_and_vh_finite(tmp_path, monkeypatch):
+    data = tmp_path / "data"
+    s1_dir = data / "raw" / "HandLabeled" / "S1Hand"
+    s1_dir.mkdir(parents=True)
+    s1 = np.full((2, H, W), -15.0, dtype="float32")
+    s1[1, :, :] = np.nan  # VH missing everywhere ...
+    s1[1, 10:14, 10:14] = -20.0  # ... except a 4x4 block
+    with rasterio.open(s1_dir / "Vh_1_S1Hand.tif", "w", driver="GTiff", height=H, width=W,
+                       count=2, dtype="float32", crs="EPSG:4326", transform=TRANSFORM,
+                       nodata=np.nan) as dst:
+        dst.write(s1)
+    out = tmp_path / "out"
+    out.mkdir()
+    write_prob(out / "flood_probability.tif", np.full((H, W), 0.2, dtype="float32"))
+    monkeypatch.setenv("FLOODVALUE_DATA_DIR", str(data))
+    assert assets_run.run(argparse.Namespace(chip="Vh_1", out=str(out), budget=None)) == 0
+    for row in read_csv(out / "assets.csv"):
+        c, r = ~TRANSFORM @ (float(row["longitude"]), float(row["latitude"]))
+        assert 10 <= int(r) < 14 and 10 <= int(c) < 14
