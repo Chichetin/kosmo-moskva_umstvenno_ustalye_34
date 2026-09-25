@@ -1,7 +1,7 @@
 """`python -m floodvalue predict --chip <id> | --s1 <path> [--out <dir>]`: p-raster and mask.
 
 `--chip` reads `HandLabeled/S1Hand/<id>_S1Hand.tif`; `--s1` reads any 2-band S1 GeoTIFF (VV, VH
-in dB, NaN = no data), e.g. an official `S1Weak`/`S1Perm` chip outside HandLabeled (#87): chip_id
+in dB, NaN = no data), e.g. an official `S1Weak` chip outside HandLabeled (#87): chip_id
 is the file name before `_S1`, output goes to `<FLOODVALUE_OUTPUT_DIR>/<chip_id>` and
 prediction.json gets `label_status: "no_label"` (no label is read, no metrics are computed).
 Same method, calibration and threshold in both modes — nothing is fitted here.

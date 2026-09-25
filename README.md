@@ -118,7 +118,7 @@ Mekong, Bolivia) не используются нигде, кроме будущ
 раздел «Ограничения и развитие»). Полный сквозной путь до 12 файлов на другом чипе —
 подраздел ниже.
 
-### Любой S1-файл вне HandLabeled (S1Weak, S1Perm)
+### Любой S1-файл вне HandLabeled (например S1Weak)
 
 - любой из 446 HandLabeled: `make all CHIP=<chip_id> BUDGET=<руб>` (подраздел ниже);
 - любой S1-файл: `python -m floodvalue predict --s1 <path>` (или `make predict S1=<path>`).
