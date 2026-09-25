@@ -60,7 +60,7 @@
    "dev_iou": 0.506869,
    "dev_precision": 0.733399,
    "dev_recall": 0.621356,
-   "seconds": 17.7
+   "seconds": 25.6
   },
   {
    "feature_set": "tex3",
@@ -69,7 +69,7 @@
    "dev_iou": 0.473522,
    "dev_precision": 0.589442,
    "dev_recall": 0.706558,
-   "seconds": 18.8
+   "seconds": 27.4
   },
   {
    "feature_set": "tex3",
@@ -78,7 +78,7 @@
    "dev_iou": 0.363963,
    "dev_precision": 0.399642,
    "dev_recall": 0.803025,
-   "seconds": 17.9
+   "seconds": 39.7
   },
   {
    "feature_set": "tex3",
@@ -87,7 +87,7 @@
    "dev_iou": 0.503914,
    "dev_precision": 0.726897,
    "dev_recall": 0.621598,
-   "seconds": 30.2
+   "seconds": 31.4
   },
   {
    "feature_set": "tex3",
@@ -96,7 +96,7 @@
    "dev_iou": 0.472631,
    "dev_precision": 0.589129,
    "dev_recall": 0.705023,
-   "seconds": 36.6
+   "seconds": 31.9
   },
   {
    "feature_set": "tex3",
@@ -105,25 +105,25 @@
    "dev_iou": 0.361962,
    "dev_precision": 0.397719,
    "dev_recall": 0.801037,
-   "seconds": 31.7
+   "seconds": 21.8
   },
   {
    "feature_set": "tex3_7",
    "max_leaf_nodes": 31,
    "water_weight": 1.0,
    "dev_iou": 0.529964,
-   "dev_precision": 0.731417,
+   "dev_precision": 0.731416,
    "dev_recall": 0.65802,
-   "seconds": 16.4
+   "seconds": 16.6
   },
   {
    "feature_set": "tex3_7",
    "max_leaf_nodes": 31,
    "water_weight": 2.0,
-   "dev_iou": 0.492721,
+   "dev_iou": 0.49272,
    "dev_precision": 0.593731,
    "dev_recall": 0.743338,
-   "seconds": 17.5
+   "seconds": 18.9
   },
   {
    "feature_set": "tex3_7",
@@ -132,7 +132,7 @@
    "dev_iou": 0.369606,
    "dev_precision": 0.399561,
    "dev_recall": 0.831371,
-   "seconds": 20.2
+   "seconds": 15.9
   },
   {
    "feature_set": "tex3_7",
@@ -141,7 +141,7 @@
    "dev_iou": 0.527663,
    "dev_precision": 0.726428,
    "dev_recall": 0.658524,
-   "seconds": 24.0
+   "seconds": 19.0
   },
   {
    "feature_set": "tex3_7",
@@ -150,7 +150,7 @@
    "dev_iou": 0.47924,
    "dev_precision": 0.573719,
    "dev_recall": 0.744256,
-   "seconds": 23.8
+   "seconds": 19.7
   },
   {
    "feature_set": "tex3_7",
@@ -159,7 +159,7 @@
    "dev_iou": 0.36441,
    "dev_precision": 0.393631,
    "dev_recall": 0.830763,
-   "seconds": 25.5
+   "seconds": 22.3
   },
   {
    "feature_set": "tex3_7_15",
@@ -168,7 +168,7 @@
    "dev_iou": 0.509546,
    "dev_precision": 0.685616,
    "dev_recall": 0.664898,
-   "seconds": 22.8
+   "seconds": 17.9
   },
   {
    "feature_set": "tex3_7_15",
@@ -177,7 +177,7 @@
    "dev_iou": 0.454271,
    "dev_precision": 0.533947,
    "dev_recall": 0.752739,
-   "seconds": 22.5
+   "seconds": 17.0
   },
   {
    "feature_set": "tex3_7_15",
@@ -186,7 +186,7 @@
    "dev_iou": 0.348668,
    "dev_precision": 0.374312,
    "dev_recall": 0.835778,
-   "seconds": 22.0
+   "seconds": 16.8
   },
   {
    "feature_set": "tex3_7_15",
@@ -195,7 +195,7 @@
    "dev_iou": 0.492213,
    "dev_precision": 0.653973,
    "dev_recall": 0.665547,
-   "seconds": 26.5
+   "seconds": 21.7
   },
   {
    "feature_set": "tex3_7_15",
@@ -204,7 +204,7 @@
    "dev_iou": 0.443311,
    "dev_precision": 0.520281,
    "dev_recall": 0.749784,
-   "seconds": 27.8
+   "seconds": 27.3
   },
   {
    "feature_set": "tex3_7_15",
@@ -213,10 +213,10 @@
    "dev_iou": 0.344417,
    "dev_precision": 0.370208,
    "dev_recall": 0.831757,
-   "seconds": 28.4
+   "seconds": 26.2
   }
  ],
  "split_sha256": "0098346e0f87297501409a1a8522afab6209e35f56e8cf1b68996909c8b63c75",
- "created_at": "2026-09-25",
- "commit": "56288a48c682-dirty (обучено из незакоммиченного кода; код — коммит 876bc64)"
+ "created_at": "2026-09-26",
+ "commit": "58ecd213f936"
 }

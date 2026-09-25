@@ -1,6 +1,6 @@
 # Контролируемый эксперимент: входы пиксельного классификатора (dev)
 
-Сгенерировано `python -m floodvalue.model.pixel.ablation` (commit `56288a48c682-dirty (обучено из незакоммиченного кода; код — коммит 876bc64)`, 2026-09-25). Числа — `docs/verification/pixel-ablation.csv`. Validation и test не читались.
+Сгенерировано `python -m floodvalue.model.pixel.ablation` (commit `58ecd213f936`, 2026-09-26). Числа — `docs/verification/pixel-ablation.csv`. Validation и test не читались.
 
 **Одна ось — набор входных признаков.** Зафиксировано всё остальное: одна и та же выборка пикселей train (1881892 пикселей, 236 чипов, seed 20260925), клиппинг по train, `HistGradientBoostingClassifier` с параметрами `{"max_leaf_nodes": 31, "water_weight": 1.0, "max_iter": 300, "learning_rate": 0.1}`, порог p ≥ 0.5. Метрика — pooled IoU на dev (USA, 69 чипов), 95 % бутстрэп по чипам (1000 повторов); Δ — парный бутстрэп против итоговой конфигурации «+текстура 3/7» (models/pixel/config.json).
 
