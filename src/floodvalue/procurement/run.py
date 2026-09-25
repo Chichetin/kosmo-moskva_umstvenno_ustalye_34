@@ -15,17 +15,11 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-import yaml
-
-from floodvalue.paths import CONFIGS_DIR, output_dir
+from floodvalue.contracts import load_run_config
+from floodvalue.paths import output_dir
 from floodvalue.procurement import strategies, zones
 from floodvalue.procurement.pricing import load_pricing
 
-# До влития configs/run.yaml (issue contracts) — те же значения, что в его черновике.
-# TODO: удалить запасные значения, когда configs/run.yaml будет в main.
-FALLBACK_RUN = {"chip_id": "Sri-Lanka_713926", "budget_rub": 5000,
-                "decision_at": "2017-05-30T12:00:00+00:00",
-                "decision_deadline": "2017-05-31T00:00:00+00:00"}
 SENS_BUDGETS = (0, 1000, 2500, 5000, 10000, 20000, 50000)
 SENS_RATE_FACTORS = (Decimal("0.5"), Decimal("1.5"))
 
@@ -43,15 +37,12 @@ SENS_FIELDS = ["scenario_id", "strategy", "changed_inputs_json", "decision_cost_
 
 
 def run_config() -> dict[str, Any]:
-    path = CONFIGS_DIR / "run.yaml"
-    cfg = dict(FALLBACK_RUN)
-    source = "floodvalue.procurement.run.FALLBACK_RUN (configs/run.yaml нет в main)"
-    if path.exists():
-        loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        cfg.update({k: loaded[k] for k in FALLBACK_RUN if k in loaded})
-        source = "configs/run.yaml"
-    cfg["source"] = source
-    return cfg
+    """configs/run.yaml через контракт (floodvalue.contracts.load_run_config)."""
+    rc = load_run_config()
+    return {"chip_id": rc.chip_id, "budget_rub": rc.budget_rub,
+            "decision_at": rc.decision_at.isoformat(),
+            "decision_deadline": rc.decision_deadline.isoformat(),
+            "source": "configs/run.yaml"}
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
