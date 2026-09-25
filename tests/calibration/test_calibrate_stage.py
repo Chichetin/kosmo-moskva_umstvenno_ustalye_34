@@ -100,7 +100,10 @@ def synthetic_chips(n_per_event=6, seed=0):
             label[0, :4] = -1
             p = C.sigmoid(z).astype(np.float32)
             p[1, :4] = np.nan
-            chips.append(R.Chip(f"{ev}_{i}", ev, p, label, np.zeros((H, W), bool)))
+            s1 = np.full((2, H, W), -20.0, dtype=np.float32)
+            s1[1, 1, :4] = np.nan
+            chips.append(R.Chip(f"{ev}_{i}", ev, p, label, np.zeros((H, W), bool),
+                               R.io.valid_mask(s1, label)))
     return chips
 
 
@@ -145,6 +148,28 @@ def test_load_chips_reads_only_validation(monkeypatch):
     chips = R.load_chips("fake2")
     assert asked == [("validation", {})]
     assert chips[0].event == "Nigeria"
+
+
+def test_load_chips_uses_shared_s1_and_label_valid_mask(monkeypatch, tmp_path):
+    s1 = np.full((2, 2, 2), -20.0, dtype=np.float32)
+    s1[1, 0, 1] = np.nan  # one missing S1 band, while the label remains usable
+    label = np.array([[0, 1], [-1, 1]], dtype=np.int16)
+    p_raw = np.full((2, 2), 0.5, dtype=np.float32)
+
+    mod = types.ModuleType("finite_probability_method")
+    mod.predict_proba = lambda _s1: p_raw
+    monkeypatch.setitem(sys.modules, mod.__name__, mod)
+    monkeypatch.setitem(R.METHOD_MODULES, "finite-probability", mod.__name__)
+    monkeypatch.setattr(R, "chip_ids", lambda part: ["Nigeria_1"])
+    monkeypatch.setattr(R.io, "load_s1", lambda cid: (s1, {}))
+    monkeypatch.setattr(R.io, "load_label", lambda cid: (label, {}))
+    monkeypatch.setattr(R.io, "layer_path", lambda cid, layer: tmp_path / "absent.tif")
+
+    chip = R.load_chips("finite-probability")[0]
+
+    expected = np.array([[True, False], [False, True]])
+    np.testing.assert_array_equal(R.io.valid_mask(s1, label), expected)
+    np.testing.assert_array_equal(chip.valid, expected)
 
 
 def test_mean3x3_keeps_nan_and_ignores_it():
