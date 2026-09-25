@@ -215,9 +215,103 @@
       },
       "train_chips": 239,
       "held_out_chips": 67
+    },
+    {
+      "event": "Somalia",
+      "mean": [
+        -10.208631253136879,
+        -17.09820343369398,
+        6.889041248315347
+      ],
+      "std": [
+        3.8832034486321283,
+        4.410642081880569,
+        3.4428213269472794
+      ],
+      "baseline_fold_t": -23.4,
+      "baseline_fold_train_iou": 0.41385251307157167,
+      "steps_per_epoch": 140,
+      "seconds": 520,
+      "valid_mask_sha256": "d287844cb2071ab0d28ff0a79a9fd4fe776d84885a327937127bf1cb463139f5",
+      "ranking": {
+        "unet_e19": {
+          "ap": 0.3947493769597621,
+          "oracle_iou": 0.287397613939664,
+          "oracle_score_gt": 0.25
+        },
+        "unet_e19_tta": {
+          "ap": 0.3989524151812263,
+          "oracle_iou": 0.2903128144260952,
+          "oracle_score_gt": 0.23
+        },
+        "unet_e60": {
+          "ap": 0.27957537801014154,
+          "oracle_iou": 0.23847399369371927,
+          "oracle_score_gt": 0.53
+        },
+        "unet_e60_tta": {
+          "ap": 0.28720766301568273,
+          "oracle_iou": 0.24399991621457448,
+          "oracle_score_gt": 0.6
+        },
+        "baseline": {
+          "ap": 0.16808572686204323,
+          "oracle_iou": 0.13958760265439477,
+          "oracle_score_gt": 22.9
+        }
+      },
+      "train_chips": 280,
+      "held_out_chips": 26
+    },
+    {
+      "event": "USA",
+      "mean": [
+        -10.132124772521061,
+        -17.13152241681879,
+        6.998618424815942
+      ],
+      "std": [
+        3.947127013520782,
+        4.538833858701836,
+        3.448694621300268
+      ],
+      "baseline_fold_t": -23.0,
+      "baseline_fold_train_iou": 0.37798276874115827,
+      "steps_per_epoch": 118,
+      "seconds": 434,
+      "valid_mask_sha256": "cf89ac0b49f7819ea5581c1a8e19aed53fe9f4451a11d1472361f62e5a465bbc",
+      "ranking": {
+        "unet_e19": {
+          "ap": 0.6254578595856003,
+          "oracle_iou": 0.47113446919947305,
+          "oracle_score_gt": 0.32
+        },
+        "unet_e19_tta": {
+          "ap": 0.6354794624029558,
+          "oracle_iou": 0.4810110213190401,
+          "oracle_score_gt": 0.21
+        },
+        "unet_e60": {
+          "ap": 0.6500783698222542,
+          "oracle_iou": 0.4805226119882832,
+          "oracle_score_gt": 0.52
+        },
+        "unet_e60_tta": {
+          "ap": 0.6579412024272966,
+          "oracle_iou": 0.48672746245809634,
+          "oracle_score_gt": 0.44
+        },
+        "baseline": {
+          "ap": 0.5897185162125177,
+          "oracle_iou": 0.4506431123022646,
+          "oracle_score_gt": 25.0
+        }
+      },
+      "train_chips": 237,
+      "held_out_chips": 69
     }
   ],
-  "seconds": 2181,
+  "seconds": 3135,
   "split_sha256": "0098346e0f87297501409a1a8522afab6209e35f56e8cf1b68996909c8b63c75",
   "device": "NVIDIA GeForce RTX 4080",
   "versions": {
