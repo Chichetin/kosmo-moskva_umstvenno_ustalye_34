@@ -85,6 +85,23 @@ def read_chip(chip_id: str) -> tuple[np.ndarray, np.ndarray]:
     return D.read_s1(chip_id), D.read_label(chip_id)
 
 
+def predict_probs_tta(model, x: torch.Tensor, device: str) -> np.ndarray:
+    """Mean p over the 8 dihedral transforms (rot90 x flip), each mapped back to the input grid.
+    Test-time augmentation only; the model and its weights are the same."""
+    acc = None
+    for k in range(4):
+        for flip in (False, True):
+            xt = torch.rot90(x, k, dims=(-2, -1))
+            if flip:
+                xt = torch.flip(xt, dims=(-1,))
+            p = torch.from_numpy(predict_probs(model, xt, device))
+            if flip:
+                p = torch.flip(p, dims=(-1,))
+            p = torch.rot90(p, -k, dims=(-2, -1)).numpy()
+            acc = p if acc is None else acc + p
+    return acc / 8.0
+
+
 def fold_stats(ids: list[str], read: Reader, channels: list[str]) -> tuple[list, list]:
     """Normalization mean/std over the given (fold training) chips only."""
     return channel_stats([read(c)[0] for c in ids], channels)
@@ -178,7 +195,7 @@ def train_fold(x, y, m, cfg: dict, eval_epochs=EVAL_EPOCHS, device: str = "cpu",
               "features": {"channels": channels}}
     model = build_model(config).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"])
-    steps = max(1, (2 * len(x)) // cfg["batch"])
+    steps = max(1, (2 * len(x) * cfg.get("steps_mult", 1)) // cfg["batch"])
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=cfg["lr"], pct_start=0.1,
                                                 total_steps=cfg["epochs"] * steps)
     gen = torch.Generator().manual_seed(cfg["seed"])
@@ -233,6 +250,8 @@ def run_fold(fold: dict, cfg: dict, read: Reader = read_chip, baseline_t: float 
     for epoch, state in states.items():
         model.load_state_dict(state)
         probs[f"unet_e{epoch}"] = predict_probs(model, xh, device)
+        if cfg.get("tta"):
+            probs[f"unet_e{epoch}_tta"] = predict_probs_tta(model, xh, device)
     b_edges = -EDGES[::-1]  # baseline score = -VH (more water-like = higher)
     edges = {k: P_EDGES for k in probs} | {"baseline": b_edges}
     hist = {k: [np.zeros(len(e) + 1, np.int64) for _ in range(2)] for k, e in edges.items()}
@@ -328,6 +347,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--eval-epochs", default=",".join(map(str, EVAL_EPOCHS)))
     p.add_argument("--crop", type=int, default=DEFAULTS["crop"])
     p.add_argument("--seed", type=int, default=DEFAULTS["seed"])
+    for key in ("base", "batch"):
+        p.add_argument(f"--{key}", type=int, default=DEFAULTS[key])
+    for key in ("dropout", "lr", "weight_decay", "dice_weight", "db_jitter"):
+        p.add_argument(f"--{key.replace('_', '-')}", type=float, default=DEFAULTS[key])
+    p.add_argument("--steps-mult", type=int, default=1,
+                   help="multiply optimizer steps per epoch (D-019: 2 x chips / batch)")
+    p.add_argument("--tta", action="store_true",
+                   help="also score the mean of 8 rot90/flip predictions at each eval epoch")
     p.add_argument("--events", default="", help="comma list: run only these folds (smoke)")
     p.add_argument("--max-chips", type=int, default=0,
                    help="smoke: limit chips per event (numbers are then not a result)")
@@ -373,9 +400,11 @@ def main(argv: list[str] | None = None) -> int:
     out = Path(args.out_dir) if args.out_dir else output_dir() / "loeo"
     out.mkdir(parents=True, exist_ok=True)
     eval_epochs = tuple(int(e) for e in args.eval_epochs.split(",") if e.strip())
-    cfg = {k: DEFAULTS[k] for k in ("channels", "base", "dropout", "batch", "lr", "weight_decay",
-                                     "dice_weight", "db_jitter")}
-    cfg |= {"epochs": args.epochs, "crop": args.crop, "seed": args.seed}
+    cfg = {"channels": DEFAULTS["channels"]}
+    cfg |= {k: getattr(args, k) for k in ("base", "dropout", "batch", "lr", "weight_decay",
+                                          "dice_weight", "db_jitter")}
+    cfg |= {"epochs": args.epochs, "crop": args.crop, "seed": args.seed,
+            "steps_mult": args.steps_mult, "tta": args.tta}
     shipped = shipped_baseline_rule()
     only = {e.strip() for e in args.events.split(",") if e.strip()}
     command = "python -m floodvalue.model.unet.loeo " + " ".join(
