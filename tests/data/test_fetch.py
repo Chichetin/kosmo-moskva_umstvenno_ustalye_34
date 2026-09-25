@@ -315,13 +315,18 @@ def test_no_pixel_read_call_touches_a_test_chip(raw, offline, monkeypatch):
     import rasterio.io
 
     seen = []
-    orig = rasterio.io.DatasetReader.read
 
-    def spy(self, *a, **kw):
-        seen.append(self.name)
-        return orig(self, *a, **kw)
+    def spy_on(method):
+        orig = getattr(rasterio.io.DatasetReader, method)
 
-    monkeypatch.setattr(rasterio.io.DatasetReader, "read", spy)
+        def spy(self, *a, **kw):
+            seen.append(self.name)
+            return orig(self, *a, **kw)
+
+        monkeypatch.setattr(rasterio.io.DatasetReader, method, spy)
+
+    for method in ("read", "read_masks", "dataset_mask", "sample"):
+        spy_on(method)
     assert fetch.run(None) == 0
     assert any("Sri-Lanka_713926" in n for n in seen)
     assert not [n for n in seen if "Mekong_922373" in n]
