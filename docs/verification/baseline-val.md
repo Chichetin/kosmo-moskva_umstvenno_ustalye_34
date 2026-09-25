@@ -1,6 +1,6 @@
 # Baseline: порог по S1 — проверка на dev и validation
 
-Сгенерировано `make baseline` (commit `57f432cc5f12`, 2026-09-25). Числа ниже — из `docs/verification/baseline-metrics.csv`, `baseline-variants.csv`, `baseline-threshold-curve.csv`. Test не читался (D-010).
+Сгенерировано `make baseline` (commit `cbf7637832d6`, 2026-09-25). Числа ниже — из `docs/verification/baseline-metrics.csv`, `baseline-variants.csv`, `baseline-threshold-curve.csv`. Test не читался (D-010).
 
 ## Правило
 
