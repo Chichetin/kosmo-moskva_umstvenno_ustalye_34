@@ -28,14 +28,16 @@ cp .env.example .env        # FLOODVALUE_DATA_DIR, FLOODVALUE_OUTPUT_DIR
 вручную — `git lfs pull`. Зависимости `uv.lock` — **CPU-сборка torch**, inference
 одного чипа работает без GPU (D-003). Обучение на GPU — раздел «Обучение» ниже.
 
-Сырые данные Sen1Floods11 (не в git) — отдельной командой, до `make data`:
+Сен1Floods11 (не в git) `make data` качает сам — только слои, нужные конвейеру
+(S1Hand, LabelHand, JRCWaterHand, метаданные), с QC и манифестом; повторный запуск
+только сверяет хеши. Полный набор (все 5 слоёв HandLabeled + perm_water + сплиты,
+~3,8 ГБ) — отдельно, если нужен целиком:
 
 ```bash
 python3 scripts/download_sen1floods11.py            # HandLabeled + perm_water + сплиты, ~3,8 ГБ
 ```
 
-Подробности и режимы (`--no-s2`, `--with-weak`) — `docs/data.md` §3а. Повторный запуск
-только сверяет md5, ничего не качает заново.
+Подробности и режимы (`--no-s2`, `--with-weak`) — `docs/data.md` §3а.
 
 ## Обучение: GPU локально или Colab
 
@@ -62,7 +64,7 @@ python3 scripts/download_sen1floods11.py            # HandLabeled + perm_water +
 
 | Этап | Команда | Статус |
 |---|---|---|
-| Получение данных и QC | `make data` | не реализовано (сырые данные — `scripts/download_sen1floods11.py`, см. выше) |
+| Получение данных и QC | `make data` | готово (QC 446/446 чипов, `pytest tests/data`; сырые файлы — `scripts/download_sen1floods11.py`, см. выше) |
 | Split (заморожен) | `make split` | готово (D-016, `pytest tests/split`) |
 | Baseline: порог на train/val | `make baseline` | не реализовано |
 | Обучение основного метода | `make train` (GPU: `make train GPU=1`; Colab: `notebooks/train_colab.ipynb`) | не реализовано |
@@ -73,7 +75,7 @@ python3 scripts/download_sen1floods11.py            # HandLabeled + perm_water +
 | Зоны, цена, A/B/C | `make procure BUDGET=<руб>` | не реализовано (геометрия и цена по ПП 840 — чистые функции готовы, `pytest tests/procurement`; CLI-этап собирается) |
 | 12 обязательных файлов | `make export && make validate` | не реализовано |
 | Интерфейс оператора | `make app` | не реализовано |
-| Всё на готовых весах | `make all CHIP=<chip_id> BUDGET=<руб>` | не реализовано (цепочка ждёт `data`/`predict`/`export`) |
+| Всё на готовых весах | `make all CHIP=<chip_id> BUDGET=<руб>` | не реализовано (цепочка ждёт `predict`/`export`; `data` уже готов) |
 
 `make check` (`test` + `hooks-test` + `validate`) — обязателен перед каждым push; пока
 `floodvalue.export.validate` не реализован, `check` печатает причину и не роняет
