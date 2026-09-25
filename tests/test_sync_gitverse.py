@@ -1,0 +1,69 @@
+"""scripts/sync-gitverse.sh — offline checks only (no network, no GitVerse), #34."""
+
+import os
+import re
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SCRIPT = REPO_ROOT / "scripts" / "sync-gitverse.sh"
+TEXT = SCRIPT.read_text(encoding="utf-8")
+
+
+def test_bash_syntax() -> None:
+    subprocess.run(["bash", "-n", str(SCRIPT)], check=True)
+
+
+@pytest.fixture
+def bare_repo(tmp_path: Path) -> Path:
+    """Git repo without .env so the script cannot pick up a real token."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "scripts").mkdir()
+    shutil.copy(SCRIPT, tmp_path / "scripts" / SCRIPT.name)
+    return tmp_path
+
+
+def _run(repo: Path, *args: str) -> subprocess.CompletedProcess:
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GITVERSE_")}
+    return subprocess.run(["bash", "scripts/sync-gitverse.sh", *args], cwd=repo, env=env,
+                          capture_output=True, text=True, timeout=30)
+
+
+def test_unknown_argument_rejected(bare_repo: Path) -> None:
+    res = _run(bare_repo, "--bogus")
+    assert res.returncode == 2
+    assert "неизвестный аргумент" in res.stderr
+
+
+@pytest.mark.parametrize("args", [(), ("--verify",), ("--code-only",)])
+def test_known_modes_stop_on_missing_token(bare_repo: Path, args: tuple[str, ...]) -> None:
+    res = _run(bare_repo, *args)
+    assert res.returncode != 0
+    assert "GITVERSE_TOKEN не задан" in res.stderr
+    assert "неизвестный аргумент" not in res.stderr
+
+
+def test_no_git_tracing_enabled() -> None:
+    # tracing prints the Authorization header; the script may only unset these variables
+    assert not re.search(r"\b(GIT_TRACE\w*|GIT_CURL_VERBOSE)=", TEXT)
+    assert not re.search(r"export\s+(GIT_TRACE|GIT_CURL_VERBOSE)", TEXT)
+
+
+def test_transport_hardening_present() -> None:
+    assert "http.version=HTTP/1.1" in TEXT
+    assert "lfs.transfer.maxretries=" in TEXT
+    assert "lfs.concurrenttransfers=" in TEXT
+    assert re.search(r'timeout "\$LFS_TIMEOUT"', TEXT)
+    assert "--no-verify" in TEXT
+    # zsh-safe refspec: braces around want
+    assert '"${want}:refs/heads/' in TEXT
+    assert "$want:" not in TEXT
+
+
+def test_token_not_on_command_line() -> None:
+    # the token reaches curl via stdin (-H @-), never as an argument or inside a URL
+    assert "-H \"Authorization" not in TEXT
+    assert not re.search(r"https://[^\s\"]*\$\{?GITVERSE_TOKEN", TEXT)
