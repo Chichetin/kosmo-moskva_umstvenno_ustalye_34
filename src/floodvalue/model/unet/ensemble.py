@@ -84,6 +84,8 @@ def main(argv: list[str] | None = None) -> dict:
                       "dev_iou": M.scores(ev["dev"]["all"])["iou"]},
         "command": "python -m floodvalue.model.unet.ensemble " + " ".join(sys.argv[1:]),
         "member_commands": [c["command"] for c in configs],
+        "reproduce": "python -m floodvalue train  (trains ENSEMBLE_SEEDS of the default "
+                     "configuration and runs this assembly; GPU training is not bit-exact)",
     })
     (out / CONFIG_FILE).write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n",
                                    encoding="utf-8")

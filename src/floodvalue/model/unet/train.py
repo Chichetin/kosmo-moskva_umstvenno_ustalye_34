@@ -147,7 +147,8 @@ def predict_probs(model, x: torch.Tensor, device: str, batch: int = 8) -> np.nda
 
 def evaluate(probs: np.ndarray, ids: list[str], y: torch.Tensor, m: torch.Tensor,
              threshold: float = 0.5) -> dict:
-    """Pooled and per-event metrics at `threshold` plus per-chip counts for bootstrap."""
+    """Pooled and per-event metrics at `threshold`, per-chip counts for bootstrap, and the
+    valid-mask hash of each group (masks in chip_id order, as the baseline does)."""
     y, m = y.numpy().astype(bool), m.numpy().astype(bool)
     per_chip = [M.confusion(probs[i] >= threshold, y[i], m[i]) for i in range(len(ids))]
     events: dict[str, dict] = {}
@@ -156,8 +157,15 @@ def evaluate(probs: np.ndarray, ids: list[str], y: torch.Tensor, m: torch.Tensor
     total: dict[str, int] = {}
     for c in per_chip:
         total = M.add(total, c)
+
+    def group_hash(event: str | None) -> str:
+        order = sorted(i for i, cid in enumerate(ids) if event in (None, D.event_of(cid)))
+        order.sort(key=lambda i: ids[i])
+        return M.mask_sha256([m[i] for i in order])
+
+    hashes = {"ALL": group_hash(None)} | {e: group_hash(e) for e in events}
     return {"all": total, "events": events, "per_chip": per_chip,
-            "valid_mask_sha256": M.mask_sha256(list(m))}
+            "valid_mask_sha256": hashes}
 
 
 def best_threshold_iou(probs: np.ndarray, y: torch.Tensor, m: torch.Tensor) -> tuple[float, float]:
@@ -177,7 +185,8 @@ def metric_rows(name: str, split: str, ev: dict, threshold: float) -> list[dict]
     rows = []
     for event, c in [("ALL", ev["all"])] + sorted(ev["events"].items()):
         rows.append({"method": name, "split": split, "event": event, **M.scores(c), **c,
-                     "threshold": threshold, "valid_mask_sha256": ev["valid_mask_sha256"]})
+                     "threshold": threshold,
+                     "valid_mask_sha256": ev["valid_mask_sha256"][event]})
     return rows
 
 

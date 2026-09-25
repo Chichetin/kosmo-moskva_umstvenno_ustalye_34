@@ -1,0 +1,23 @@
+{
+  "name": "unet",
+  "members": 5,
+  "iou_ci95": {
+    "dev": [
+      0.4792816444301126,
+      0.6805514456388762
+    ],
+    "validation": [
+      0.412202175218629,
+      0.7222063969496624
+    ]
+  },
+  "dev_best_threshold_iou": [
+    0.5,
+    0.5844846299417957
+  ],
+  "validation_best_threshold_iou_diagnostic": [
+    0.2,
+    0.6846231433330608
+  ],
+  "weights_sha256": "504944cd880c0b2e94acf2481e6ddc4db985ddbd64d550a3591321e8b0cc1bb3"
+}

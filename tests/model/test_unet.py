@@ -190,3 +190,34 @@ def test_ensemble_is_mean_of_member_probabilities(tmp_path):
     assert np.allclose(p[ok], (p0[ok] + p1[ok]) / 2, atol=1e-6)
     assert not np.allclose(p0[ok], p1[ok])
     P.load_model.cache_clear()
+
+
+def test_shipped_unet_metrics_use_same_valid_pixels_as_baseline():
+    """valid_mask_sha256 of U-Net rows == baseline rows (identical valid pixels, contracts §7)."""
+    import csv
+
+    from floodvalue.paths import REPO_ROOT
+
+    def hashes(path, method):
+        with open(path, newline="") as f:
+            return {(r["split"], r["event"]): r["valid_mask_sha256"]
+                    for r in csv.DictReader(f) if r["method"] == method}
+
+    unet = hashes(REPO_ROOT / "models" / "unet" / "metrics.csv", "unet")
+    base = hashes(REPO_ROOT / "docs" / "verification" / "baseline-metrics.csv", "baseline")
+    assert unet and all(base[k] == v for k, v in unet.items())
+
+
+def test_shipped_unet_config_matches_weights():
+    from floodvalue.paths import REPO_ROOT
+
+    d = REPO_ROOT / "models" / "unet"
+    config = json.loads((d / P.CONFIG_FILE).read_text())
+    members = P.config_members(config)
+    assert len(members) == 5 and config["weights_sha256"] == P.members_sha256(members)
+    for m in members:
+        head = (d / m["file"]).read_bytes()[:40]
+        if head.startswith(b"version https://git-lfs"):
+            pytest.skip("LFS objects not pulled")
+        assert P.file_sha256(d / m["file"]) == m["sha256"]
+    assert config["split"]["sha256"].startswith("0098346e")
