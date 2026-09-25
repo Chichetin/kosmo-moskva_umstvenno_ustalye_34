@@ -1,13 +1,14 @@
 """Chip I/O for training/evaluation of the U-Net. Chip lists come from the frozen split
-(`floodvalue.data.split`, D-016); test is sealed there and never requested here (D-010)."""
-
-from pathlib import Path
+(`floodvalue.data.split`, D-016), rasters from `floodvalue.data.io`; test labels are sealed
+there (SealedTestError) and test chips are never requested here (D-010)."""
 
 import numpy as np
-import rasterio
 
-from floodvalue.data.split import SealedTestError, chip_ids, load_split, part_of_event
-from floodvalue.paths import data_dir
+from floodvalue.data import io
+from floodvalue.data.split import SealedTestError, chip_ids, load_split
+
+__all__ = ["SealedTestError", "split_chip_ids", "split_sha256", "event_of", "read_s1",
+           "read_label", "load_chips"]
 
 
 def split_chip_ids(part: str) -> list[str]:
@@ -21,35 +22,18 @@ def split_sha256() -> str:
 
 
 def event_of(chip_id: str) -> str:
-    return chip_id.rsplit("_", 1)[0]
+    return io.parse_chip_id(chip_id)[0]
 
 
-def s1_path(chip_id: str, root: Path | None = None) -> Path:
-    root = root or data_dir()
-    return Path(root) / "raw" / "HandLabeled" / "S1Hand" / f"{chip_id}_S1Hand.tif"
+def read_s1(chip_id: str) -> np.ndarray:
+    """(2, H, W) float32 dB, NaN = no data."""
+    return io.load_s1(chip_id)[0].astype(np.float32)
 
 
-def label_path(chip_id: str, root: Path | None = None) -> Path:
-    root = root or data_dir()
-    return Path(root) / "raw" / "HandLabeled" / "LabelHand" / f"{chip_id}_LabelHand.tif"
+def read_label(chip_id: str) -> np.ndarray:
+    """LabelHand (H, W) int16; test labels raise SealedTestError (D-010)."""
+    return io.load_label(chip_id)[0].astype(np.int16)
 
 
-def read_s1(chip_id: str, root: Path | None = None) -> np.ndarray:
-    """(2, H, W) float32 dB, NaN = no data (nodata tag honoured just in case)."""
-    with rasterio.open(s1_path(chip_id, root)) as src:
-        a = src.read().astype(np.float32)
-        if src.nodata is not None and np.isfinite(src.nodata):
-            a[a == src.nodata] = np.nan
-    return a
-
-
-def read_label(chip_id: str, root: Path | None = None) -> np.ndarray:
-    """LabelHand (H, W) int16. Labels of test events are sealed (D-010)."""
-    if part_of_event(event_of(chip_id)) == "test":
-        raise SealedTestError(f"label of test chip {chip_id} is sealed (eval-test only)")
-    with rasterio.open(label_path(chip_id, root)) as src:
-        return src.read(1).astype(np.int16)
-
-
-def load_chips(ids: list[str], root: Path | None = None) -> list[tuple[str, np.ndarray, np.ndarray]]:
-    return [(c, read_s1(c, root), read_label(c, root)) for c in ids]
+def load_chips(ids: list[str]) -> list[tuple[str, np.ndarray, np.ndarray]]:
+    return [(c, read_s1(c), read_label(c)) for c in ids]

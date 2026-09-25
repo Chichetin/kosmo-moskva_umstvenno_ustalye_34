@@ -1,4 +1,5 @@
 import json
+import shutil
 
 import numpy as np
 import pytest
@@ -121,9 +122,9 @@ def test_predict_proba_rejects_weights_with_wrong_sha(tiny_model_dir):
     P.load_model.cache_clear()
 
 
-def test_read_label_refuses_test_event(tmp_path):
+def test_read_label_refuses_test_event():
     with pytest.raises(D.SealedTestError):
-        D.read_label("Spain_7370579", root=tmp_path)
+        D.read_label("Spain_7370579")
 
 
 def test_split_chip_ids_refuse_test():
@@ -160,3 +161,32 @@ def test_predict_cli_writes_contract_rasters(tiny_model_dir, tmp_path, monkeypat
     assert p[0, 0] == -9999 and m[0, 0] == 255
     valid = p != -9999
     assert np.array_equal(m[valid], (p[valid] >= 0.5).astype(np.uint8))
+
+
+def test_ensemble_is_mean_of_member_probabilities(tmp_path):
+    torch.manual_seed(1)
+    config = {"method": "unet", "arch": {"base": 4, "dropout": 0.0},
+              "features": {"channels": CH, "mean": MEAN, "std": STD}, "threshold": 0.5,
+              "members": []}
+    singles = []
+    for i in range(2):
+        d = tmp_path / f"single{i}"
+        d.mkdir()
+        model = P.build_model(config)
+        torch.save(model.state_dict(), d / P.WEIGHTS_FILE)
+        shutil.copyfile(d / P.WEIGHTS_FILE, tmp_path / f"member_{i}.pt")
+        sha = P.file_sha256(d / P.WEIGHTS_FILE)
+        config["members"].append({"file": f"member_{i}.pt", "sha256": sha})
+        (d / P.CONFIG_FILE).write_text(json.dumps(
+            {k: v for k, v in config.items() if k != "members"} | {"weights_sha256": sha}))
+        singles.append(d)
+    config["weights_sha256"] = P.members_sha256(config["members"])
+    (tmp_path / P.CONFIG_FILE).write_text(json.dumps(config))
+    P.load_model.cache_clear()
+    s1 = s1_with_nan(32, 32)
+    p = P.predict_proba(s1, model_dir=tmp_path)
+    p0, p1 = (P.predict_proba(s1, model_dir=d) for d in singles)
+    ok = valid_mask(s1)
+    assert np.allclose(p[ok], (p0[ok] + p1[ok]) / 2, atol=1e-6)
+    assert not np.allclose(p0[ok], p1[ok])
+    P.load_model.cache_clear()

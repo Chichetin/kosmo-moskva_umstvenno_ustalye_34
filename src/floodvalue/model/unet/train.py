@@ -1,7 +1,7 @@
 """Training of the compact U-Net on S1 only (D-009, D-012).
 
-    python -m floodvalue train                       # default configuration -> models/unet/
-    python -m floodvalue.model.unet.train --help     # variants for the controlled experiment
+    python -m floodvalue train                       # seed ensemble of the default config -> models/unet/
+    python -m floodvalue.model.unet.train --help     # one run / variants for the experiment
 
 Protocol: normalization statistics from train; checkpoint = best pooled IoU at p >= 0.5 on
 dev (USA, D-012); validation metrics are only reported (calibration/threshold is #20);
@@ -27,7 +27,7 @@ from floodvalue.model import metrics as M
 from floodvalue.model.unet import data as D
 from floodvalue.model.unet.features import CLIP_DB, channel_stats, loss_mask, make_features
 from floodvalue.model.unet.predict import CONFIG_FILE, WEIGHTS_FILE, build_model, file_sha256
-from floodvalue.paths import MODELS_DIR
+from floodvalue.paths import MODELS_DIR, output_dir
 
 DEFAULTS = {
     "name": "unet",
@@ -43,6 +43,8 @@ DEFAULTS = {
     "db_jitter": 1.0,
     "seed": 20260925,
 }
+# Seeds of the members of the shipped seed ensemble (D-019).
+ENSEMBLE_SEEDS = [20260925, 1, 2, 3, 4]
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -314,8 +316,18 @@ def train(args: argparse.Namespace) -> dict:
 
 
 def run(args) -> int:
-    """`python -m floodvalue train` entry (method dispatcher passes the CLI namespace)."""
-    train(parse_args([]))
+    """`python -m floodvalue train`: train the default configuration with ENSEMBLE_SEEDS and
+    assemble the seed ensemble into models/unet/ (member runs go to <out>/unet-runs/)."""
+    from floodvalue.model.unet import ensemble
+
+    runs = Path(args.out) if getattr(args, "out", None) else output_dir()
+    runs = runs / "unet-runs"
+    dirs = []
+    for seed in ENSEMBLE_SEEDS:
+        d = runs / f"seed{seed}"
+        train(parse_args(["--name", f"unet_s{seed}", "--seed", str(seed), "--out-dir", str(d)]))
+        dirs.append(str(d))
+    ensemble.main(["--members", ",".join(dirs)])
     return 0
 
 

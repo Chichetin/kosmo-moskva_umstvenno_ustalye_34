@@ -1,7 +1,8 @@
 """CPU-capable inference of the U-Net: `predict_proba(s1_db) -> p` (docs/contracts.md §3).
 
-Weights and normalization come from `models/unet/` (config.json + model.pt); the sha256 of
-the weights is checked on load so an un-pulled LFS pointer fails loudly, not silently.
+Weights and normalization come from `models/unet/` (config.json + member_*.pt). The model may
+be an ensemble of seeds (config "members"); p is the mean of member probabilities. Every
+member's sha256 is checked on load so an un-pulled LFS pointer fails loudly, not silently.
 """
 
 import hashlib
@@ -36,20 +37,36 @@ def build_model(config: dict) -> UNet:
                 dropout=arch.get("dropout", 0.0))
 
 
+def members_sha256(members: list[dict]) -> str:
+    """One hash for the whole ensemble: sha256 of "file:sha256" lines in member order."""
+    text = "\n".join(f"{m['file']}:{m['sha256']}" for m in members)
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def config_members(config: dict) -> list[dict]:
+    """Ensemble members; a single-model config is an ensemble of one."""
+    if "members" in config:
+        return config["members"]
+    return [{"file": config.get("weights_file", WEIGHTS_FILE), "sha256": config["weights_sha256"]}]
+
+
 @lru_cache(maxsize=4)
-def load_model(model_dir: str) -> tuple[UNet, dict]:
+def load_model(model_dir: str) -> tuple[list[UNet], dict]:
     d = Path(model_dir)
     config = json.loads((d / CONFIG_FILE).read_text(encoding="utf-8"))
-    weights = d / WEIGHTS_FILE
-    actual = file_sha256(weights)
-    if actual != config["weights_sha256"]:
-        raise RuntimeError(
-            f"{weights}: sha256 {actual} != config {config['weights_sha256']} "
-            "(LFS pointer not pulled? run `git lfs pull`)")
-    model = build_model(config)
-    model.load_state_dict(torch.load(weights, map_location="cpu", weights_only=True))
-    model.eval()
-    return model, config
+    models = []
+    for member in config_members(config):
+        weights = d / member["file"]
+        actual = file_sha256(weights)
+        if actual != member["sha256"]:
+            raise RuntimeError(
+                f"{weights}: sha256 {actual} != config {member['sha256']} "
+                "(LFS pointer not pulled? run `git lfs pull`)")
+        model = build_model(config)
+        model.load_state_dict(torch.load(weights, map_location="cpu", weights_only=True))
+        model.eval()
+        models.append(model)
+    return models, config
 
 
 def logits_padded(model: torch.nn.Module, x: torch.Tensor, multiple: int = 16) -> torch.Tensor:
@@ -64,11 +81,13 @@ def logits_padded(model: torch.nn.Module, x: torch.Tensor, multiple: int = 16) -
 def predict_proba(s1_db: np.ndarray, model_dir: str | Path | None = None) -> np.ndarray:
     """s1_db: float32 (2, H, W), [VV, VH] in dB, NaN = no data.
     Returns float32 (H, W): p in [0, 1], NaN where S1 has no data."""
-    model, config = load_model(str(model_dir or DEFAULT_MODEL_DIR))
+    models, config = load_model(str(model_dir or DEFAULT_MODEL_DIR))
     f = config["features"]
-    x = make_features(np.asarray(s1_db, dtype=np.float32), f["channels"], f["mean"], f["std"])
+    x = torch.from_numpy(make_features(np.asarray(s1_db, dtype=np.float32), f["channels"],
+                                       f["mean"], f["std"]))[None]
     with torch.inference_mode():
-        logits = logits_padded(model, torch.from_numpy(x)[None])[0]
-    p = torch.sigmoid(logits.float()).numpy().astype(np.float32)
+        # ensemble = mean of member probabilities
+        p = torch.stack([torch.sigmoid(logits_padded(m, x)[0].float()) for m in models]).mean(0)
+    p = p.numpy().astype(np.float32)
     p[~valid_mask(s1_db)] = np.nan
     return p
