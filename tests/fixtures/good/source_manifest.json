@@ -1,0 +1,16 @@
+{
+  "sources": [
+    {
+      "id": "Synthetic_000001_S1Hand",
+      "file": "Synthetic_000001_S1Hand.tif",
+      "url": "https://github.com/cloudtostreet/Sen1Floods11",
+      "version": "synthetic",
+      "observation_date": "2017-05-30",
+      "available_date": "2017-05-30",
+      "license": "CC BY 4.0 (формат как у Sen1Floods11)",
+      "purpose": "S1 демо-чипа эталона",
+      "limitations": "синтетика для тестов валидатора",
+      "applies_to": "Synthetic_000001"
+    }
+  ]
+}
