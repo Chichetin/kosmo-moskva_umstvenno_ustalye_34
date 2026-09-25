@@ -68,17 +68,17 @@ python3 scripts/download_sen1floods11.py            # HandLabeled + perm_water +
 | Получение данных и QC | `make data` | готово — `data: 446 чипов, скачано файлов: 0`, `QC формата 446/446` (`docs/data.md` §11; `pytest tests/data`; сырые файлы — `scripts/download_sen1floods11.py`, см. выше) |
 | Split (заморожен) | `make split` | готово — `split v1: train 237, dev 69, validation 60, test 75, excluded 5`, `OK: rebuilt split == splits/split_v1.json == docs/decisions.md` (D-016; `pytest tests/split`) |
 | Baseline: порог на train/val | `make baseline` | готово — `baseline: VH <= -23.0 dB, s = 2.1315`, validation IoU 0,580 (D-021, `docs/verification/baseline-val.md`; `pytest tests/baseline`) |
-| Обучение основного метода (U-Net, ансамбль 5 seed) | `make train` (GPU: `make train GPU=1`; Colab: `notebooks/train_colab.ipynb`) | готово — веса 5 членов в `models/unet/` через LFS, dev IoU 0,584 против baseline 0,391 (D-019, `docs/verification/unet-metrics.md`); команда обучения проверена смоук-прогоном (`--max-chips`, CPU и GPU, код 0), полный переобучающий прогон (~75 с/член на GPU) в этом PR не повторялся — `models/` вне разрешённых путей issue |
+| Обучение основного метода (U-Net, ансамбль 5 seed) | `make train` (GPU: `make train GPU=1`; Colab: `notebooks/train_colab.ipynb`) | готово — веса 5 членов в `models/unet/` через LFS, dev IoU 0,584 против baseline 0,391 (D-019, `docs/verification/unet-metrics.md`); команда обучения проверена смоук-прогоном (`--max-chips`, CPU и GPU, код 0), полный переобучающий прогон (~75 с/член на GPU) после обучения весов сдачи не повторялся (время и устройство — `docs/verification/unet-metrics.md` §«Воспроизведение») |
 | Калибровка и порог на validation | `make calibrate` | готово — Platt-калибровка, порог 0,37 по IoU на validation (D-029, `docs/verification/calibration-val.md`); пишет `models/unet/calibration.json`, `predict` подхватывает его автоматически без правок вызова |
 | Inference на чипе (S1-only, оба метода) | `FLOODVALUE_METHOD=unet\|baseline make predict CHIP=<chip_id>` | готово — на `Sri-Lanka_713926` (unet: `threshold 0.37, threshold_status "calibrated (platt) and chosen on validation, D-029"`, `valid_pixels 262144`; baseline: `seconds 0.0`) и на `Nigeria_1095404` (другой официальный чип, unet: `valid_pixels 262144`) |
 | Финальная оценка на part (validation/dev/test) | `make eval-test` (сырое, по умолчанию `--part test` — запечатан); `uv run --frozen python -m floodvalue eval-test --part validation` | готово, **test честно запечатан**: `make eval-test` без подтверждения → `eval-test: отказ — test is sealed (D-010): set FLOODVALUE_EVAL_TEST_CONFIRM=<sha256 of the frozen configuration>; ...`; `--part validation` реально считает 60 чипов → `docs/verification/eval-validation.md` (калиброванная модель: IoU 0,685 против baseline 0,580, ECE 0,007, Brier 0,041, AUROC неопределённости 0,902); `docs/verification/test-log.md` по test пуст — test ещё не открывался (`eval-test` замороженной конфигурации — не позже 26.09 20:00, D-033) |
 | 10 объектов и ущерб | `make assets CHIP=<chip_id>` | готово — `assets: 10 объектов, оценено 10` (D-018; `pytest tests/assets`) |
 | Зоны, цена, A/B/C | `make procure BUDGET=<руб>` | готово — `procure: A/B/C` с ценой, охватом EL и `budget_feasible` (D-023; `pytest tests/procurement`) |
-| 12 обязательных файлов | `make export && make validate` | готово — реальный комплект `make all CHIP=Sri-Lanka_713926 BUDGET=5000` → `12/12 файлов прошли проверку`, `flood_mask.tif`/`flood_probability.tif` — с калиброванным порогом 0,37, `metrics.csv` — с калиброванными метриками main (D-027, D-029; `pytest tests/contracts tests/export`); `run_metadata.warnings` пуст на чистом дереве — проверено в этом PR (ранее было предупреждение про рассинхрон порога метрик, снято подключением калибратора в `export`) |
+| 12 обязательных файлов | `make export && make validate` | готово — реальный комплект `make all CHIP=Sri-Lanka_713926 BUDGET=5000` → `12/12 файлов прошли проверку`, `flood_mask.tif`/`flood_probability.tif` — с калиброванным порогом 0,37, `metrics.csv` — с калиброванными метриками main (D-027, D-029; `pytest tests/contracts tests/export`); `run_metadata.warnings` пуст на чистом дереве — `make all CHIP=Sri-Lanka_713926 BUDGET=5000` на commit `89c8e4f` (26.09) → `warnings: []`, validate 12/12 (ранее было предупреждение про рассинхрон порога метрик, снято подключением калибратора в `export`) |
 | Интерфейс оператора | `make app` | не реализовано — `stage 'app' not implemented yet (floodvalue.app.run); issue area:app` (выбран Streamlit, D-034) |
 | Отчёт QC данных | `make data-qc` | готово — `docs/verification/data-qc.md` из `interim/qc.csv` после `make data` |
 | Комплект и веса для релиза | `make release OUT=<комплект> [TAG=<тег>]` | готово — `run_<run_id>.zip`, `models_<commit>.zip`, `SHA256SUMS` (D-037, `pytest tests/test_release_bundle.py`); загрузка финального комплекта — после `eval-test` |
-| Перенос рецепта U-Net между событиями (LOEO) | `python -m floodvalue.model.unet.loeo` через `notebooks/loeo_colab.ipynb` (только Colab, D-036) | в работе — код и ноутбук влиты (`pytest tests/model/test_loeo.py tests/model/test_loeo_notebook.py`), прогон в Colab ожидается (`docs/verification/transfer-loeo.md`) |
+| Перенос рецепта U-Net между событиями (LOEO) | `python -m floodvalue.model.unet.loeo` через `notebooks/loeo_colab.ipynb` (D-036) | прогнан `MODE=full` на commit `1eaf2cc9e572` (локально на RTX 4080 вместо Colab, 6 фолдов): IoU U-Net на невиданном событии 0,206–0,532, ΔIoU к порогу фолда значимо > 0 в 4 из 6 фолдов — `docs/verification/transfer-loeo.md` (таблица из отчёта прогона в #86, CSV/JSON фолдов не приложены); проводка — `pytest tests/model/test_loeo.py tests/model/test_loeo_notebook.py` |
 | Всё на готовых весах | `make all CHIP=<chip_id> BUDGET=<руб>` | готово — `make all CHIP=Sri-Lanka_713926 BUDGET=5000` собирает `outputs/Sri-Lanka_713926_5000_<commit>/` (predict уже калиброван) и проходит `validate` 12/12 (`app` в цепочку не входит; `calibrate` — отдельный шаг, записывает веса в `models/unet/calibration.json` заранее) |
 
 Статусы получены реальными запусками перечисленных команд в PR #60 (`.env` из
@@ -90,10 +90,10 @@ python3 scripts/download_sen1floods11.py            # HandLabeled + perm_water +
 `make check` (`test` + `hooks-test` + `validate`) — обязателен перед каждым push; без
 `OUT=` `validate` проверяет самый свежий комплект в `outputs/`, если он есть, иначе
 эталон `tests/fixtures/good` (12/12); `make validate OUT=<комплект>` — конкретный
-собранный комплект. Проверено в этом PR: `make check` зелёный после слияния #58
-«eval-test», #59 «calibration» и #61 «validator» (точное число тестов растёт с
-каждым PR — см. вывод `pytest` в актуальном CI/PR), `test-hooks.sh` 40/40, `validate`
-12/12.
+собранный комплект. Чистый клон GitVerse `6fe66f0`: `uv sync --frozen && uv run --frozen
+pytest` → 473 passed, `make all` → validate 12/12 (`docs/verification/clean-clone-gitverse.md`).
+На commit `89c8e4f` (26.09) `make check` → 646 passed, 4 skipped, `test-hooks.sh` OK,
+`validate` 12/12. Число тестов растёт с каждым PR.
 
 ## S1-only и выбор метода
 
@@ -110,7 +110,7 @@ FLOODVALUE_METHOD=baseline uv run --frozen python -m floodvalue predict --chip S
 
 Оба варианта равнозначно работают через `make`: `FLOODVALUE_METHOD=baseline make
 predict CHIP=Sri-Lanka_713926` и `FLOODVALUE_METHOD=unet make predict
-CHIP=Sri-Lanka_713926` — проверено в этом PR. Inference на другом официальном чипе
+CHIP=Sri-Lanka_713926` — оба дают код 0 на commit `89c8e4f` (26.09; baseline — `threshold` 0.5, unet — 0.37). Inference на другом официальном чипе
 (не только на демонстрационном) проверен на `Nigeria_1095404`
 (`uv run --frozen python -m floodvalue predict --chip Nigeria_1095404`, вход только
 `S1Hand`, `valid_pixels: 262144`) — до заморозки функций чипы `test`-части (Spain,
@@ -222,9 +222,9 @@ D-017.
 - **Split** — по событиям, не по чипам (D-016). Dev — единственное событие USA (4,6 %
   воды): на нём одном выбраны вариант метода и порог baseline, поэтому оценка
   устойчивости даётся бутстрэпом по чипам, не по независимым событиям. Validation
-  используется дважды — для отчёта (`make eval-test --part validation`, реально
-  выполнено в этом PR) и как единственная выборка для калибровки и выбора порога
-  (`make calibrate` — Platt, порог 0,37, D-029, реально выполнено в этом PR). **Test
+  используется дважды — для отчёта (`python -m floodvalue eval-test --part validation`, commit `af52cc72a2d6` —
+  `docs/verification/eval-validation.md`) и как единственная выборка для калибровки и выбора порога
+  (`make calibrate` — Platt, порог 0,37, D-029, `docs/verification/calibration-val.md`). **Test
   запечатан корректно**: `make eval-test` без
   `FLOODVALUE_EVAL_TEST_CONFIRM` реально отказывает («test is sealed»),
   `docs/verification/test-log.md` пока пуст — test ещё не открывался. Сводные доли
@@ -243,7 +243,7 @@ D-017.
   выполнена и показывает MAE прогноза против прокси-ущерба
   (`docs/verification/eval-validation.md` §5), но это выборка для настройки, а не
   независимая. В `run_metadata.json` собранного комплекта поле `proxy_check` пока
-  `"status": "planned"` в любом случае (проверено на калиброванном прогоне в этом PR)
+  `"status": "planned"` в любом случае (`make all CHIP=Sri-Lanka_713926 BUDGET=5000` на `89c8e4f`, 26.09 → `proxy_check.status=planned`)
   — `export` ещё не сшит с протоколом `eval-test`, а на замороженном test проверка
   не выполнялась вовсе.
 - **Стоимость данных — сценарная.** Ставка Б = 788,64 руб./км² (`base_rate_status=scenario`)
@@ -266,8 +266,9 @@ D-017.
   растительности или при ветровой ряби, невидимая в SAR (`docs/data.md` §8 п. 13),
   тени рельефа (layover/shadow — общее свойство SAR, отдельно на этом наборе не
   измерялось), и распределения dB/доли воды, сильно отличные от train. `make
-  eval-test` реализован и запечатан на test правильно (проверено в этом PR: `--part
-  test` без confirm-хеша — отказ; `--part validation` реально считает 60 чипов);
+  eval-test` реализован и запечатан на test правильно (`make eval-test` без
+  `FLOODVALUE_EVAL_TEST_CONFIRM` на `89c8e4f`, 26.09 → «отказ — test is sealed (D-010)», код 2;
+  `--part validation` считает 60 чипов — `docs/verification/eval-validation.md`);
   перенос на test (новые события Spain/Mekong/Bolivia) сам по себе ещё не проверен —
   это следующий шаг после заморозки функций, а не нереализованный код.
 - **Доступность дополнительных данных.** Лицензия официального Sen1Floods11 явно не
@@ -282,10 +283,11 @@ D-017.
   федерального фонда ДЗЗ. IoU несравним со статьёй: у нас pooled по пикселям на split
   по событиям и «вся вода», в литературе — часто среднее по чипам на авторском split.
 - **Режим S1-only обязателен и поддержан**: `FLOODVALUE_METHOD=unet|baseline` — см.
-  «S1-only и выбор метода» выше; проверено на двух официальных чипах в этом PR.
+  «S1-only и выбор метода» выше; `predict` на `Sri-Lanka_713926` и `Nigeria_1095404` на
+  `89c8e4f` (26.09) — код 0, вход только `S1Hand`.
 
 План проверки: `make eval-test --part test` для замороженной конфигурации (D-033) (код и запечатывание
-уже готовы и проверены в этом PR — следующий шаг чисто процедурный, не разработка),
+уже готовы: отказ без confirm-хеша проверен `make eval-test` на `89c8e4f` — следующий шаг чисто процедурный, не разработка),
 затем перенос на события вне Sen1Floods11 и на реальный реестр объектов инфраструктуры
 вместо учебных V/q; пилот с инфраструктурным оператором (D-001) с метриками из task.md
 — время от данных до решения, доля пропущенных значимых объектов, доля ручной
