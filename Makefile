@@ -1,8 +1,9 @@
-# Одна команда на этап и одна на всё. Параметры: CHIP=<chip_id> BUDGET=<руб>.
+# Одна команда на этап и одна на всё. Параметры: CHIP=<chip_id> BUDGET=<руб> OUT=<каталог комплекта>.
 PY ?= uv run --frozen python -m floodvalue
 CHIP ?=
 BUDGET ?=
-STAGE_ARGS = $(if $(CHIP),--chip $(CHIP)) $(if $(BUDGET),--budget $(BUDGET))
+OUT ?=
+STAGE_ARGS = $(if $(CHIP),--chip $(CHIP)) $(if $(BUDGET),--budget $(BUDGET)) $(if $(OUT),--out $(OUT))
 
 .PHONY: setup test hooks-test check data split baseline train calibrate predict assets procure export validate app eval-test all
 
