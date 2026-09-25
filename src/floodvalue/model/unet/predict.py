@@ -78,16 +78,28 @@ def logits_padded(model: torch.nn.Module, x: torch.Tensor, multiple: int = 16) -
     return model(x)[..., :h, :w]
 
 
-def predict_proba(s1_db: np.ndarray, model_dir: str | Path | None = None) -> np.ndarray:
-    """s1_db: float32 (2, H, W), [VV, VH] in dB, NaN = no data.
-    Returns float32 (H, W): p in [0, 1], NaN where S1 has no data."""
+def _member_probs(s1_db: np.ndarray, model_dir: str | Path | None) -> torch.Tensor:
+    """(K, H, W) sigmoid probabilities of the K ensemble members (NaN not applied yet)."""
     models, config = load_model(str(model_dir or DEFAULT_MODEL_DIR))
     f = config["features"]
     x = torch.from_numpy(make_features(np.asarray(s1_db, dtype=np.float32), f["channels"],
                                        f["mean"], f["std"]))[None]
     with torch.inference_mode():
-        # ensemble = mean of member probabilities
-        p = torch.stack([torch.sigmoid(logits_padded(m, x)[0].float()) for m in models]).mean(0)
-    p = p.numpy().astype(np.float32)
+        return torch.stack([torch.sigmoid(logits_padded(m, x)[0].float()) for m in models])
+
+
+def predict_proba(s1_db: np.ndarray, model_dir: str | Path | None = None) -> np.ndarray:
+    """s1_db: float32 (2, H, W), [VV, VH] in dB, NaN = no data.
+    Returns float32 (H, W): p in [0, 1], NaN where S1 has no data."""
+    # ensemble = mean of member probabilities
+    p = _member_probs(s1_db, model_dir).mean(0).numpy().astype(np.float32)
     p[~valid_mask(s1_db)] = np.nan
+    return p
+
+
+def predict_members(s1_db: np.ndarray, model_dir: str | Path | None = None) -> np.ndarray:
+    """Raw p of every ensemble member: float32 (K, H, W), NaN where S1 has no data.
+    Their mean equals `predict_proba` (used for the uncertainty raster, #21)."""
+    p = _member_probs(s1_db, model_dir).numpy().astype(np.float32)
+    p[:, ~valid_mask(s1_db)] = np.nan
     return p
