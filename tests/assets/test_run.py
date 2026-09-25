@@ -59,8 +59,10 @@ def test_run_writes_three_files_by_contract(setup):
     loss = read_csv(out / "asset_loss.csv")
     assert list(assets_csv[0]) == ["asset_id", "chip_id", "asset_class", "asset_value_rub",
                                    "vulnerability_coef", "longitude", "latitude"]
+    # contract fields first, then the optional EL-range columns of D-039
     assert list(loss[0]) == ["asset_id", "chip_id", "p_flood", "expected_loss_rub",
-                             "uncertainty", "rank", "status"]
+                             "uncertainty", "rank", "status", "p_low", "p_high", "el_low_rub",
+                             "el_high_rub", "mask_unstable"]
     by_id = {r["asset_id"]: r for r in assets_csv}
     for feat in fc["features"]:
         props = feat["properties"]
