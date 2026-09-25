@@ -481,6 +481,8 @@ def test_metadata_threshold_changed_breaks_mask(run_dir):
         d["threshold"] = 0.6
         d["methods"]["main"]["threshold"] = 0.6
     edit_json(run_dir / F.RUN_METADATA, upd)
+    # metrics.csv follows the new threshold, so only the mask disagrees
+    edit_csv(run_dir / "metrics.csv", lambda rows: row(rows, method="main").update(threshold="0.6"))
     assert "threshold" in only(failing(run_dir), F.FLOOD_MASK)
 
 
@@ -537,6 +539,50 @@ def test_metrics_of_both_methods_required(run_dir):
 def test_metrics_on_different_valid_masks_fails(run_dir):
     edit_csv(run_dir / "metrics.csv", lambda rows: rows[0].update(valid_mask_sha256="1" * 64))
     assert "разных масках" in only(failing(run_dir), F.RUN_METADATA)
+
+
+def test_metrics_main_threshold_differs_from_metadata_fails(run_dir):
+    # main rows computed at p >= 0.37 while the mask uses 0.5: metrics do not describe the mask
+    edit_csv(run_dir / "metrics.csv", lambda rows: row(rows, method="main").update(threshold="0.37"))
+    assert "metrics.csv: main validation/ALL: threshold=0.37 ≠ threshold комплекта 0.5" in \
+        only(failing(run_dir), F.RUN_METADATA)
+
+
+def test_metrics_main_threshold_checked_in_every_split(run_dir):
+    # a matching validation row must not hide a stale dev row
+    def add_dev(rows):
+        rows.append(dict(row(rows, method="main"), split="dev", threshold="0.37"))
+        rows.append(dict(row(rows, method="baseline"), split="dev"))
+    edit_csv(run_dir / "metrics.csv", add_dev)
+    msg = only(failing(run_dir), F.RUN_METADATA)
+    assert "main dev/ALL: threshold=0.37" in msg and "validation/ALL" not in msg
+
+
+def test_metrics_main_threshold_float_noise_passes(run_dir):
+    edit_csv(run_dir / "metrics.csv", lambda rows: row(rows, method="main").update(
+        threshold="0.5000000000001"))
+    assert failing(run_dir) == {}
+
+
+def test_metrics_main_threshold_empty_fails(run_dir):
+    edit_csv(run_dir / "metrics.csv", lambda rows: row(rows, method="main").update(threshold=""))
+    assert "main validation/ALL: threshold пуст" in only(failing(run_dir), F.RUN_METADATA)
+
+
+def test_metrics_main_row_short_reports_not_crashes(run_dir):
+    # a truncated main row (csv gives None for missing cells) is an error, not a traceback
+    path = run_dir / "metrics.csv"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    lines = [",".join(ln.split(",")[:12]) if ln.startswith("main,") else ln for ln in lines]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    assert "main validation/ALL: threshold пуст" in " ".join(failing(run_dir)[F.RUN_METADATA])
+
+
+def test_metrics_baseline_threshold_in_db_not_compared(run_dir):
+    # baseline threshold is dB of its channel (-20.0 in the fixture), never compared with p
+    edit_csv(run_dir / "metrics.csv", lambda rows: row(rows, method="baseline").update(
+        threshold="-23.0"))
+    assert failing(run_dir) == {}
 
 
 def test_metrics_file_missing_fails(run_dir):
@@ -702,6 +748,10 @@ def _break_mask(run_dir):
         dst.write(m, 1)
 
 
+def _break_metrics_threshold(run_dir):
+    edit_csv(run_dir / "metrics.csv", lambda rows: row(rows, method="main").update(threshold="0.37"))
+
+
 def _break_b_unmarked(run_dir):
     edit_csv(run_dir / F.STRATEGY_COMPARISON,
              lambda rows: row(rows, strategy="B").update(budget_feasible="true"))
@@ -715,6 +765,8 @@ BROKEN = {
     "mask_threshold": (_break_mask, F.FLOOD_MASK, "mask ≠ (p ≥ threshold=0.5) в 1 пикселях"),
     "b_over_budget": (_break_b_unmarked, F.STRATEGY_COMPARISON,
                       "B: budget_feasible=true, а data_cost > бюджета"),
+    "metrics_threshold": (_break_metrics_threshold, F.RUN_METADATA,
+                          "threshold=0.37 ≠ threshold комплекта 0.5"),
 }
 
 

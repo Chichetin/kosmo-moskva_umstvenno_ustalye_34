@@ -42,6 +42,7 @@ MONEY_TOL = 0.005  # half a kopeck: recomputed kopeck amounts must match exactly
 EL_TOL = 0.01  # EL written to the kopeck
 P_TOL = 1e-6  # p_flood vs float32 raster value
 COORD_TOL = 1e-7  # degrees, ~1 cm
+THRESHOLD_TOL = 1e-9  # main threshold in metrics.csv vs run_metadata.threshold (float noise)
 
 
 def _utc(value: datetime) -> datetime:
@@ -295,7 +296,8 @@ METRICS_FIELDS = ("method", "split", "event", "iou", "f1", "precision", "recall"
 
 def _check_metrics(report: _Report, run_dir: Path, meta: RunMetadata) -> None:
     """Criterion 12 'metrics of both methods': files listed in run_metadata.metrics exist;
-    metrics.csv has baseline and main on the same valid-pixel mask (docs/contracts.md §7)."""
+    metrics.csv has baseline and main on the same valid-pixel mask (docs/contracts.md §7);
+    every main row is computed at the set's mask threshold (§7a; baseline rows are in dB)."""
     name = F.RUN_METADATA
     for rel in meta.metrics.files:
         path = next((c for c in (run_dir / rel, REPO_ROOT / rel) if c.is_file()), None)
@@ -319,6 +321,19 @@ def _check_metrics(report: _Report, run_dir: Path, meta: RunMetadata) -> None:
         for key, hashes in by_key.items():
             if len(hashes) > 1:
                 report.add(name, f"{rel}: методы в {key} посчитаны на разных масках валидных пикселей")
+        for r in rows:
+            if r["method"] != "main":
+                continue
+            where = f"{rel}: main {r['split']}/{r['event']}"
+            try:
+                t = float(r["threshold"])
+            except (TypeError, ValueError):  # None: the row is shorter than the header
+                report.add(name, f"{where}: threshold пуст или не число — нельзя сверить с "
+                                 f"threshold комплекта {meta.threshold}")
+                continue
+            if not abs(t - meta.threshold) <= THRESHOLD_TOL:
+                report.add(name, f"{where}: threshold={r['threshold']} ≠ threshold комплекта "
+                                 f"{meta.threshold} (run_metadata.json) — метрики не описывают маску")
 
 
 # --- main entry --------------------------------------------------------------------------------
