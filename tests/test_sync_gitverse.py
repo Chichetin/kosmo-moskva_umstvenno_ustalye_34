@@ -77,3 +77,41 @@ def test_lfs_goes_through_content_length_loader() -> None:
     assert "нет записи в LFS" not in TEXT
     assert "проверьте права токена" in TEXT
     assert (REPO_ROOT / "scripts" / "gitverse_lfs_push.py").is_file()
+
+
+def _closed_port() -> int:
+    import socket
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def _run_api_down(repo: Path, gitverse_url: str) -> subprocess.CompletedProcess:
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GITVERSE_")}
+    env.update(GITVERSE_TOKEN="fake-token-for-test", GITVERSE_USER="tester",  # secret-scan: allow
+               GITVERSE_URL=gitverse_url, GITVERSE_API_RETRY_DELAY="0",
+               GITVERSE_API=f"http://127.0.0.1:{_closed_port()}/repos/x")
+    return subprocess.run(["bash", "scripts/sync-gitverse.sh", "--verify"], cwd=repo, env=env,
+                          capture_output=True, text=True, timeout=60)
+
+
+def test_api_down_falls_back_to_symref(bare_repo: Path, tmp_path: Path) -> None:
+    remote = tmp_path / "gv.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "trunk", str(remote)], check=True)
+    subprocess.run(["git", "-C", str(bare_repo), "-c", "user.name=t", "-c", "user.email=t@t",
+                    "commit", "-q", "--allow-empty", "-m", "x"], check=True)
+    subprocess.run(["git", "-C", str(bare_repo), "push", "-q", str(remote), "HEAD:trunk"], check=True)
+    res = _run_api_down(bare_repo, str(remote))
+    assert "беру HEAD через ls-remote --symref" in res.stderr
+    assert "ветка по умолчанию GitVerse не получена" not in res.stderr
+    assert "Traceback" not in res.stderr and "JSONDecodeError" not in res.stderr
+    # goes on past branch detection (then stops: the fixture repo has no origin)
+    assert res.returncode != 0
+
+
+def test_api_and_symref_down_fail_cleanly(bare_repo: Path, tmp_path: Path) -> None:
+    res = _run_api_down(bare_repo, str(tmp_path / "missing.git"))
+    assert res.returncode == 1
+    assert "ветка по умолчанию GitVerse не получена ни из API, ни из ls-remote" in res.stderr
+    assert "Traceback" not in res.stderr and "JSONDecodeError" not in res.stderr
+    assert "fake-token-for-test" not in res.stderr + res.stdout

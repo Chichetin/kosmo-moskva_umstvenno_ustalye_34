@@ -54,9 +54,22 @@ if git remote get-url gitverse >/dev/null 2>&1; then git remote set-url gitverse
 else git remote add gitverse "$GITVERSE_URL"; fi
 
 # заголовок с токеном — через stdin, не в аргументах curl (их видно в ps)
+# API периодически рвёт соединение (curl: 000, пустой ответ) — повторы, затем запасной путь
+# через ls-remote --symref HEAD; пусто и там — понятное сообщение и выход 1, без трейсбека.
 default_branch="$(printf 'Authorization: Bearer %s\n' "$GITVERSE_TOKEN" |
-  curl -sf -m 30 -H @- -H 'Accept: application/vnd.gitverse.object+json;version=1' "$GITVERSE_API" |
-  python3 -c 'import json,sys; print(json.load(sys.stdin)["default_branch"])')"
+  curl -sf -m 30 --retry 3 --retry-all-errors --retry-delay "${GITVERSE_API_RETRY_DELAY:-5}" -H @- \
+    -H 'Accept: application/vnd.gitverse.object+json;version=1' "$GITVERSE_API" |
+  python3 -c 'import json,sys
+try: print(json.load(sys.stdin)["default_branch"])
+except Exception: pass' || true)"
+if [ -z "$default_branch" ]; then
+  echo "[sync] WARN: API GitVerse не отдал default_branch — беру HEAD через ls-remote --symref" >&2
+  default_branch="$(gv ls-remote --symref gitverse HEAD 2>/dev/null |
+    sed -n 's|^ref: refs/heads/\([^[:space:]]*\)[[:space:]]*HEAD$|\1|p' || true)"
+fi
+[ -n "$default_branch" ] || {
+  echo "[sync] FAIL: ветка по умолчанию GitVerse не получена ни из API, ни из ls-remote (сеть/доступ) — повторите позже" >&2
+  exit 1; }
 branches=(main master)
 [[ " ${branches[*]} " == *" $default_branch "* ]] || branches+=("$default_branch")
 

@@ -14,7 +14,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "scripts" / "gitverse_lfs_push.py"
-TOKEN = "tok-SECRET-5f3a9c"
+TOKEN = "tok-SECRET-5f3a9c"  # secret-scan: allow (fake token for the local test server)
 USER = "tester"
 
 
