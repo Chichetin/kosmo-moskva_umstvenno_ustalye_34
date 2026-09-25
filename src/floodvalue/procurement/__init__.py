@@ -1,1 +1,13 @@
-"""floodvalue.procurement — see docs/project-structure.md."""
+"""floodvalue.procurement — see docs/project-structure.md.
+
+Public API for the operator interface (D-013): :func:`plan` recomputes A/B/C for a new
+budget from the files of a results directory, without touching p, mask, threshold or portfolio.
+"""
+from pathlib import Path
+from typing import Any
+
+
+def plan(run_dir: Path, budget_rub: float) -> dict[str, Any]:
+    """Recompute strategies A/B/C for ``budget_rub``; keys: plans, plan_rows, comparison, reasons."""
+    from floodvalue.procurement.run import plan as _plan
+    return _plan(run_dir, budget_rub)
