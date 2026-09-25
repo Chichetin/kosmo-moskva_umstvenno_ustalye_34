@@ -1,5 +1,6 @@
 """Контракт §10 docs/contracts.md: сигнатура plan() и ключи результата (D-013, D-038)."""
 import inspect
+import json
 import shutil
 
 import pytest
@@ -11,10 +12,16 @@ from floodvalue.procurement import run as prun
 TOP_KEYS = {"plans", "plan_rows", "comparison", "reasons", "social_constraint", "c_selection"}
 
 
-@pytest.fixture(scope="module")
-def run_dir(tmp_path_factory):
-    d = tmp_path_factory.mktemp("plan") / "run"
+@pytest.fixture
+def run_dir(tmp_path, monkeypatch):
+    """Эталонный комплект + манифест S1 с датой его чипа (вход plan(), D-043)."""
+    d = tmp_path / "run"
     shutil.copytree(FIXTURE_RUN, d)
+    data = tmp_path / "data"
+    (data / "interim").mkdir(parents=True)
+    (data / "interim" / "source_manifest_s1.json").write_text(json.dumps({"sources": [
+        {"chip_id": "Synthetic_000001", "observation_date": "2017-05-30"}]}), encoding="utf-8")
+    monkeypatch.setenv("FLOODVALUE_DATA_DIR", str(data))
     return d
 
 
@@ -50,3 +57,16 @@ def test_social_default_follows_config_and_switch(run_dir):
                                             "uncovered_required", "note"}
     assert on["social_constraint"]["required_asset_ids"]
     assert set(on) == TOP_KEYS
+
+
+def test_missing_s1_manifest_raises(run_dir, tmp_path, monkeypatch):
+    """Без манифеста S1 или даты чипа plan() бросает исключение, а не строит план (§10)."""
+    monkeypatch.setenv("FLOODVALUE_DATA_DIR", str(tmp_path / "empty"))
+    with pytest.raises(FileNotFoundError):
+        procurement.plan(run_dir, 5000)
+    other = tmp_path / "other"
+    (other / "interim").mkdir(parents=True)
+    (other / "interim" / "source_manifest_s1.json").write_text('{"sources": []}', encoding="utf-8")
+    monkeypatch.setenv("FLOODVALUE_DATA_DIR", str(other))
+    with pytest.raises(ValueError):
+        procurement.plan(run_dir, 5000)

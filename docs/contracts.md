@@ -225,11 +225,17 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
 ```python
 # floodvalue.procurement.plan — реализует area:procurement
 def plan(run_dir: Path, budget_rub: float, social: bool | None = None) -> dict:
-    """Читает assets.csv, asset_loss.csv и растры комплекта (flood_probability.tif,
-    uncertainty.tif — если есть) из run_dir и конфиги (configs/run.yaml, configs/pricing.yaml);
-    каталог зон строится заново из текущих входов (устаревший candidate_orders.geojson
-    не читается). Ничего не пишет; растры, p, маску, порог и портфель не меняет;
-    детерминирована при тех же входах.
+    """Читает из run_dir assets.csv (ровно один chip_id), asset_loss.csv и растры комплекта
+    (flood_probability.tif, uncertainty.tif — если есть); конфиги configs/run.yaml и
+    configs/pricing.yaml; $FLOODVALUE_DATA_DIR/interim/source_manifest_s1.json (пишет
+    `make data`) — observation_date чипа, от которой считаются decision_at и
+    decision_deadline (D-043). Каталог зон строится заново из текущих входов (устаревший
+    candidate_orders.geojson не читается). Ничего не пишет; растры, p, маску, порог и
+    портфель не меняет; детерминирована при тех же входах.
+
+    Исключения (плана нет): FileNotFoundError — нет манифеста S1 или assets.csv/asset_loss.csv;
+    ValueError — в assets.csv не один chip_id, в манифесте нет observation_date чипа, или
+    дата decision_at в run.yaml ≠ дате S1 чипа из run.yaml.
 
     social — социальное ограничение стратегии C (D-038), необязательный аргумент:
       None  — как в configs/run.yaml → social_constraint.enabled (по умолчанию false);
@@ -241,8 +247,11 @@ def plan(run_dir: Path, budget_rub: float, social: bool | None = None) -> dict:
       "plan_rows":   [dict]  # строки procurement_plan.csv (поля §6) БЕЗ "reason":
                              #   reason подставляет procure из reasons["B"|"C"]
       "comparison":  [dict]  # строки strategy_comparison.csv для A, B, C (поля §6);
-                             #   значения — Python-типы (Decimal/float/bool/None), не строки CSV;
+                             #   включая covered_asset_ids (asset_id через пробел);
+                             #   значения — Python-типы (str/Decimal/float/bool/None), не строки CSV;
                              #   budget_rub = аргумент, округлённый до 0,01
+                             # Decimal в plan_rows/comparison json.dumps не сериализует —
+                             #   приводит к строке потребитель (как _cell в procure)
       "reasons": {
           "B":              {candidate_id: правило B},
           "C":              {candidate_id: "шаг k: новый охват …, цена корзины …"},
@@ -250,9 +259,10 @@ def plan(run_dir: Path, budget_rub: float, social: bool | None = None) -> dict:
           "chosen_any":     [candidate_id…],  # B ∪ C, отсортировано
           "B_empty":        str,              # только если B пуста
       }
-      "social_constraint": {"required_asset_ids": [asset_id…]}      # ограничение выключено
-                         | {"required_asset_ids": […], "satisfied": bool,
-                            "uncovered_required": [asset_id…], "note": str}  # включено
+      "social_constraint": {"required_asset_ids": []}               # выключено или нет
+                                                                    #   объектов asset_classes
+                         | {"required_asset_ids": [asset_id…], "satisfied": bool,
+                            "uncovered_required": [asset_id…], "note": str}  # список не пуст
       "c_selection": {"variant": "greedy" | "start:<candidate_id>",
                       "alternatives": {variant: {"chosen": […], "data_cost_rub": str,
                                                  "covered_expected_loss_rub": число}}}
