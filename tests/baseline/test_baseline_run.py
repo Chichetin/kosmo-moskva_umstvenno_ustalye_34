@@ -77,3 +77,10 @@ def test_channel_is_chosen_on_dev_not_train():
     assert p["channel"] == "VH" and p["per_channel"]["VH"]["dev_iou"] > 0.9
     p, _ = run.fit_and_evaluate({"train": ["Tr_0", "Tr_1"]}, data.__getitem__)
     assert p["channel"] == "VV" and p["channel_chosen_on"] == "train"
+
+
+def test_read_chip_refuses_test_labels():
+    from floodvalue.data.split import SealedTestError
+
+    with pytest.raises(SealedTestError):
+        run.read_chip("Spain_7370579")
