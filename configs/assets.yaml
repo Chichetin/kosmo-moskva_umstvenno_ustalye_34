@@ -1,13 +1,13 @@
 # Типы и характеристики 10 объектов — task.md, «Типы и характеристики 10 объектов».
 # Учебные параметры, не оценка реального имущества. Менять нельзя (условия кейса).
 asset_types:
-  - {asset_class: warehouse,       value_rub: 10000000, vulnerability: 0.25}
-  - {asset_class: substation,      value_rub: 20000000, vulnerability: 0.40}
-  - {asset_class: road_unit,       value_rub: 5000000,  vulnerability: 0.30}
-  - {asset_class: facility,        value_rub: 8000000,  vulnerability: 0.20}
-  - {asset_class: pumping_station, value_rub: 12000000, vulnerability: 0.35}
-  - {asset_class: clinic,          value_rub: 30000000, vulnerability: 0.15}
-  - {asset_class: school,          value_rub: 18000000, vulnerability: 0.20}
-  - {asset_class: workshop,        value_rub: 6000000,  vulnerability: 0.45}
-  - {asset_class: telecom_node,    value_rub: 4000000,  vulnerability: 0.50}
-  - {asset_class: water_intake,    value_rub: 16000000, vulnerability: 0.30}
+  - {asset_class: warehouse,       asset_value_rub: 10000000, vulnerability_coef: 0.25}
+  - {asset_class: substation,      asset_value_rub: 20000000, vulnerability_coef: 0.40}
+  - {asset_class: road_unit,       asset_value_rub: 5000000,  vulnerability_coef: 0.30}
+  - {asset_class: facility,        asset_value_rub: 8000000,  vulnerability_coef: 0.20}
+  - {asset_class: pumping_station, asset_value_rub: 12000000, vulnerability_coef: 0.35}
+  - {asset_class: clinic,          asset_value_rub: 30000000, vulnerability_coef: 0.15}
+  - {asset_class: school,          asset_value_rub: 18000000, vulnerability_coef: 0.20}
+  - {asset_class: workshop,        asset_value_rub: 6000000,  vulnerability_coef: 0.45}
+  - {asset_class: telecom_node,    asset_value_rub: 4000000,  vulnerability_coef: 0.50}
+  - {asset_class: water_intake,    asset_value_rub: 16000000, vulnerability_coef: 0.30}

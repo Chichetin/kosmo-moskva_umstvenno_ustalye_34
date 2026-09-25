@@ -9,7 +9,9 @@
 | `data` | `src/floodvalue/data/` (fetch, QC, манифест), `tests/data/` | `data/` (вне git), `source_manifest` часть S1 | официальный бакет |
 | `split` | `splits/`, `src/floodvalue/data/split.py` | `splits/split_v1.json` + хеш | манифест `data` |
 | `baseline` | `src/floodvalue/baseline/` | порог baseline, маска, метрики val/test | S1, метки, split |
-| `model` | `src/floodvalue/model/`, `notebooks/`, `models/` | `predict(s1) → p`, веса, `eval-test` | S1, split |
+| `model-pixel` | `src/floodvalue/model/pixel/`, `models/pixel/` | метод A: `predict_proba`, веса, эксперимент | S1, split |
+| `model-unet` | `src/floodvalue/model/unet/`, `notebooks/`, `models/unet/` | метод B: `predict_proba`, веса | S1, split |
+| `eval` | `src/floodvalue/model/eval_test.py`, `src/floodvalue/model/metrics.py`, `tests/eval/` | `eval-test`, метрики на идентичных пикселях, перенос | p-растры обоих методов, split |
 | `calibration` | `src/floodvalue/calibration/` | калибратор, порог основного метода, неопределённость | p на validation |
 | `assets` | `src/floodvalue/assets/` | `assets.*`, `asset_loss.csv`, чувствительность p/V/q | p-растр, `configs/assets.yaml` |
 | `procurement` | `src/floodvalue/procurement/`, `configs/pricing.yaml` | зоны, цена, A/B/C, `procurement_plan.csv`, `strategy_*`, чувствительность бюджета/ставки | `asset_loss.csv`, p, неопределённость |

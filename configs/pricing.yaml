@@ -1,7 +1,8 @@
 # Базовый учебный сценарий цены по ПП РФ № 840 — task.md, «Как проверить стоимость по ПП РФ № 840».
 # РП = Б × К × О × П × Т × Р. Коэффициенты — здесь, в коде только формула.
 legal_edition: "ПП РФ № 840 от 29.06.2019 в ред. ПП РФ № 1297 от 27.08.2025"
-legal_checked_at: null          # дата самостоятельной проверки редакции командой — заполнить (критерий 18)
+legal_checked_at: null          # дата самостоятельной проверки редакции командой — заполнить в P20 (критерий 18)
+methodology_reference: "Приказ ГК «Роскосмос» № 116 от 21.05.2026 (рег. 26.06.2026 № 87243) — методика определения стоимости БРЕ, не ставка"
 case_reference_date: "2026-09-20"
 formula: "РП = Б × К × О × П × Т × Р"
 
@@ -17,12 +18,15 @@ freshness:
   operational: 1.0              # имеющиеся данные, давность <= operational_max_age_days (граница включительно)
   archive: 0.6                  # старше operational_max_age_days
   operational_max_age_days: 90
+  # acquisition_type=new без guaranteed_purchase=true — ошибка валидации (правило не задано постановкой)
 
 discount:                       # Р = min(1; max(floor; slope × ln(S / r²) + intercept)); S — км², r — м
   optical: {slope: -0.058, intercept: 1.037, floor: 0.2}
   sar:     {slope: -0.020, intercept: 1.031, floor: 0.7}
   previous_area_km2: 0          # ранее учтённые заказы в календарном году (по умолчанию 0)
   group_by: [sensor_type, resolution_m, calendar_year]
+  # group_area_km2 = сумма area_km2 выбранных позиций группы в корзине стратегии + previous_area_km2
+  sensor_family: {optical: [optical], sar: [sar]}   # значения sensor_type в каталоге
 
 rounding:
   mode: ROUND_HALF_UP
@@ -30,6 +34,8 @@ rounding:
   discount_coef: "0.000000001"
   unit_price_rub_km2: "0.01"
   cost_rub: "0.01"
+# Порядок: unit_price_rub_km2 = round(Б × О × П × Т × Р, 0.01); cost_rub = round(unit_price_rub_km2 × area_km2, 0.01);
+# Р округляется до 9 знаков до умножения; итог стратегии — сумма cost_rub строк.
 min_area_km2: 1.0               # проверяется до округления
 area_crs: "EPSG:6933"
 
