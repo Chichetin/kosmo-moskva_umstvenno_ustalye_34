@@ -266,6 +266,7 @@ def plan(run_dir: Path, budget_rub: float, social: bool | None = None) -> dict:
       "c_selection": {"variant": "greedy" | "start:<candidate_id>",
                       "alternatives": {variant: {"chosen": […], "data_cost_rub": str,
                                                  "covered_expected_loss_rub": число}}}
+                     # alternatives — только "greedy" и выбранный variant, не все проходы
     """
 ```
 
