@@ -108,6 +108,50 @@ def test_part_test_with_uncommitted_config_is_refused(monkeypatch, capsys, tmp_p
     assert "uncommitted" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("confirm", [False, True])
+def test_part_test_for_non_final_method_is_refused_before_hash(monkeypatch, capsys, tmp_path,
+                                                                test_log, confirm):
+    """D-025: test opens only for the final method; a candidate is refused before any test
+    read and before the configuration hash is even computed (#111)."""
+    if confirm:
+        monkeypatch.setenv(E.CONFIRM_ENV, E.frozen_config_hash(method="pixel"))
+    forbid_test_reads(monkeypatch)
+
+    def no_hash(*a, **k):
+        raise AssertionError("config hash requested for a non-final method")
+    monkeypatch.setattr(E, "frozen_config_hash", no_hash)
+    monkeypatch.setattr(E, "uncommitted_frozen_paths", lambda *a, **k: "")
+    monkeypatch.setenv("FLOODVALUE_METHOD", "pixel")
+    before = test_log.read_text(encoding="utf-8")
+    rc = cli.main(["eval-test", "--part", "test", "--out", str(tmp_path / "o")])
+    out = capsys.readouterr().out
+    assert rc == 3 and "отказ" in out and "D-025" in out and "pixel" in out
+    assert test_log.read_text(encoding="utf-8") == before
+    assert not (tmp_path / "o").exists()
+
+
+def test_part_test_gate_accepts_final_method_named_explicitly(monkeypatch):
+    monkeypatch.setenv("FLOODVALUE_METHOD", E.main_predict.DEFAULT_METHOD)
+    monkeypatch.setattr(E, "uncommitted_frozen_paths", lambda *a, **k: "")
+    monkeypatch.setenv(E.CONFIRM_ENV, E.frozen_config_hash())
+    assert E.open_test_gate()[0] == E.frozen_config_hash()
+
+
+def test_non_test_part_keeps_candidate_method(data_root, tmp_path, monkeypatch):
+    """dev/validation still evaluate a candidate chosen by FLOODVALUE_METHOD."""
+    monkeypatch.setenv("FLOODVALUE_METHOD", "pixel")
+    seen = {}
+
+    def fake_eval(part, chips, workdir, **k):
+        seen["part"] = part
+        raise RuntimeError("stop after the gate")
+    monkeypatch.setattr(E, "chip_ids", lambda part, **k: ["Sri-Lanka_2"])
+    monkeypatch.setattr(E, "evaluate", fake_eval)
+    with pytest.raises(RuntimeError, match="stop after the gate"):
+        cli.main(["eval-test", "--part", "validation", "--out", str(tmp_path / "o")])
+    assert seen["part"] == "validation"
+
+
 def test_labels_of_test_events_stay_sealed_without_flag(data_root):
     with pytest.raises(SealedTestError):
         E.io.load_label("Spain_9")
