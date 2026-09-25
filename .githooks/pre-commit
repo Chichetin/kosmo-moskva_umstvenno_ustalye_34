@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Включается один раз: git config core.hooksPath .githooks (делает `make setup`).
+exec bash "$(git rev-parse --show-toplevel)/.claude/hooks/check-data-files.sh"

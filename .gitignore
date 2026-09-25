@@ -1,0 +1,24 @@
+# данные и результаты запусков — вне git (FLOODVALUE_DATA_DIR, docs/data.md)
+/data/
+/outputs/
+/runs/
+*.tif
+*.tiff
+!tests/fixtures/**/*.tif
+# окружение
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+# Claude Code: worktree и служебные маркеры
+.claude/worktrees/
+.claude/.last-green-test-run
+.claude/settings.local.json
+# IDE
+.idea/
+.vscode/

@@ -1,0 +1,53 @@
+[project]
+name = "floodvalue"
+version = "0.1.0"
+description = "FloodValue: карта воды по Sentinel-1 (Sen1Floods11) → ожидаемый ущерб 10 объектов → план заказа ДЗЗ A/B/C"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "numpy>=2.0",
+  "pandas>=2.2",
+  "rasterio>=1.4",
+  "shapely>=2.0",
+  "pyproj>=3.6",
+  "pydantic>=2.8",
+  "pyyaml>=6.0",
+  "scikit-learn>=1.5",
+  "scipy>=1.13",
+  "torch>=2.4",
+  "matplotlib>=3.9",
+  "streamlit>=1.38",
+  "folium>=0.17",
+  "streamlit-folium>=0.22",
+  "requests>=2.32",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3", "ruff>=0.6"]
+
+[project.scripts]
+floodvalue = "floodvalue.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/floodvalue"]
+
+# CPU-сборка torch: inference на одном чипе обязан работать без GPU (Colab ставит свою).
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

@@ -1,0 +1,46 @@
+# Соответствие условиям
+
+Строка обновляется в том же PR, что и артефакт. Статус без команды — не статус.
+Статусы: ⬜ нет · 🟡 частично · ✅ проверено командой.
+
+## 20 критериев (`criteria.md`)
+
+| № | Критерий | Артефакт | Проверка (команда) | Статус |
+|---|---|---|---|---|
+| 1 | Подготовка исходных геоданных | `src/floodvalue/data/`, `docs/data.md`, `source_manifest.json` | `make data` → QC-отчёт: VV/VH, CRS, nodata, совпадение сетки с меткой | 🟡 разведка в `docs/data.md` |
+| 2 | Пороговый baseline | `src/floodvalue/baseline/`, порог в `models/baseline/` | `make baseline` → порог выбран на train/val; метрики IoU/F1/P/R | ⬜ |
+| 3 | Основной метод | `src/floodvalue/model/`, `models/<main>/`, `notebooks/` | `make train`, `make predict CHIP=…`; описание в README | ⬜ |
+| 4 | Сравнение методов | `docs/verification/test-comparison.md` | `make eval-test` → оба метода, идентичные валидные пиксели, по событиям, FP/FN | ⬜ |
+| 5 | Итоговая карта и порог | `flood_probability.tif`, `flood_mask.tif`, кривая порога на val | `make validate` (mask = p ≥ threshold); `docs/verification/threshold.md` | ⬜ |
+| 6 | Split без утечки | `splits/split_v1.json`, `docs/decisions.md` D-006, `test-log.md` | `make split` → хеш = decisions; `pytest tests/split` (события не пересекаются) | ⬜ |
+| 7 | Перенос и неполные данные | test на новых событиях, S1-only, другой чип | `make predict CHIP=<другой>`; `docs/verification/transfer.md` | ⬜ |
+| 8 | Контролируемый эксперимент | `docs/verification/experiment-*.md` | таблица на validation (признаки / вариант / постобработка) | ⬜ |
+| 9 | Надёжность вероятностей | калибратор, reliability на test | `make calibrate`; ECE/Brier до и после; параметры опубликованы | ⬜ |
+| 10 | Неопределённость | `uncertainty.tif`, `asset_loss.csv:uncertainty` | неопределённость выше на ошибках (val/test); влияние на выбор зон | ⬜ |
+| 11 | Повторный запуск | README, `uv.lock`, веса в GitVerse LFS | чистый клон GitVerse → `make setup && make all` | ⬜ |
+| 12 | Обязательные файлы и проверки | `src/floodvalue/export/`, `src/floodvalue/contracts/` | `make validate` → 12/12 | ⬜ |
+| 13 | Ожидаемый прямой ущерб | `assets.*`, `asset_loss.csv`, seed в `run_metadata.json` | `pytest tests/assets` (EL = 1 000 000 при p=0,4, V=10 млн, q=0,25; p из растра; no_data пусто) | ⬜ |
+| 14 | Приоритеты и интерпретация | `asset_loss.csv:rank`, `sensitivity.csv`, прокси-проверка | чувствительность p, V, q по отдельности; прокси-ошибка на test-чипе | ⬜ |
+| 15 | План съёмки в бюджете | `candidate_orders.geojson`, `procurement_plan.csv` | `make procure BUDGET=…`; валидатор геометрии; C ≤ бюджета | ⬜ |
+| 16 | Сравнение A/B/C | `strategy_plans.json`, `strategy_comparison.csv` | `make validate`; B сверх бюджета помечена | ⬜ |
+| 17 | Стоимость платных данных | `procurement_plan.csv`, `configs/pricing.yaml` | `pytest tests/procurement` (1 703,46 / 946,37 / 567,82; 90 дней; скидка по корзине) | 🟡 конфиг и контрольная арифметика сверены |
+| 18 | ПП 840 и допущения | `configs/pricing.yaml` (редакция, дата проверки), README | `legal_checked_at` заполнен; `base_rate_status=scenario` везде | 🟡 редакция записана, дата проверки — нет |
+| 19 | Интерфейс оператора | `src/floodvalue/app/` | `make app`; смена бюджета: хеши растров не меняются | ⬜ |
+| 20 | Границы прототипа | README «Ограничения и развитие» | `scribe` + `jury` | ⬜ |
+
+## 12 обязательных файлов (`task.md`, раздел III)
+
+| Файл | Производит (`area:`) | Проверка | Статус |
+|---|---|---|---|
+| `flood_probability.tif` | model / export | `make validate`: Float32, [0,1], nodata −9999, сетка = S1 | ⬜ |
+| `flood_mask.tif` | calibration / export | UInt8, 0/1/255, mask ⇔ p ≥ threshold | ⬜ |
+| `assets.geojson` | assets | 10 Point, [lon, lat], типы и V/q | ⬜ |
+| `assets.csv` | assets | = geojson | ⬜ |
+| `asset_loss.csv` | assets | EL = p·V·q, rank, пустые у no_data | ⬜ |
+| `candidate_orders.geojson` | procurement | Polygon, без дыр, ≥ 1 км², площадь EPSG:6933 | ⬜ |
+| `procurement_plan.csv` | procurement | цена пересчитывается, скидка по корзине | ⬜ |
+| `strategy_plans.json` | procurement | = строкам плана | ⬜ |
+| `strategy_comparison.csv` | procurement | суммы, бюджет, охват по `asset_id` | ⬜ |
+| `sensitivity.csv` | assets / procurement | p, V, q, бюджет, ставка | ⬜ |
+| `run_metadata.json` | export | ключи, threshold = маска | ⬜ |
+| `source_manifest.json` | data / export | S1 демо-чипа, даты, лицензии | ⬜ |

@@ -1,0 +1,42 @@
+# Базовый учебный сценарий цены по ПП РФ № 840 — task.md, «Как проверить стоимость по ПП РФ № 840».
+# РП = Б × К × О × П × Т × Р. Коэффициенты — здесь, в коде только формула.
+legal_edition: "ПП РФ № 840 от 29.06.2019 в ред. ПП РФ № 1297 от 27.08.2025"
+legal_checked_at: null          # дата самостоятельной проверки редакции командой — заполнить (критерий 18)
+case_reference_date: "2026-09-20"
+formula: "РП = Б × К × О × П × Т × Р"
+
+base_rate:
+  rub_per_km2: 788.64
+  status: scenario              # official — только с проверяемым источником конкретной ставки
+  source: "Учебная сценарная ставка из материалов кейса (task.md); подтверждённый размер БРЕ не установлен"
+
+processing_coef: {L0: 1.0, L1: 1.0, L2: 1.2}
+usage_coef: {internal: 1.0, limited: 1.2, unrestricted: 1.5}
+freshness:
+  new_guaranteed: 1.8           # acquisition_type=new, guaranteed_purchase=true
+  operational: 1.0              # имеющиеся данные, давность <= operational_max_age_days (граница включительно)
+  archive: 0.6                  # старше operational_max_age_days
+  operational_max_age_days: 90
+
+discount:                       # Р = min(1; max(floor; slope × ln(S / r²) + intercept)); S — км², r — м
+  optical: {slope: -0.058, intercept: 1.037, floor: 0.2}
+  sar:     {slope: -0.020, intercept: 1.031, floor: 0.7}
+  previous_area_km2: 0          # ранее учтённые заказы в календарном году (по умолчанию 0)
+  group_by: [sensor_type, resolution_m, calendar_year]
+
+rounding:
+  mode: ROUND_HALF_UP
+  area_km2: "0.001"
+  discount_coef: "0.000000001"
+  unit_price_rub_km2: "0.01"
+  cost_rub: "0.01"
+min_area_km2: 1.0               # проверяется до округления
+area_crs: "EPSG:6933"
+
+# Контрольная арифметика постановки — тесты procurement обязаны её воспроизводить:
+# Б=788,64; К=1,000; оптика 1 м; S=1,000; L2; internal; new guaranteed → 1703.46
+# то же operational → 946.37; archive > 90 дней → 567.82
+control_examples:
+  - {processing_level: L2, usage_type: internal, freshness: new_guaranteed, area_km2: 1.0, resolution_m: 1, sensor: optical, cost_rub: 1703.46}
+  - {processing_level: L2, usage_type: internal, freshness: operational,    area_km2: 1.0, resolution_m: 1, sensor: optical, cost_rub: 946.37}
+  - {processing_level: L2, usage_type: internal, freshness: archive,        area_km2: 1.0, resolution_m: 1, sensor: optical, cost_rub: 567.82}
