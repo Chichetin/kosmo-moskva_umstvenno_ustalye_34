@@ -9,10 +9,10 @@
 
 - Рабочий репозиторий — **GitHub, приватный** (D-002): issues, PR, `gh`. `origin` —
   GitHub.
-- **Защиты `main` на сервере нет**: GitHub Free не применяет branch protection и rulesets
-  к приватным репозиториям. Единственная защита — `permissions.deny` в
-  `.claude/settings.json` и эти правила. Push в `main` не делать никогда — только PR.
-  (Станет публичным или тариф Pro/Team — включить защиту `main` в настройках GitHub.)
+- **`main` защищена на сервере** (включено 25.09 через API, `protected: true`): только
+  через PR (0 обязательных апрувов — аппрув даёт `reviewer`), правило действует и на
+  админа, force-push и удаление `main` запрещены. Дублируется `permissions.deny` в
+  `.claude/settings.json`. Проверка: `gh api repos/Chichetin/kosmo-moskva_umstvenno_ustalye_34/branches/main --jq .protected`.
 - **Сдача — GitVerse**, зеркало (`gitverse` remote) заводится позже; см. «GitVerse».
 
 ## Автономность агента
