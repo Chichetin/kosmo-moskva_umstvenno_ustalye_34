@@ -143,7 +143,7 @@ def markdown(res: dict, method: str) -> str:
       "На validation выбраны две вещи: (1) вид калибратора — по log-loss **вне события** "
       "(подгонка на одном событии, проверка на другом); (2) порог — максимум IoU калиброванной p "
       "по всей validation. Итоговые числа validation поэтому оптимистичны; честная оценка "
-      "переноса — таблица «между событиями» ниже и test (#19).")
+      "переноса — таблица «между событиями» ниже и `make eval-test` (#29, #32).")
     a("")
     a(f"Входная модель: `models/{method}/config.json`, `weights_sha256` "
       f"`{cal['input_model_sha256'][:12]}…`. Сырая p — `predict_proba` метода (docs/contracts.md §3), "
@@ -205,12 +205,14 @@ def markdown(res: dict, method: str) -> str:
           f"{f(calr['water_share'])}). Калибратор переносит на новое событие априорную долю воды "
           f"validation ({pct(fit['water_share'])}): на событии, где воды в разы меньше, p завышается "
           "и порог даёт лишние срабатывания; ухудшаются и ECE, и log-loss, а значит и EL = p·V·q "
-          "на таком событии завышен. Калибровка остаётся на validation по протоколу D-012 (dev — "
-          "для выбора модели, test запечатан); этот результат на выбор не влиял. Справочно: сводные "
-          "доли воды test видели на разведке до split (раскрыто в D-016, 15–18 %, `docs/data.md` §5) — "
-          "ближе к validation, чем к dev. Вывод для оператора: калиброванная p надёжна для паводков "
-          "с долей воды порядка validation; на событии с малой долей воды p завышена, и это "
-          "ограничение переноса, а не свойство модели.")
+          "на таком событии завышен. Две оговорки: (1) сравнение смещено в пользу сырой p ≥ 0,5 — "
+          "чекпойнт U-Net выбран по IoU@0,5 именно на dev (D-019); (2) падение IoU даёт порог, а не "
+          f"Platt: калиброванный порог {f(thr, 2)} — это сырая p ≥ "
+          f"{f(cal['raw_threshold_equivalent'], 4)}, та же маска получилась бы и без калибратора. "
+          "Калибровка и порог остаются выбранными на validation по протоколу D-012 (dev — для выбора "
+          "модели); результат dev на выбор не влиял. Вывод для оператора: калиброванная p надёжна "
+          "для паводков с долей воды порядка validation; на событии с малой долей воды p и маска "
+          "завышены — это ограничение выдаваемой модели (калибратор входит в неё) при переносе.")
         a("")
     a("## Выбор калибратора: перенос между событиями")
     a("")
@@ -238,6 +240,12 @@ def markdown(res: dict, method: str) -> str:
           f"{f(np.mean([r['ece'] for r in rows]), 4)} | {f(np.mean([r['brier'] for r in rows]), 4)} | "
           f"{f(np.mean([r['iou_transfer'] for r in rows]))} |")
     a("")
+    iou_id = np.mean([r["iou_transfer"] for r in means["identity"]])
+    iou_k = np.mean([r["iou_transfer"] for r in means[kind]])
+    a(f"Выигрыш IoU при переносе даёт выбор порога, а не калибратор: без калибровки с перенесённым "
+      f"порогом средний IoU {f(iou_id)}, с {KIND_RU[kind]} — {f(iou_k)}. {KIND_RU[kind]} выбран ради "
+      "шкалы p (log-loss, ECE — критерий 9 и EL = p·V·q), не ради маски.")
+    a("")
     a("На всей validation (подгонка и оценка на одних пикселях — для сравнения гибкости, не для выбора):")
     a("")
     a("| Калибратор | Параметры | ECE | Brier | log-loss | средняя p |")
@@ -260,8 +268,14 @@ def markdown(res: dict, method: str) -> str:
     worst = max(rel, key=lambda r: abs(r["mean_p"] - r["water_share"]))
     total = sum(r["n"] for r in rel)
     mid = sum(r["n"] for r in rel if 0.2 <= r["bin_lo"] and r["bin_hi"] <= 0.8 + 1e-9)
-    a(f"Сырая p систематически **занижена** во всём диапазоне (сеть обучена на ~8,9 % воды). "
-      f"После калибровки средняя p совпадает с долей воды, ECE падает с "
+    raw_rel = [r for r in res["rel_raw"] if r["n"]]
+    upper = raw_rel[1:]
+    under = sum(r["water_share"] > r["mean_p"] for r in upper)
+    first = raw_rel[0]
+    a(f"Сырая p **занижена** в {under} из {len(upper)} непустых бинов выше первого (сеть обучена на "
+      f"~8,9 % воды); в первом бине [{f(first['bin_lo'], 2)}; {f(first['bin_hi'], 2)}), где "
+      f"{pct(first['n'] / sum(r['n'] for r in raw_rel))} пикселей, p {f(first['mean_p'])} при доле воды "
+      f"{f(first['water_share'])}. После калибровки средняя p совпадает с долей воды, ECE падает с "
       f"{f(ba[('ALL', 'raw_0.5')]['ece'], 4)} до {f(ba[('ALL', 'calibrated')]['ece'], 4)}. Остаётся "
       f"S-образное отклонение в середине шкалы: наибольшее — в бине [{f(worst['bin_lo'], 2)}; "
       f"{f(worst['bin_hi'], 2)}), p {f(worst['mean_p'])} при доле воды {f(worst['water_share'])}. "
@@ -342,12 +356,12 @@ def markdown(res: dict, method: str) -> str:
     ece_in = next(r["ece"] for r in res["in_sample"] if r["kind"] == kind)
     a(f"- Validation — два события (Nigeria {pct(ba[('Nigeria', 'raw_0.5')]['water_share'])} воды, "
       f"Sri-Lanka {pct(ba[('Sri-Lanka', 'raw_0.5')]['water_share'])}). Калибратор сдвигает p к доле воды "
-      f"validation ({pct(fit['water_share'])}); в test доля воды по разведке 15–18 % (`docs/data.md` §5), "
-      "но на событии с другой долей воды калибровка может снова разойтись. Перенос между "
+      f"validation ({pct(fit['water_share'])}); на событии с другой долей воды калибровка может "
+      "снова разойтись (см. dev выше). Перенос между "
       f"событиями validation это показывает: ECE вне события {f(ece_out, 4)} против {f(ece_in, 4)} "
       "при подгонке на всей validation.")
     a("- Порог выбран на тех же пикселях, где считаются итоговые числа validation; незавышенная "
-      "оценка — test (`make eval-test`, #19).")
+      "оценка — test (`make eval-test`, #29, #32).")
     a("- Калибровка не меняет ранжирование пикселей: ROC/PR-кривая модели та же, выигрыш IoU — от "
       "порога, выигрыш log-loss/Brier/ECE — от шкалы p.")
     a("")
@@ -355,7 +369,7 @@ def markdown(res: dict, method: str) -> str:
     a("")
     a("```bash")
     a("set -a; . ./.env; set +a          # FLOODVALUE_DATA_DIR с Sen1Floods11")
-    a("make calibrate                     # CPU, около 2 минут: калибратор, порог, этот отчёт")
+    a("make calibrate                     # CPU, 1–2 минуты: калибратор, порог, этот отчёт")
     a("make predict CHIP=Sri-Lanka_713926 # flood_probability.tif уже калиброван, mask ⇔ p ≥ порог")
     a("```")
     a("")
