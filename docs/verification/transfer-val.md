@@ -88,6 +88,11 @@ OK   flood_mask.tif
 
 — тот же результат `12/12` на всех четырёх комплектах (включая демо-чип `Sri-Lanka_713926`).
 
+Повтор после слияния `main` с #76/#97 (неопределённость: `uncertainty.tif`, `p_low`/`p_high` в
+`asset_loss.csv`) — 2026-09-26, `make all CHIP=USA_198411 BUDGET=5000` на рабочем дереве слияния
+поверх `ba25686` → `12/12 файлов прошли проверку`, `run_metadata.threshold` 0,37; единственное
+предупреждение — «рабочее дерево с незакоммиченными изменениями» (прогон до коммита слияния).
+
 ## 3. Nodata: `USA_198411` (66,6 % NaN)
 
 `flood_probability.tif`/`flood_mask.tif` (docs/contracts.md §2) проверены напрямую (`rasterio`):
@@ -157,7 +162,7 @@ sha256 конфигурации `506ce620d041373c6b312ead25deed6221e79704fe3ce2f
 — тот же сквозной путь, что у `predict`/`make all`, метки dev/validation читать разрешено,
 D-010 запечатывает только test). Результат команды — `docs/verification/eval-dev.md`
 (+ `eval-dev.csv`, `-chips.csv`, `-summary.json`; перегенерирован 2026-09-26 на commit
-`23e3e9215d72` с тем же sha256 конфигурации, числа совпали); validation — также
+`23e3e9215d72` с тем же sha256 конфигурации, числа совпали; хеш конфигурации — на момент этих commit: позже в `models/` добавились `models/pixel/` и `models/unet/uncertainty.json` (#76, #97), p основного метода от этого не меняется — среднее членов ансамбля); validation — также
 `docs/verification/eval-validation.md` §1.
 
 **Ни dev, ни validation — не «новое событие» в строгом смысле:** чекпойнт U-Net выбирался
