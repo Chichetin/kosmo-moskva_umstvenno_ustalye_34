@@ -109,20 +109,29 @@ def bootstrap_iou(chips: list[ChipStats], ch: str, t: float, n: int = N_BOOT,
 
 
 def fit(chips: list[ChipStats]) -> dict:
-    """Everything that is *chosen*, chosen on train only."""
+    """Threshold and scale are fitted on train; the channel (VV/VH) is chosen on dev.
+
+    Protocol D-012/D-016: dev (USA) is the part for choosing between variants, validation
+    only reports. Without dev chips the channel falls back to the train IoU.
+    """
     train = [c for c in chips if c.part == "train"]
+    dev = [c for c in chips if c.part == "dev"]
     per_channel = {}
     for ch in core.CHANNELS:
         w, d, nw, nd = _sum_le(train, ch)
         t, iou = core.best_threshold(core.EDGES, w, d, nw, nd)
-        per_channel[ch] = {"threshold_db": t, "train_iou": iou}
-    channel = max(per_channel, key=lambda ch: per_channel[ch]["train_iou"])
+        per_channel[ch] = {"threshold_db": t, "train_iou": round(iou, 6)}
+        if dev:
+            s = metrics.scores(**counts_at(dev, ch, t))
+            per_channel[ch]["dev_iou"] = round(s["iou"] or 0.0, 6)
+    key = "dev_iou" if dev else "train_iou"
+    channel = max(per_channel, key=lambda ch: per_channel[ch][key])
     t = per_channel[channel]["threshold_db"]
     w, d, _, _ = _sum_le(train, channel)
     centers = core.bin_centers(core.EDGES)
     s = core.fit_scale(t, centers, core.hist_from_le(w), core.hist_from_le(d))
-    return {"channel": channel, "threshold_db": t, "scale_db": round(s, 4),
-            "per_channel": per_channel}
+    return {"channel": channel, "channel_chosen_on": "dev" if dev else "train",
+            "threshold_db": t, "scale_db": round(s, 4), "per_channel": per_channel}
 
 
 def evaluate(chips: list[ChipStats], params: dict) -> dict:
@@ -229,25 +238,28 @@ def render_report(params: dict, result: dict, config: dict) -> str:
     out = [
         "# Baseline: порог по S1 — проверка на dev и validation",
         "",
-        f"Сгенерировано `make baseline` (commit `{config['commit']}`, {config['created_at']}). "
-        "Числа ниже — из `docs/verification/baseline-metrics.csv`, "
-        "`baseline-variants.csv`, `baseline-threshold-curve.csv`. Test не читался (D-010).",
+        (f"Сгенерировано `make baseline` (commit `{config['commit']}`, {config['created_at']}). "
+         "Числа ниже — из `docs/verification/baseline-metrics.csv`, "
+         "`baseline-variants.csv`, `baseline-threshold-curve.csv`. Test не читался (D-010)."),
         "",
         "## Правило",
         "",
-        f"- Вода ⇔ **{ch} ≤ {t:.1f} dB** (S1 уже в dB). Порог — максимум IoU по всем валидным "
-        "пикселям train (пулинг пикселей), перебор от −60 до +30 dB с шагом 0,1.",
-        "- Канал выбран на train: " + "; ".join(
+        (f"- Вода ⇔ **{ch} ≤ {t:.1f} dB** (S1 уже в dB). Порог — максимум IoU по всем валидным "
+         "пикселям train (пулинг пикселей), перебор от −60 до +30 dB с шагом 0,1."),
+        "- Для каждого канала порог подобран на train; канал выбран по IoU на "
+        f"**{params['channel_chosen_on']}** (D-012: dev — выбор варианта, validation — только "
+        "отчёт): " + "; ".join(
             f"{c}: порог {v['threshold_db']:.1f} dB, IoU train {v['train_iou']:.3f}"
+            + (f", IoU dev {v['dev_iou']:.3f}" if "dev_iou" in v else "")
             for c, v in params["per_channel"].items()) + ".",
-        f"- Вероятность (временный основной метод, D-009): p = sigmoid(({t:.1f} − {ch}) / s), "
-        f"**s = {s:.3f} dB** — минимум log-loss на train при фиксированном пороге. "
-        "p ≥ 0,5 ⇔ маска baseline. Сигмоида не калибрована на validation: доля воды "
-        "в train 8,9 %, в validation 15,2 %.",
-        "- Валидный пиксель: VV и VH конечны **и** LabelHand ≠ −1 (`floodvalue.model.metrics`). "
-        "`valid_mask_sha256` — отпечаток этой маски; основной метод обязан получить тот же хеш.",
-        f"- Чипов: train {result['n_chips']['train']}, dev {result['n_chips']['dev']}, "
-        f"validation {result['n_chips']['validation']}.",
+        (f"- Вероятность (временный основной метод, D-009): p = sigmoid(({t:.1f} − {ch}) / s), "
+         f"**s = {s:.3f} dB** — минимум log-loss на train при фиксированном пороге. "
+         "p ≥ 0,5 ⇔ маска baseline. Сигмоида не калибрована на validation: доля воды "
+         "в train 8,9 %, в validation 15,2 %."),
+        ("- Валидный пиксель: VV и VH конечны **и** LabelHand ≠ −1 (`floodvalue.model.metrics`). "
+         "`valid_mask_sha256` — отпечаток этой маски; основной метод обязан получить тот же хеш."),
+        (f"- Чипов: train {result['n_chips']['train']}, dev {result['n_chips']['dev']}, "
+         f"validation {result['n_chips']['validation']}."),
         "",
         "## Метрики baseline по событиям",
         "",
@@ -263,8 +275,8 @@ def render_report(params: dict, result: dict, config: dict) -> str:
             f"{N_BOOT} повторов, seed {SEED}): " + "; ".join(
                 f"{p} [{lo:.3f}; {hi:.3f}]" for p, (lo, hi) in result["bootstrap"].items()) + ".",
             "", "## Варианты (ALL): VV, VH, Otsu по чипу", "",
-            "Пороги VV и VH — каждый свой, выбран на train. Otsu считается по VH каждого чипа "
-            "отдельно, без обучения (порог чипа — по всем конечным пикселям S1).", "",
+            ("Пороги VV и VH — каждый свой, выбран на train. Otsu считается по VH каждого чипа "
+             "отдельно, без обучения (порог чипа — по всем конечным пикселям S1)."), "",
             "| split | вариант | порог, dB | IoU | F1 | Precision | Recall |",
             "|---|---|---|---|---|---|---|"]
     for r in result["variants"]:
@@ -277,17 +289,17 @@ def render_report(params: dict, result: dict, config: dict) -> str:
     out += ["", "Порог Otsu по чипам, медиана [мин; макс], dB: " + "; ".join(
         f"{p} {m:.1f} [{a:.1f}; {b:.1f}]" for p, (m, a, b) in ot.items()) + ".",
         "", "## Устойчивость порога между событиями (диагностика, не выбор)", "",
-        f"Порог {ch}, максимизирующий IoU отдельно на каждом событии. Для выбора не "
-        "используется — показывает, насколько один глобальный порог далёк от "
-        "оптимального на новом событии.", "",
+        (f"Порог {ch}, максимизирующий IoU отдельно на каждом событии. Для выбора не "
+         "используется — показывает, насколько один глобальный порог далёк от "
+         "оптимального на новом событии."), "",
         "| split | событие | лучший порог, dB | IoU при нём |", "|---|---|---|---|"]
     for o in result["oracle"]:
         out.append(f"| {o['split']} | {o['event']} | {o['best_threshold_db']:.1f} | "
                    f"{o['best_iou']:.3f} |")
     out += ["", "## Кривая «порог → метрики»", "",
-            f"`docs/verification/baseline-threshold-curve.csv`: split × канал × порог от "
-            f"{CURVE_RANGE[0]:.0f} до {CURVE_RANGE[1]:.0f} dB с шагом 0,1 (IoU, F1, P, R, "
-            "TP/FP/FN/TN). График — `docs/verification/baseline-threshold-curve.png`.", "",
+            (f"`docs/verification/baseline-threshold-curve.csv`: split × канал × порог от "
+             f"{CURVE_RANGE[0]:.0f} до {CURVE_RANGE[1]:.0f} dB с шагом 0,1 (IoU, F1, P, R, "
+             "TP/FP/FN/TN). График — `docs/verification/baseline-threshold-curve.png`."), "",
             "## Воспроизведение", "", "```bash",
             "set -a; . ./.env; set +a      # FLOODVALUE_DATA_DIR",
             "make baseline                 # порог, s, метрики, этот отчёт",
@@ -334,7 +346,7 @@ def run(args) -> int:
         "prob_threshold": 0.5,
         "fitted_on": "train",
         "split_sha256": _split_sha(),
-        "created_at": dt.date.today().isoformat(),
+        "created_at": dt.datetime.now(dt.UTC).date().isoformat(),
         "commit": git_commit(),
     }
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
