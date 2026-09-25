@@ -10,8 +10,15 @@ import math
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import (BaseModel, BeforeValidator, ConfigDict, Field, StrictBool, field_validator,
-                      model_validator)
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    StrictBool,
+    field_validator,
+    model_validator,
+)
 
 NonEmptyStr = Annotated[str, Field(min_length=1)]
 Probability = Annotated[float, Field(ge=0.0, le=1.0)]

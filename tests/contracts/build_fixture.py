@@ -107,8 +107,8 @@ def build(out: Path) -> None:
     p = np.clip((rr + cc) / (2 * SIZE - 2), 0, 1).astype(np.float32)
     p[:6, :6] = -9999.0
     mask = np.where(p == -9999.0, 255, (p.astype(np.float64) >= THRESHOLD).astype(np.uint8))
-    profile = dict(driver="GTiff", width=SIZE, height=SIZE, count=1, crs="EPSG:4326",
-                   transform=from_origin(LON0, LAT0, RES, RES))
+    profile = {"driver": "GTiff", "width": SIZE, "height": SIZE, "count": 1, "crs": "EPSG:4326",
+                   "transform": from_origin(LON0, LAT0, RES, RES)}
     with rasterio.open(out / "flood_probability.tif", "w", dtype="float32", nodata=-9999.0,
                        **profile) as dst:
         dst.write(p, 1)

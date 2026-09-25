@@ -21,10 +21,18 @@ from shapely.geometry import Point, shape
 from floodvalue.contracts import files as F
 from floodvalue.contracts.geo import MIN_AREA_KM2, area_km2, product_half_up, round_half_up
 from floodvalue.contracts.io import read_csv, read_json
-from floodvalue.contracts.schemas import (AssetCsvRow, AssetLossRow, AssetProperties,
-                                          CandidateProperties, ProcurementPlanRow, RunMetadata,
-                                          SensitivityRow, SourceManifest, StrategyComparisonRow,
-                                          StrategyPlans)
+from floodvalue.contracts.schemas import (
+    AssetCsvRow,
+    AssetLossRow,
+    AssetProperties,
+    CandidateProperties,
+    ProcurementPlanRow,
+    RunMetadata,
+    SensitivityRow,
+    SourceManifest,
+    StrategyComparisonRow,
+    StrategyPlans,
+)
 from floodvalue.paths import CONFIGS_DIR, REPO_ROOT, data_dir, output_dir
 
 FIXTURE_RUN = REPO_ROOT / "tests" / "fixtures" / "good"
@@ -254,6 +262,11 @@ def _check_plan(report: _Report, plan: list[ProcurementPlanRow], catalog: dict, 
                                  f"пересчёту по корзине {disc}")
 
 
+def covered_expected_loss(zones: list, points: dict[str, Point], el: dict[str, float]) -> float:
+    """EL of unique asset_id covered by any zone; `covers` counts the boundary (task.md)."""
+    return sum(v for aid, v in el.items() if any(z.covers(points[aid]) for z in zones))
+
+
 # --- main entry --------------------------------------------------------------------------------
 
 def validate_run(run_dir: Path, assets_config: Path | None = None,
@@ -271,7 +284,7 @@ def validate_run(run_dir: Path, assets_config: Path | None = None,
             return None
         try:
             return fn()
-        except Exception as exc:  # malformed file: report, keep checking the others
+        except Exception as exc:  # noqa: BLE001 - malformed file: report, keep checking
             report.add(name, f"не читается: {type(exc).__name__}: {exc}")
             return None
 
@@ -301,7 +314,7 @@ def validate_run(run_dir: Path, assets_config: Path | None = None,
     if F.FLOOD_PROBABILITY in present and F.FLOOD_MASK in present:
         try:
             raster = _check_rasters(report, run_dir, meta)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             report.add(F.FLOOD_PROBABILITY, f"растры не читаются: {type(exc).__name__}: {exc}")
 
     # assets.geojson / assets.csv ---------------------------------------------------------------

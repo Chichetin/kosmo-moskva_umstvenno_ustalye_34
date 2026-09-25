@@ -1,9 +1,13 @@
-# Контракты (черновик v0)
+# Контракты v1
 
 Единственная точка стыковки модулей. Код схем — `src/floodvalue/contracts/` (pydantic v2,
-D-004). Изменение — отдельный PR с перечнем потребителей (`docs/project-structure.md`),
-merge после вердикта `reviewer`, проверившего каждого. Черновик фиксируется issue
-«contracts v1» к сквозному пути; до этого поля ниже — ориентир.
+D-004): `files.py` (имена, обязательные поля, спецификация растров), `schemas.py` (строки
+CSV, свойства GeoJSON, `run_metadata.json`, `source_manifest.json`, `configs/run.yaml`),
+`geo.py` (ROUND_HALF_UP, площадь EPSG:6933, произведение цены в Decimal), `io.py` (чтение
+CSV/JSON с отказом на NaN/Inf). Валидатор — `floodvalue.export.validate` (§11, D-014).
+Изменение — отдельный PR с перечнем потребителей (`docs/project-structure.md`), merge
+после вердикта `reviewer`, проверившего каждого. Эталонный комплект —
+`tests/fixtures/good/` (синтетический чип, собирается `tests/contracts/build_fixture.py`).
 
 ## 1. Каталог результатов одного запуска
 
@@ -58,7 +62,10 @@ separators=(",", ":"), ensure_ascii=True)`; записан в `docs/decisions.md
 - `configs/pricing.yaml` — формула ПП 840: редакция, дата проверки, Б и её статус,
   таблицы О/П/Т, параметры скидки для optical/sar, правила округления.
 - `configs/assets.yaml` — 10 типов: `asset_class`, `asset_value_rub`, `vulnerability_coef`.
-- `configs/run.yaml` — демо-чип, seed портфеля, бюджет, `decision_at`, `decision_deadline`.
+- `configs/run.yaml` (схема `RunConfig`, `floodvalue.contracts.load_run_config()`):
+  `chip_id`, `event_id`, `chip_split`, `portfolio_seed`, `budget_rub`, `decision_at`,
+  `decision_deadline` (ISO 8601 с поясом). До заморозки — `Sri-Lanka_713926` (validation,
+  D-010); после — `Spain_7370579` (test) только замороженной конфигурацией.
 
 ## 6. Обязательные файлы (поля — дословно `task.md`, раздел III)
 
@@ -86,9 +93,112 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
 одной маске валидных пикселей (`valid_mask_sha256` совпадает). `threshold_curve.csv` —
 «порог → метрики» на validation.
 
-## Открытые вопросы v1
+## 7a. Уточнения к §6, v1 (проверяет валидатор)
 
-- Точная структура `run_metadata.json` (вложенные объекты `methods`, `portfolio`,
-  `pricing`, `uncertainty`, `proxy_check`) — фиксирует issue contracts v1.
-- Смысл `uncertainty` в `asset_loss.csv` (например, стандартное отклонение EL или
-  энтропия p) — фиксирует issue calibration, до того поле обязательно, смысл в метаданных.
+- Пустая ячейка CSV = нет значения; литералы `nan`/`inf`/`Infinity` — ошибка. Булевы в
+  CSV — строго `true`/`false`. Даты — ISO 8601; время без пояса считается UTC.
+- `asset_loss.csv`: `p_flood` — значение `flood_probability.tif` в пикселе объекта
+  (допуск 1e-6 к float32), без округления сверх кратчайшей записи; `expected_loss_rub` =
+  записанный `p_flood` × V × q с допуском 0,01 руб.; `status=ok` ⇔ пиксель валиден;
+  `partial`/`no_data` → пустые `p_flood`, `expected_loss_rub`, `rank`; `rank` 1…n только у
+  `ok` по (−EL, `asset_id`). `uncertainty` может быть пустым; смысл — `run_metadata.uncertainty`.
+- `candidate_orders.geojson`: только `Polygon` (не MultiPolygon); `observation_at`,
+  `available_at` — ключи обязательны, значение может быть `null` (неизвестно);
+  `base_rate_status` ∈ {scenario, official}.
+- `procurement_plan.csv`: группа скидки — строки одной стратегии с одним
+  `discount_group_id` (D-017: `<семейство>_<r>m_<год>`), одно семейство сенсора и одно
+  `resolution_m`; `group_area_km2` одинакова в группе и ≥ суммы `area_km2` корзины группы
+  (разница — `previous_area_km2`); Р = min(1; max(floor; slope·ln(S/r²)+intercept)) до
+  9 знаков (допуск 1,5e-9); О, П — по `configs/pricing.yaml`; Т — по `acquisition_type`
+  каталога (new → 1,8; operational → 1,0; archive → 0,6); `unit_price_rub_km2` =
+  ROUND_HALF_UP(Б·О·П·Т·Р, 0,01) и `cost_rub` = ROUND_HALF_UP(unit·area, 0,01) в Decimal от
+  записанных чисел — точно до копейки; `legal_edition` = `configs/pricing.yaml`.
+- `strategy_comparison.csv`: ровно по одной строке A, B, C; один `budget_rub` =
+  `run_metadata.budget.budget_rub`; `budget_feasible` ⇔ `data_cost_rub ≤ budget_rub`; C
+  обязана быть в бюджете; `covered_expected_loss_rub` (B, C) = Σ EL `ok`-объектов, которые
+  `covers` хотя бы одна зона стратегии с `data_role=event_observation` и `available_at ≤
+  decision_deadline` (допуск 0,01); `coverage_share` = covered / Σ EL `ok`-объектов (допуск
+  1e-4), пусто ⇔ Σ EL = 0; `residual_uncertainty` пусто ⇔ `not_estimated`; A — `baseline`.
+- `sensitivity.csv`: ключи `changed_inputs_json` для обязательных вариаций —
+  `p_flood`, `asset_value_rub`, `vulnerability_coef`, `budget_rub`, `base_rate_rub_km2`;
+  на каждый — хотя бы одна строка, где из этих пяти изменён только он (другие ключи,
+  например `asset_id`, допустимы).
+
+## 8. `run_metadata.json` (схема `RunMetadata`)
+
+Обязательные ключи верхнего уровня; вложенные объекты допускают дополнительные поля.
+
+```json
+{"contract_version": "1", "run_id": "…", "chip_id": "Sri-Lanka_713926", "event_id": "Sri-Lanka",
+ "event_date": "2017-05-30", "created_at": "<ISO>", "commit": "<sha>",
+ "threshold": 0.5,
+ "source": {"dataset": "Sen1Floods11 v1.1 HandLabeled", "dataset_url": "…",
+            "s1_files": ["Sri-Lanka_713926_S1Hand.tif"], "source_manifest": "source_manifest.json"},
+ "split": {"file": "splits/split_v1.json", "sha256": "…|null", "chip_split": "validation"},
+ "portfolio": {"seed": 20260925, "placement_rule": "…", "assets_config": "configs/assets.yaml"},
+ "methods": {"baseline": {"name", "version", "weights": [{"path", "sha256"}], "threshold",
+                          "threshold_units": "dB VH", "threshold_source"},
+             "main": {… "threshold" = threshold, "threshold_units": "p"},
+             "evaluation_order": "…"},
+ "expected_loss": {"formula": "EL = p_flood × V × q", "p_source", "status_rules"},
+ "budget": {"budget_rub", "decision_at", "decision_deadline"},
+ "pricing": {"config", "legal_edition", "base_rate_rub_km2", "base_rate_status",
+             "discount_rule", "grouping"},
+ "zones": {"construction", "availability_rule", "area_method", "unknown_dates_rule"},
+ "strategies": {"rule_B", "rule_C", "other_costs", "coverage_aggregation",
+                "coverage_share_note": null},
+ "uncertainty": {"meaning", "units", "method", "raster": null},
+ "proxy_check": {"status": "done|planned|not_done", "test_chip", "control_points",
+                 "fixed_v_q", "n_points", "error_metric", "result"},
+ "metrics": {"files": ["metrics.csv", "…"]},
+ "reproduce": ["make all CHIP=… BUDGET=…"]}
+```
+
+`threshold` — порог основного метода (mask = 1 ⇔ p ≥ threshold, сравнение в float64
+значения float32), равен `methods.main.threshold`. `source.s1_files` содержит S1 чипа.
+`assets_metadata.json` модуля `assets` (D-018) экспорт переносит так: `seed`,
+`placement_rule` → `portfolio`; `el_model`, `p_extraction_rule`, `status_rule` →
+`expected_loss`; `uncertainty` → `uncertainty` (пока `binary_entropy_bits`, биты, временно).
+
+## 9. `source_manifest.json` (схема `SourceManifest`)
+
+`{"sources": [{"id", "file", "url", "version", "observation_date", "available_date",
+"license", "purpose", "limitations", "applies_to", "after_event_note"}]}`; даты —
+`YYYY-MM-DD` или `null`. Есть источник с `<chip_id>_S1Hand` в `id` или `file`; `id`
+уникальны; `observation_date` позже `run_metadata.event_date` — только с непустым
+`after_event_note`.
+
+## 10. Пересчёт бюджета для интерфейса (D-005, D-013)
+
+```python
+# floodvalue.procurement.plan — чистая функция, реализует area:procurement
+def plan(run_dir: Path, budget_rub: float) -> dict:
+    """Читает candidate_orders.geojson, asset_loss.csv, assets.geojson, run_metadata.json
+    из run_dir; ничего не пишет, растры, p, порог и портфель не меняет; детерминирована.
+    Возвращает:
+      "plans":      {"A": [], "B": [candidate_id…], "C": [candidate_id…]}  # = strategy_plans.json
+      "plan_rows":  [dict строки procurement_plan.csv]                     # поля §6
+      "comparison": [dict строки strategy_comparison.csv, A/B/C]          # budget_rub = аргумент
+      "reasons":    {candidate_id: "почему выбрана / исключена"}           # для интерфейса
+    """
+```
+
+`app` вызывает её при смене бюджета; `procure` пишет результат в файлы комплекта.
+Результат, записанный в файлы, обязан проходить валидатор.
+
+## 11. Валидатор (критерий 12, D-014)
+
+`python -m floodvalue validate --out <каталог>` = `make validate OUT=<каталог>`. Без
+`--out` — самый свежий комплект в `FLOODVALUE_OUTPUT_DIR` (подкаталог с
+`run_metadata.json`, по времени изменения этого файла), если его нет — эталон
+`tests/fixtures/good`; путь печатается первой строкой. Вывод — `OK`/`FAIL` по каждому из
+12 файлов с причинами и итог `N/12`; код возврата 0 только при 12/12. Каждая ошибка
+приписана одному файлу; перекрёстные проверки (маска ↔ порог, EL ↔ растр, план ↔
+сравнение) приписаны файлу, который им противоречит. Если найден S1 чипа в
+`FLOODVALUE_DATA_DIR`, сетка `flood_probability.tif` сверяется и с ним.
+
+## Открытые вопросы
+
+- Смысл `uncertainty` в `asset_loss.csv` — временно бинарная энтропия p в битах (D-018),
+  окончательно фиксирует issue calibration/uncertainty (записывается в
+  `run_metadata.uncertainty`).

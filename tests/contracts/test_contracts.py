@@ -50,8 +50,8 @@ def test_run_config_loads():
 
 
 def test_empty_cell_is_none_and_nan_rejected():
-    row = dict(asset_id="a", chip_id="c", p_flood="", expected_loss_rub="", uncertainty="",
-               rank="", status="no_data")
+    row = {"asset_id": "a", "chip_id": "c", "p_flood": "", "expected_loss_rub": "", "uncertainty": "",
+               "rank": "", "status": "no_data"}
     assert AssetLossRow.model_validate(row).p_flood is None
     with pytest.raises(ValidationError):
         AssetLossRow.model_validate(dict(row, status="ok", p_flood="nan", expected_loss_rub="1",
@@ -59,10 +59,10 @@ def test_empty_cell_is_none_and_nan_rejected():
 
 
 def test_not_estimated_requires_empty_number():
-    base = dict(strategy="B", data_cost_rub="1", other_cost_rub="0", decision_cost_rub="1",
-                budget_rub="5", budget_feasible="true", covered_expected_loss_rub="0",
-                coverage_share="", residual_uncertainty="", uncertainty_status="not_estimated",
-                uncertainty_basis="x")
+    base = {"strategy": "B", "data_cost_rub": "1", "other_cost_rub": "0", "decision_cost_rub": "1",
+                "budget_rub": "5", "budget_feasible": "true", "covered_expected_loss_rub": "0",
+                "coverage_share": "", "residual_uncertainty": "", "uncertainty_status": "not_estimated",
+                "uncertainty_basis": "x"}
     StrategyComparisonRow.model_validate(base)
     with pytest.raises(ValidationError):
         StrategyComparisonRow.model_validate(dict(base, residual_uncertainty="0"))
