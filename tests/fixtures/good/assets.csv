@@ -1,0 +1,11 @@
+asset_id,chip_id,asset_class,asset_value_rub,vulnerability_coef,longitude,latitude
+a01,Synthetic_000001,warehouse,10000000,0.25,80.00125,7.79875
+a02,Synthetic_000001,substation,20000000,0.4,80.02525,7.79475
+a03,Synthetic_000001,road_unit,5000000,0.3,80.02025,7.78975
+a04,Synthetic_000001,facility,8000000,0.2,80.00525,7.78475
+a05,Synthetic_000001,pumping_station,12000000,0.35,80.03025,7.77975
+a06,Synthetic_000001,clinic,30000000,0.15,80.01025,7.77475
+a07,Synthetic_000001,school,18000000,0.2,80.03125,7.76975
+a08,Synthetic_000001,workshop,6000000,0.45,80.00775,7.79225
+a09,Synthetic_000001,telecom_node,4000000,0.5,80.01675,7.78325
+a10,Synthetic_000001,water_intake,16000000,0.3,80.02275,7.77225

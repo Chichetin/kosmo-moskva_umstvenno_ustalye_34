@@ -1,0 +1,7 @@
+strategy,candidate_id,area_km2,base_rate_rub_km2,base_rate_status,processing_level,usage_type,guaranteed_purchase,processing_coef,usage_coef,freshness_coef,discount_coef,discount_group_id,group_area_km2,unit_price_rub_km2,cost_rub,formula,legal_edition,sensor_type,resolution_m,acquisition_type
+B,Z1,1.210,788.64,scenario,L2,internal,true,1.2,1.0,1.8,0.962224506,optical_1m_2017,3.630,1639.11,1983.32,РП = Б × К × О × П × Т × Р,ПП РФ № 840 от 29.06.2019 в ред. ПП РФ № 1297 от 27.08.2025,optical,1,new
+B,Z3,1.210,788.64,scenario,L2,internal,false,1.2,1.0,0.6,0.962224506,optical_1m_2017,3.630,546.37,661.11,РП = Б × К × О × П × Т × Р,ПП РФ № 840 от 29.06.2019 в ред. ПП РФ № 1297 от 27.08.2025,optical,1,archive
+B,Z4,1.210,788.64,scenario,L2,internal,true,1.2,1.0,1.8,0.962224506,optical_1m_2017,3.630,1639.11,1983.32,РП = Б × К × О × П × Т × Р,ПП РФ № 840 от 29.06.2019 в ред. ПП РФ № 1297 от 27.08.2025,optical,1,new
+B,Z2,1.103,788.64,scenario,L1,internal,false,1.0,1.0,1.0,1.000000000,sar_3m_2017,1.103,788.64,869.87,РП = Б × К × О × П × Т × Р,ПП РФ № 840 от 29.06.2019 в ред. ПП РФ № 1297 от 27.08.2025,sar,3,operational
+C,Z1,1.210,788.64,scenario,L2,internal,true,1.2,1.0,1.8,1.000000000,optical_1m_2017,1.210,1703.46,2061.19,РП = Б × К × О × П × Т × Р,ПП РФ № 840 от 29.06.2019 в ред. ПП РФ № 1297 от 27.08.2025,optical,1,new
+C,Z2,1.103,788.64,scenario,L1,internal,false,1.0,1.0,1.0,1.000000000,sar_3m_2017,1.103,788.64,869.87,РП = Б × К × О × П × Т × Р,ПП РФ № 840 от 29.06.2019 в ред. ПП РФ № 1297 от 27.08.2025,sar,3,operational
