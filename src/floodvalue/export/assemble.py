@@ -67,8 +67,9 @@ def metrics_rows(baseline_rows: list[dict], main_rows: list[dict] | None,
             "method_name": "threshold_baseline", "source_file": baseline_file} for r in base]
     if main_rows and not is_baseline_prediction(prediction):
         for r in main_rows:
-            if r.get("method") == "main" and r.get("split") in METRICS_SPLITS:
-                out.append({**{k: r[k] for k in METRICS_FIELDS},
+            if r.get("method") in ("main", prediction.get("method")) \
+                    and r.get("split") in METRICS_SPLITS:
+                out.append({**{k: r[k] for k in METRICS_FIELDS}, "method": "main",
                             "threshold_units": r.get("threshold_units") or "p",
                             "method_name": str(prediction.get("method", "main")),
                             "source_file": main_file})
@@ -241,6 +242,7 @@ def _method_info(name: str, version: str, weights: list[dict], threshold: float,
 def run_metadata(*, run_id: str, chip_id: str, event_id: str, event_date: str, created_at: str,
                  commit: str, commit_dirty: bool, prediction: dict, baseline_config: dict,
                  baseline_config_path: str, baseline_config_sha256: str,
+                 main_config: dict | None = None,
                  assets_meta: dict, procurement_meta: dict, pricing: dict, split: dict,
                  split_file: str, run_config: dict, uncertainty_raster: str | None,
                  metrics_files: list[str], reproduce: list[str], versions: dict,
@@ -264,11 +266,19 @@ def run_metadata(*, run_id: str, chip_id: str, event_id: str, event_date: str, c
             status="temporary: основной метод ещё не влит (#16/#17), D-009",
             proba=baseline_config.get("proba"))
     else:
+        cfg = main_config or {}
+        name = str(prediction.get("method", "main"))
+        weights = [{"path": f"models/{name}/{m['file']}", "sha256": m["sha256"]}
+                   for m in cfg.get("members", []) if m.get("file") and m.get("sha256")]
+        arch = cfg.get("arch")
         main = _method_info(
-            str(prediction.get("method", "main")), str(prediction.get("version", "")) or "n/a",
-            list(prediction.get("weights", [])), float(prediction["threshold"]), "p",
+            name, f"{name} {json.dumps(arch, sort_keys=True)}" if arch else name, weights,
+            float(prediction["threshold"]), "p",
             str(prediction.get("threshold_source") or prediction.get("threshold_status")
-                or "prediction.json"))
+                or "prediction.json"),
+            weights_sha256=prediction.get("weights_sha256") or cfg.get("weights_sha256"),
+            config=f"models/{name}/config.json" if cfg else None,
+            ensemble=cfg.get("ensemble"), selection=cfg.get("selection"))
     unc = assets_meta.get("uncertainty", {})
     zones = procurement_meta.get("zones", {})
     split_hash = split_sha256(split)

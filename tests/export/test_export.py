@@ -82,6 +82,17 @@ def test_metrics_real_main_uses_its_own_rows_and_never_copies_baseline():
     assert {r["iou"] for r in stray if r["method"] == "main"} == {"0.5"}
 
 
+def test_metrics_rows_named_by_method_become_main():
+    unet = [{**BASE_ROWS[2], "method": "unet", "iou": "0.6", "threshold": "0.5"},
+            {**BASE_ROWS[0], "method": "unet"}]  # train row is dropped (§7)
+    rows = assemble.metrics_rows(BASE_ROWS, unet, {"method": "unet", "threshold": 0.5},
+                                 "b.csv", "docs/verification/unet-metrics.csv")
+    mains = [r for r in rows if r["method"] == "main"]
+    assert [(r["split"], r["iou"], r["method_name"]) for r in mains] == \
+        [("validation", "0.6", "unet")]
+    assert not [r for r in rows if r["method"] == "unet"]
+
+
 def _sens(scenario, changed):
     return {"scenario_id": scenario, "strategy": "C", "changed_inputs_json": json.dumps(changed),
             "decision_cost_rub": "1", "covered_expected_loss_rub": "1",

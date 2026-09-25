@@ -107,7 +107,10 @@ def _work_dir(args, chip_id: str) -> Path:
 
 def _metrics(work_prediction: dict, dest: Path, warnings: list[str]) -> list[str]:
     base_path = REPO_ROOT / BASELINE_METRICS
-    main_path = REPO_ROOT / MAIN_METRICS
+    method = str(work_prediction.get("method", "main"))
+    main_rel = next((rel for rel in (f"docs/verification/{method}-metrics.csv", MAIN_METRICS)
+                     if (REPO_ROOT / rel).is_file()), MAIN_METRICS)
+    main_path = REPO_ROOT / main_rel
     if not base_path.is_file():
         warnings.append(f"нет {BASELINE_METRICS}: metrics.csv без baseline (make baseline)")
         base_rows = []
@@ -115,17 +118,17 @@ def _metrics(work_prediction: dict, dest: Path, warnings: list[str]) -> list[str
         base_rows = _read_csv(base_path)
     main_rows = _read_csv(main_path) if main_path.is_file() else None
     if main_rows and assemble.is_baseline_prediction(work_prediction):
-        warnings.append(f"{MAIN_METRICS} есть, но растр комплекта — baseline (D-009): строки "
+        warnings.append(f"{main_rel} есть, но растр комплекта — baseline (D-009): строки "
                         "main взяты из baseline, чтобы метрики соответствовали растру")
         main_rows = None
     if main_rows is None and not assemble.is_baseline_prediction(work_prediction):
-        warnings.append(f"основной метод {work_prediction.get('method')!r} без {MAIN_METRICS}: "
+        warnings.append(f"основной метод {method!r} без {main_rel}: "
                         "в metrics.csv нет строк main")
     rows = assemble.metrics_rows(base_rows, main_rows, work_prediction, BASELINE_METRICS,
-                                 MAIN_METRICS if main_rows else None)
+                                 main_rel if main_rows else None)
     _write_csv(dest / "metrics.csv", assemble.METRICS_FIELDS + assemble.METRICS_EXTRA, rows)
     files = ["metrics.csv", BASELINE_METRICS]
-    return files + ([MAIN_METRICS] if main_rows else [])
+    return files + ([main_rel] if main_rows else [])
 
 
 def export(chip_id: str, work: Path, dest: Path | None = None,
@@ -154,6 +157,9 @@ def export(chip_id: str, work: Path, dest: Path | None = None,
     if dirty:
         warnings.append("рабочее дерево git с незакоммиченными изменениями: commit не "
                         "воспроизводит запуск полностью")
+    if str(prediction.get("threshold_status", "")).startswith("uncalibrated"):
+        warnings.append("вероятности основного метода не калиброваны, порог 0,5 не выбран на "
+                        "validation (калибровка — #20): " + str(prediction["threshold_status"]))
     if assemble.is_baseline_prediction(prediction):
         warnings.append("основной метод — временно baseline-сигмоида (D-009): "
                         "floodvalue.model.predict ещё не влит (#16/#17)")
@@ -209,6 +215,9 @@ def export(chip_id: str, work: Path, dest: Path | None = None,
                                             else chip_id.rsplit("_", 1)[0])
     split = _read_json(SPLIT_FILE)
     baseline_config = _read_json(BASELINE_CONFIG)
+    main_cfg_path = MODELS_DIR / str(prediction.get("method", "")) / "config.json"
+    main_config = (_read_json(main_cfg_path) if main_cfg_path.is_file()
+                   and not assemble.is_baseline_prediction(prediction) else None)
     budget_arg = assemble.budget_label(budget)
     reproduce = [
         f"git checkout {commit}",
@@ -225,7 +234,8 @@ def export(chip_id: str, work: Path, dest: Path | None = None,
         created_at=datetime.now(UTC).isoformat(timespec="seconds"), commit=commit,
         commit_dirty=dirty, prediction=prediction, baseline_config=baseline_config,
         baseline_config_path=str(BASELINE_CONFIG.relative_to(REPO_ROOT)),
-        baseline_config_sha256=_sha256(BASELINE_CONFIG), assets_meta=assets_meta,
+        baseline_config_sha256=_sha256(BASELINE_CONFIG), main_config=main_config,
+        assets_meta=assets_meta,
         procurement_meta=proc_meta, pricing=pricing, split=split,
         split_file=str(SPLIT_FILE.relative_to(REPO_ROOT)), run_config=run_config,
         uncertainty_raster="uncertainty.tif" if (dest / "uncertainty.tif").is_file() else None,
