@@ -16,7 +16,14 @@ module's share; `budget_rub`, `base_rate_rub_km2` belong to procurement/P18b) so
 
 import json
 
-from floodvalue.assets.portfolio import Asset, expected_loss, rank_assets
+from floodvalue.assets.portfolio import (
+    UNCERTAINTY_NAME,
+    Asset,
+    binary_entropy,
+    expected_loss,
+    rank_assets,
+)
+from floodvalue.assets.priority import inspection_order, order_moves
 
 SENSITIVITY_FIELDS = [
     "scenario_id",
@@ -66,6 +73,7 @@ def _baseline(assets: list[Asset], loss_rows: list[dict]) -> dict[str, dict]:
             "p": row["p_flood"],
             "status": row["status"],
             "rank": row["rank"],
+            "uncertainty": row["uncertainty"],
             "V": a.asset_value_rub,
             "q": a.vulnerability_coef,
             "asset_class": a.asset_class,
@@ -122,6 +130,7 @@ def _interpretation(
     new_total: float,
     clipped: list[str],
     highlight: str | None,
+    inspection_moves: list[str],
 ) -> str:
     parts = []
     if base_total:
@@ -154,6 +163,9 @@ def _interpretation(
         direction = "поднялся" if (new_r or 99) < (old_r or 99) else "опустился"
         parts.append(f"{cls} ({aid}) {direction} с {old_r} на {new_r}")
 
+    # D-035: the same inspection rule on the scenario's p and EL (entropy follows p', see _inspection).
+    parts.append(f"очерёдность осмотра: {', '.join(inspection_moves) or 'без изменений'}")
+
     if clipped:
         parts.append(f"отсечение [0,1] сработало у: {', '.join(sorted(clipped))}")
 
@@ -161,8 +173,24 @@ def _interpretation(
     if no_data_ids:
         parts.append(f"no_data не участвуют: {', '.join(no_data_ids)}")
 
-    parts.append("uncertainty и статус ok/no_data в этом сценарии не пересчитываются")
+    parts.append("uncertainty в asset_loss и статус ok/no_data в этом сценарии не пересчитываются; "
+                 "для очерёдности энтропия следует за p' (функция p, D-018, не новое наблюдение)")
     return "; ".join(parts)
+
+
+def _inspection(base: dict[str, dict], overrides: dict, els: dict, ranks: dict) -> list[dict]:
+    rows = []
+    for aid, b in base.items():
+        p, u = overrides.get(aid, {}).get("p", b["p"]), b["uncertainty"]
+        # The D-018 entropy is a function of p: for the inspection rule it follows p' (not a new
+        # observation), otherwise a lower p would stay "uncertain". A measure independent of p
+        # (#21) stays at its baseline value. The name check is always true today on purpose:
+        # it is the switch #21 flips when the measure stops being a function of p.
+        if "p" in overrides.get(aid, {}) and UNCERTAINTY_NAME == "binary_entropy_bits":
+            u = binary_entropy(p)
+        rows.append({"asset_id": aid, "p_flood": p, "expected_loss_rub": els[aid],
+                     "uncertainty": u, "rank": ranks[aid], "status": b["status"]})
+    return inspection_order(rows, {aid: b["asset_class"] for aid, b in base.items()})
 
 
 def _scenario_row(
@@ -172,7 +200,7 @@ def _scenario_row(
     k: float,
     target: str | None,
     base: dict[str, dict],
-) -> dict:
+) -> tuple[dict, list[str]]:
     targets = [target] if scope == "single_asset" else [aid for aid, b in base.items() if b["status"] == "ok"]
     overrides, clipped = _overrides_for(parameter, k, base, targets)
     new_els = _recompute(base, overrides)
@@ -182,6 +210,8 @@ def _scenario_row(
                 for aid, b in base.items()}
     base_total = sum(v for v in base_els.values() if v is not None)
     new_total = sum(v for v in new_els.values() if v is not None)
+    moves = order_moves(_inspection(base, {}, base_els, {aid: b["rank"] for aid, b in base.items()}),
+                        _inspection(base, overrides, new_els, new_ranks))
 
     # Exactly one of SENSITIVITY_REQUIRED_KEYS per row (docs/contracts.md §7a): the changed
     # parameter is nested under its contract key; scope/asset_id/totals/clips are sibling keys,
@@ -204,8 +234,33 @@ def _scenario_row(
         # recomputed portfolio EL lives in changed_inputs_json instead (D-028).
         "covered_expected_loss_rub": None,
         "result_status": "ok" if any(v is not None for v in new_els.values()) else "no_data",
-        "interpretation": _interpretation(base, new_ranks, base_total, new_total, clipped, target),
-    }
+        "interpretation": _interpretation(base, new_ranks, base_total, new_total, clipped, target,
+                                          moves),
+    }, moves
+
+
+def _scenarios(assets: list[Asset], loss_rows: list[dict]) -> list[tuple[dict, list[str]]]:
+    base = _baseline(assets, loss_rows)
+    ok_by_rank = sorted((aid for aid, b in base.items() if b["status"] == "ok"),
+                        key=lambda aid: base[aid]["rank"])
+    leader = ok_by_rank[0] if ok_by_rank else None
+    challenger = ok_by_rank[3] if len(ok_by_rank) > 3 else None
+
+    out = []
+    for parameter in ("p", "V", "q"):
+        for k in PORTFOLIO_FACTORS:
+            out.append(_scenario_row(f"{parameter}_portfolio_x{k}", parameter, "portfolio", k, None, base))
+        if leader is not None:
+            out.append(_scenario_row(
+                f"{parameter}_leader_x{SINGLE_ASSET_DOWN_FACTOR}", parameter, "single_asset",
+                SINGLE_ASSET_DOWN_FACTOR, leader, base,
+            ))
+        if challenger is not None:
+            out.append(_scenario_row(
+                f"{parameter}_challenger_x{SINGLE_ASSET_UP_FACTOR}", parameter, "single_asset",
+                SINGLE_ASSET_UP_FACTOR, challenger, base,
+            ))
+    return out
 
 
 def el_sensitivity(assets: list[Asset], loss_rows: list[dict]) -> list[dict]:
@@ -217,26 +272,11 @@ def el_sensitivity(assets: list[Asset], loss_rows: list[dict]) -> list[dict]:
     hidden), plus two single-asset scenarios that can move ranks: the current rank-1 asset
     scaled down (SINGLE_ASSET_DOWN_FACTOR) and the highest-EL asset outside the top 3 scaled up
     (SINGLE_ASSET_UP_FACTOR), fixing the other two inputs. `no_data` assets are skipped (no p to
-    scale) and listed in `interpretation`.
+    scale) and listed in `interpretation`, which also states the inspection-order effect (D-035).
     """
-    base = _baseline(assets, loss_rows)
-    ok_by_rank = sorted((aid for aid, b in base.items() if b["status"] == "ok"),
-                        key=lambda aid: base[aid]["rank"])
-    leader = ok_by_rank[0] if ok_by_rank else None
-    challenger = ok_by_rank[3] if len(ok_by_rank) > 3 else None
+    return [row for row, _ in _scenarios(assets, loss_rows)]
 
-    rows = []
-    for parameter in ("p", "V", "q"):
-        for k in PORTFOLIO_FACTORS:
-            rows.append(_scenario_row(f"{parameter}_portfolio_x{k}", parameter, "portfolio", k, None, base))
-        if leader is not None:
-            rows.append(_scenario_row(
-                f"{parameter}_leader_x{SINGLE_ASSET_DOWN_FACTOR}", parameter, "single_asset",
-                SINGLE_ASSET_DOWN_FACTOR, leader, base,
-            ))
-        if challenger is not None:
-            rows.append(_scenario_row(
-                f"{parameter}_challenger_x{SINGLE_ASSET_UP_FACTOR}", parameter, "single_asset",
-                SINGLE_ASSET_UP_FACTOR, challenger, base,
-            ))
-    return rows
+
+def inspection_order_changes(assets: list[Asset], loss_rows: list[dict]) -> dict[str, list[str]]:
+    """scenario_id -> inspection-order moves (`priority.order_moves`) for the same scenarios."""
+    return {row["scenario_id"]: moves for row, moves in _scenarios(assets, loss_rows)}

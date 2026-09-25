@@ -410,7 +410,7 @@ def run(args) -> int:
         "commit": git_commit(),
     }
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG_PATH.write_text(json.dumps(config, ensure_ascii=False, indent=1) + "\n")
+    CONFIG_PATH.write_text(json.dumps(config, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     out_dir = Path(args.out) if getattr(args, "out", None) else output_dir() / "baseline"
     files = {"baseline-metrics.csv": result["rows"],
              "baseline-variants.csv": result["variants"],
@@ -419,7 +419,7 @@ def run(args) -> int:
         write_csv(VERIFY_DIR / name, rows)
         write_csv(out_dir / name.removeprefix("baseline-").replace("-", "_"), rows)
     plot_curve(result["curve"], params, VERIFY_DIR / "baseline-threshold-curve.png")
-    (VERIFY_DIR / "baseline-val.md").write_text(render_report(params, result, config))
+    (VERIFY_DIR / "baseline-val.md").write_text(render_report(params, result, config), encoding="utf-8")
     for r in result["rows"]:
         if r["event"] == "ALL":
             print(f"{r['split']:<10} IoU {_fmt(r['iou'])} F1 {_fmt(r['f1'])} "

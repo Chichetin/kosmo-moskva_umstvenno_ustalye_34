@@ -103,7 +103,7 @@ make validate OUT=outputs/<chip_id>_<руб>_<commit>
 **Важно:** `decision_at`/`decision_deadline` (сроки для A/B/C) берутся из
 `configs/run.yaml` и не подстраиваются под `--chip` автоматически — для реалистичного
 сценария A/B/C на чипе другого события отредактируйте их в `configs/run.yaml` перед
-`make procure`/`make all` (подробности — `docs/verification/transfer-val.md` §7).
+`make procure`/`make all` (подробности — `docs/verification/transfer-val.md` §7; привязка к дате S1 чипа — #84).
 `flood_probability.tif`/`flood_mask.tif`/`asset_loss.csv` от этого не зависят.
 
 ## Результаты
@@ -111,6 +111,28 @@ make validate OUT=outputs/<chip_id>_<руб>_<commit>
 Метрики — `docs/verification/`. Решения — `docs/decisions.md`. Соответствие критериям —
 `docs/tz-compliance.md`.
 Оригиналы условий организатора (PDF, текст, выжимка) — `docs/task/`.
+
+### Комплект и веса в релизе
+
+`outputs/` и `*.tif` в git не входят, поэтому 12 файлов демо-запуска и веса `models/`
+лежат ассетами релиза GitVerse: `run_<run_id>.zip`, `models_<commit>.zip` и `SHA256SUMS`
+(D-037). Проверка после скачивания всех трёх файлов в один каталог:
+
+```bash
+sha256sum -c SHA256SUMS      # обе строки — OK
+```
+
+**Плейсхолдер до финального запуска** — значения появятся после `eval-test` и `make all`
+на демо-чипе:
+
+```text
+<sha256 — ещё не собрано>  run_<run_id>.zip
+<sha256 — ещё не собрано>  models_<commit>.zip
+```
+
+Сборка у себя: `make release OUT=outputs/<run_id>` → `outputs/release/` (отказ, если
+`validate` не 12/12 или в `models/` LFS-указатель вместо весов; повторная сборка даёт тот же
+sha256). Загрузка в релиз: `make release OUT=outputs/<run_id> TAG=<тег>` (токен — `.env`).
 
 ## Стоимость данных и нормативные допущения
 

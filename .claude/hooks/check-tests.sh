@@ -15,8 +15,10 @@ if [ -f "$MARKER" ]; then
 fi
 
 if [ -x .venv/bin/python ]; then PYTEST=(.venv/bin/python -m pytest)
+elif [ -x .venv/Scripts/python.exe ]; then PYTEST=(.venv/Scripts/python.exe -m pytest)  # Windows venv
 elif command -v uv >/dev/null 2>&1; then PYTEST=(uv run --frozen pytest)
-else PYTEST=(python3 -m pytest)
+elif command -v python3 >/dev/null 2>&1; then PYTEST=(python3 -m pytest)
+else PYTEST=(python -m pytest)
 fi
 
 OUT="$("${PYTEST[@]}" -q -x 2>&1)"; STATUS=$?

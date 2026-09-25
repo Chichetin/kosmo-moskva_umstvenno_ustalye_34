@@ -100,7 +100,7 @@ def tiny_model_dir(tmp_path):
     model = P.build_model(config)
     torch.save(model.state_dict(), tmp_path / P.WEIGHTS_FILE)
     config["weights_sha256"] = P.file_sha256(tmp_path / P.WEIGHTS_FILE)
-    (tmp_path / P.CONFIG_FILE).write_text(json.dumps(config))
+    (tmp_path / P.CONFIG_FILE).write_text(json.dumps(config), encoding="utf-8")
     P.load_model.cache_clear()
     return tmp_path
 
@@ -178,10 +178,10 @@ def test_ensemble_is_mean_of_member_probabilities(tmp_path):
         sha = P.file_sha256(d / P.WEIGHTS_FILE)
         config["members"].append({"file": f"member_{i}.pt", "sha256": sha})
         (d / P.CONFIG_FILE).write_text(json.dumps(
-            {k: v for k, v in config.items() if k != "members"} | {"weights_sha256": sha}))
+            {k: v for k, v in config.items() if k != "members"} | {"weights_sha256": sha}), encoding="utf-8")
         singles.append(d)
     config["weights_sha256"] = P.members_sha256(config["members"])
-    (tmp_path / P.CONFIG_FILE).write_text(json.dumps(config))
+    (tmp_path / P.CONFIG_FILE).write_text(json.dumps(config), encoding="utf-8")
     P.load_model.cache_clear()
     s1 = s1_with_nan(32, 32)
     p = P.predict_proba(s1, model_dir=tmp_path)
@@ -199,7 +199,7 @@ def test_shipped_unet_metrics_use_same_valid_pixels_as_baseline():
     from floodvalue.paths import REPO_ROOT
 
     def hashes(path, method):
-        with open(path, newline="") as f:
+        with open(path, newline="", encoding="utf-8") as f:
             return {(r["split"], r["event"]): r["valid_mask_sha256"]
                     for r in csv.DictReader(f) if r["method"] == method}
 
@@ -212,7 +212,7 @@ def test_shipped_unet_config_matches_weights():
     from floodvalue.paths import REPO_ROOT
 
     d = REPO_ROOT / "models" / "unet"
-    config = json.loads((d / P.CONFIG_FILE).read_text())
+    config = json.loads((d / P.CONFIG_FILE).read_text(encoding="utf-8"))
     members = P.config_members(config)
     assert len(members) == 5 and config["weights_sha256"] == P.members_sha256(members)
     for m in members:

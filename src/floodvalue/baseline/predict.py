@@ -29,7 +29,7 @@ MASK_NODATA = 255
 
 
 def load_config(path: Path = CONFIG_PATH) -> dict:
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def predict_proba(s1_db: np.ndarray, config: dict | None = None) -> np.ndarray:
@@ -73,7 +73,7 @@ def predict_chip(chip_id: str, out_dir: Path, config_path: Path = CONFIG_PATH) -
             "scale_db": config["scale_db"],
             "config_sha256": hashlib.sha256(config_path.read_bytes()).hexdigest(),
             "s1_file": io.layer_path(chip_id, io.S1_LAYER).name}
-    (out_dir / "prediction.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1) + "\n")
+    (out_dir / "prediction.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return out_dir
 
 
