@@ -16,6 +16,7 @@ ASSETS = [{"asset_id": f"A{i:02d}", "longitude": 80.0 + 0.02 * i, "latitude": 7.
 LOSS = [{"asset_id": a["asset_id"], "status": "ok",
          "expected_loss_rub": str(1_000_000 * (11 - i)), "uncertainty": "0.5"}
         for i, a in enumerate(ASSETS, 1)]
+OTHER = {"compute_rub": 1000, "review_per_zone_rub": 500}
 
 
 def ctx(loss=LOSS):
@@ -27,9 +28,10 @@ def ctx(loss=LOSS):
     return cat, cov, elig
 
 
-def plan(budget, loss=LOSS, cfg=CFG):
+def plan(budget, loss=LOSS, cfg=CFG, required=()):
     cat, cov, elig = ctx(loss)
-    return strategies.compute_plan(cat, cov, elig, loss, Decimal(budget), cfg, AS_OF)
+    return strategies.compute_plan(cat, cov, elig, loss, Decimal(budget), cfg, AS_OF,
+                                   other_cfg=OTHER, required=required)
 
 
 def cmp_(res, s):
@@ -64,16 +66,28 @@ def test_b_counterfactual_when_over_budget():
     assert cmp_(plan("1000000"), "B")["budget_feasible"] is True
 
 
-def test_a_empty_baseline_uncertainty_bc_not_estimated():
+def test_a_baseline_uncertainty_bc_scenario_residual():
+    """A — baseline (сумма uncertainty ok-объектов); B/C — scenario: сумма по НЕпокрытым."""
     res = plan("5000")
     a = cmp_(res, "A")
     assert res["plans"]["A"] == [] and a["data_cost_rub"] == 0
     assert a["uncertainty_status"] == "baseline" and a["residual_uncertainty"] == pytest.approx(5.0)
     assert a["covered_expected_loss_rub"] == 0
-    for s in "BC":
-        assert cmp_(res, s)["uncertainty_status"] == "not_estimated"
-        assert cmp_(res, s)["residual_uncertainty"] is None
     assert not [r for r in res["plan_rows"] if r["strategy"] == "A"]
+    b, c = cmp_(res, "B"), cmp_(res, "C")
+    assert b["uncertainty_status"] == c["uncertainty_status"] == "scenario"
+    assert b["residual_uncertainty"] == pytest.approx(0.0)       # B покрывает все 10
+    n_cov = len(c["covered_asset_ids"].split())
+    assert n_cov == 2 and c["residual_uncertainty"] == pytest.approx(0.5 * (10 - n_cov))
+    assert "не заявляется" in c["uncertainty_basis"] and "сценарий" in c["uncertainty_basis"]
+
+
+def test_residual_uncertainty_not_estimated_without_assessed_assets():
+    loss = [{**r, "status": "no_data", "expected_loss_rub": "", "uncertainty": ""} for r in LOSS]
+    res = plan("5000", loss)
+    for s in "ABC":
+        r = cmp_(res, s)
+        assert r["uncertainty_status"] == "not_estimated" and r["residual_uncertainty"] is None
 
 
 def test_full_repricing_discount_on_whole_basket():
@@ -123,7 +137,7 @@ def test_sensitivity_rows():
     cat, cov, elig = ctx()
     rows = strategies.sensitivity(cat, cov, elig, LOSS, Decimal(5000), CFG, AS_OF,
                                   [Decimal(b) for b in ("0", "2500", "5000", "10000", "50000")],
-                                  [Decimal("0.5"), Decimal("1.5")])
+                                  [Decimal("0.5"), Decimal("1.5")], other_cfg=OTHER)
     import json
     budgets = [r for r in rows if r["scenario_id"].startswith("budget_")]
     rates = [r for r in rows if r["scenario_id"].startswith("rate_")]
@@ -150,6 +164,161 @@ def test_selection_uses_repriced_basket_not_sum_of_singles():
 def test_overlapping_zones_do_not_double_count():
     cov = {"x": ["A01", "A02"], "y": ["A02"]}
     el = {"A01": {"el": 10.0, "unc": 0.1}, "A02": {"el": 5.0, "unc": 0.2}}
-    row = strategies.comparison_row("B", ["x", "y"], [], Decimal(0), cov, el)
+    row = strategies.comparison_row("B", ["x", "y"], [], Decimal(0), cov, el, OTHER)
     assert row["covered_expected_loss_rub"] == 15.0
     assert row["covered_asset_ids"] == "A01 A02"
+
+
+def test_b_takes_only_primary_wide_offer():
+    res = plan("1000000")
+    assert res["plans"]["B"] == ["W-CHIP"]  # не W-CHIP-S3 / -O05 / -OP и т. д.
+
+
+def test_c_never_selects_excluded_positions():
+    cat, _, elig = ctx()
+    res = plan("1000000")
+    assert set(res["plans"]["C"]) <= elig
+    for f in cat["features"]:
+        p = f["properties"]
+        if p["candidate_id"] in res["plans"]["C"]:
+            assert p["data_role"] == "event_observation" and p.get("cloud_status") is None
+
+
+def test_c_prefers_primary_offer_on_tie_by_availability():
+    """Z-A01 и Z-A01-S3 — одна геометрия и одна цена (Р = 1): берётся более ранняя SAR 1 м."""
+    res = plan("2452.98")
+    assert res["plans"]["C"] == ["Z-A01"]
+
+
+def test_tie_break_by_candidate_id_prefers_smaller_id():
+    items = {c: {"candidate_id": c, "sensor_type": "sar", "resolution_m": 1,
+                 "acquisition_type": "new", "guaranteed_purchase": True,
+                 "observation_at": None, "processing_level": "L2", "usage_type": "internal",
+                 "area_km2": Decimal("1.44"), "available_at": "2017-05-30T21:00:00+00:00"}
+             for c in ("Z-A01", "Z-A01-X")}
+    cov = {"Z-A01": ["A01"], "Z-A01-X": ["A01"]}
+    el = {"A01": {"el": 1.0, "unc": 0.1}}
+    chosen, _, _ = strategies.select_c(items, cov, el, Decimal(10000), CFG, AS_OF)
+    assert chosen == ["Z-A01"]
+
+
+def test_social_constraint_is_coverage_not_rub_multiplier():
+    """Социальное ограничение: сначала покрываются обязательные объекты (здесь — самые
+    дешёвые по EL A09, A10), EL в рублях не меняется."""
+    base = plan("5000")
+    soc = plan("5000", required=["A09", "A10"])
+    c = cmp_(soc, "C")
+    assert {"A09", "A10"} <= set(c["covered_asset_ids"].split())
+    assert soc["social_constraint"]["satisfied"] is True
+    assert c["covered_expected_loss_rub"] == 1_000_000 + 2_000_000  # чистый EL, без множителя
+    assert cmp_(base, "C")["covered_expected_loss_rub"] > c["covered_expected_loss_rub"]
+    assert all("социальное" in soc["reasons"]["C"][z] for z in soc["plans"]["C"][:2])
+
+
+def test_social_constraint_unsatisfied_reported():
+    soc = plan("0", required=["A10"])
+    assert soc["plans"]["C"] == []
+    assert soc["social_constraint"] == {
+        "required_asset_ids": ["A10"], "satisfied": False, "uncovered_required": ["A10"],
+        "note": "бюджета или пригодных позиций не хватило для обязательных объектов"}
+
+
+def test_other_cost_from_config():
+    res = strategies.compute_plan(*ctx(), LOSS, Decimal(5000), CFG, AS_OF,
+                                  other_cfg={"compute_rub": "10", "review_per_zone_rub": "1.5"})
+    c = cmp_(res, "C")
+    assert c["other_cost_rub"] == Decimal(10) + Decimal("1.5") * len(res["plans"]["C"])
+    assert cmp_(res, "A")["other_cost_rub"] == Decimal("10.00")
+
+
+def test_sensitivity_social_row():
+    cat, cov, elig = ctx()
+    rows = strategies.sensitivity(cat, cov, elig, LOSS, Decimal(5000), CFG, AS_OF, [], [],
+                                  other_cfg=OTHER, social_ids=["A10"])
+    (r,) = [r for r in rows if r["scenario_id"] == "social_constraint_on"]
+    assert r["strategy"] == "C" and "A10" in r["interpretation"]
+
+
+def _item(cid, area):
+    return {"candidate_id": cid, "sensor_type": "sar", "resolution_m": 1,
+            "acquisition_type": "new", "guaranteed_purchase": True, "observation_at": None,
+            "processing_level": "L2", "usage_type": "internal", "area_km2": Decimal(area),
+            "available_at": "2017-05-30T21:00:00+00:00"}
+
+
+def test_c_best_single_start_beats_myopic_greedy():
+    """Жадный по EL/руб берёт S1 (10 за 2452,98) и S2, после чего BIG (12 за 5110,38) не
+    помещается: 11 < 12. Проход со стартом с наибольшего EL выбирает BIG."""
+    items = {"BIG": _item("BIG", "3.000"), "S1": _item("S1", "1.440"), "S2": _item("S2", "1.440")}
+    cov = {"BIG": ["A01", "A02", "A03"], "S1": ["A01"], "S2": ["A02"]}
+    el = {"A01": {"el": 10.0, "unc": 0}, "A02": {"el": 1.0, "unc": 0},
+          "A03": {"el": 1.0, "unc": 0}}
+    chosen, reasons, info = strategies.select_c(items, cov, el, Decimal("5200"), CFG, AS_OF)
+    assert chosen == ["BIG"] and info["variant"] == "start:BIG"
+    assert info["alternatives"]["greedy"]["chosen"] == ["S1", "S2"]
+    assert info["alternatives"]["greedy"]["covered_expected_loss_rub"] == 11.0
+    assert "стартовая" in reasons["BIG"]
+    # бюджет на всё: оба прохода дают EL 12, но старт с BIG дешевле (одна позиция вместо трёх)
+    chosen, _, info = strategies.select_c(items, cov, el, Decimal("100000"), CFG, AS_OF)
+    alt = info["alternatives"]
+    assert alt["greedy"]["covered_expected_loss_rub"] == 12.0 and len(alt["greedy"]["chosen"]) == 3
+    assert chosen == ["BIG"] and info["variant"] == "start:BIG"
+    # равные EL и цена → жадный проход (детерминированный выбор)
+    one = {"S1": items["S1"]}
+    chosen, _, info = strategies.select_c(one, {"S1": ["A01"]}, el, Decimal("5000"), CFG, AS_OF)
+    assert chosen == ["S1"] and info["variant"] == "greedy"
+
+
+def test_social_phase_takes_cheapest_cover_of_required():
+    items = {"BIG": _item("BIG", "3.000"), "S1": _item("S1", "1.440")}
+    cov = {"BIG": ["A01", "A02"], "S1": ["A01"]}
+    el = {"A01": {"el": 1.0, "unc": 0}, "A02": {"el": 1.0, "unc": 0}}
+    chosen, reasons, info = strategies.select_c(items, cov, el, Decimal("10000"), CFG, AS_OF,
+                                                required=["A01"])
+    assert chosen[0] == "S1" and "социальное" in reasons["S1"]  # дешевле BIG на объект A01
+    assert info["social"]["satisfied"] is True
+
+
+def test_compute_plan_uses_only_eligible_positions():
+    cat, cov, elig = ctx()
+    res = strategies.compute_plan(cat, cov, elig - {"Z-A01"}, LOSS, Decimal("2452.98"), CFG,
+                                  AS_OF, other_cfg=OTHER)
+    assert "Z-A01" not in res["plans"]["C"]
+    assert res["plans"]["C"] == ["Z-A01-S3"]  # та же геометрия, другое предложение
+
+
+def test_b_empty_reason_when_wide_not_eligible():
+    cat, cov, elig = ctx()
+    res = strategies.compute_plan(cat, cov, elig - {"W-CHIP"}, LOSS, Decimal(5000), CFG, AS_OF,
+                                  other_cfg=OTHER)
+    assert res["plans"]["B"] == [] and "B пуста" in res["reasons"]["B_empty"]
+
+
+def test_uncertainty_tie_break_prefers_larger_uncertainty():
+    """Равные EL на рубль и цена: берётся позиция с большей неопределённостью новых объектов."""
+    items = {"P": _item("P", "1.440"), "Q": _item("Q", "1.440")}
+    cov = {"P": ["A01"], "Q": ["A02"]}
+    el = {"A01": {"el": 5.0, "unc": 0.1}, "A02": {"el": 5.0, "unc": 0.9}}
+    chosen, _, _ = strategies.select_c(items, cov, el, Decimal("2452.98"), CFG, AS_OF)
+    assert chosen == ["Q"]
+
+
+def test_social_phase_cost_per_required_not_el_ratio():
+    """BIG лучше по EL на рубль, но S1 дешевле на обязательный объект A01 — социальная фаза
+    берёт S1; без ограничения берётся BIG."""
+    items = {"BIG": _item("BIG", "3.000"), "S1": _item("S1", "1.440")}
+    cov = {"BIG": ["A01", "A02"], "S1": ["A01"]}
+    el = {"A01": {"el": 1.0, "unc": 0}, "A02": {"el": 100.0, "unc": 0}}
+    chosen, _, _ = strategies.select_c(items, cov, el, Decimal("5200"), CFG, AS_OF,
+                                       required=["A01"])
+    assert chosen == ["S1"]
+    chosen, _, _ = strategies.select_c(items, cov, el, Decimal("5200"), CFG, AS_OF)
+    assert chosen == ["BIG"]
+
+
+def test_sensitivity_social_off_row_when_enabled():
+    cat, cov, elig = ctx()
+    rows = strategies.sensitivity(cat, cov, elig, LOSS, Decimal(5000), CFG, AS_OF, [], [],
+                                  other_cfg=OTHER, required=["A10"], social_ids=["A10"])
+    ids = [r["scenario_id"] for r in rows]
+    assert "social_constraint_off" in ids and "social_constraint_on" not in ids
