@@ -43,6 +43,7 @@ cp .env.example .env       # FLOODVALUE_DATA_DIR, FLOODVALUE_OUTPUT_DIR
 
 Метрики — `docs/verification/`. Решения — `docs/decisions.md`. Соответствие критериям —
 `docs/tz-compliance.md`.
+Оригиналы условий организатора (PDF, текст, выжимка) — `docs/task/`.
 
 ## Ограничения и развитие
 
