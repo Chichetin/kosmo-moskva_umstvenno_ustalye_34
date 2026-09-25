@@ -14,7 +14,6 @@ import argparse
 import csv
 import json
 import shutil
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -87,7 +86,8 @@ def main(argv: list[str] | None = None) -> dict:
         "ensemble": "mean of member probabilities (seed ensemble)",
         "selection": {"part": "dev", "metric": "pooled IoU at p >= 0.5; per member best epoch",
                       "dev_iou": M.scores(ev["dev"]["all"])["iou"]},
-        "command": "python -m floodvalue.model.unet.ensemble " + " ".join(sys.argv[1:]),
+        "command": f"python -m floodvalue.model.unet.ensemble --members {args.members} "
+                   f"--name {args.name} --out-dir {args.out_dir}",
         "member_commands": [c["command"] for c in configs],
         "reproduce": "python -m floodvalue train  (trains ENSEMBLE_SEEDS of the default "
                      "configuration and runs this assembly; GPU training is not bit-exact)",

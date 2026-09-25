@@ -15,7 +15,6 @@ import csv
 import json
 import platform
 import random
-import sys
 import time
 from pathlib import Path
 
@@ -27,7 +26,7 @@ from floodvalue.model import metrics as M
 from floodvalue.model.unet import data as D
 from floodvalue.model.unet.features import CLIP_DB, channel_stats, loss_mask, make_features
 from floodvalue.model.unet.predict import CONFIG_FILE, WEIGHTS_FILE, build_model, file_sha256
-from floodvalue.paths import MODELS_DIR, output_dir
+from floodvalue.paths import output_dir
 
 DEFAULTS = {
     "name": "unet",
@@ -55,7 +54,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         p.add_argument(f"--{key.replace('_', '-')}", type=int, default=DEFAULTS[key])
     for key in ("dropout", "lr", "weight_decay", "dice_weight", "db_jitter"):
         p.add_argument(f"--{key.replace('_', '-')}", type=float, default=DEFAULTS[key])
-    p.add_argument("--out-dir", default=str(MODELS_DIR / "unet"))
+    p.add_argument("--out-dir", default=None,
+                   help="run dir (default $FLOODVALUE_OUTPUT_DIR/unet-runs/<name>); "
+                        "models/unet/ is written only by the ensemble step")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--max-chips", type=int, default=0, help="smoke test: limit chips per part")
     return p.parse_args(argv)
@@ -257,7 +258,7 @@ def train(args: argparse.Namespace) -> dict:
               f"best {best['iou']:.4f}@{best['epoch']}", flush=True)
 
     model.load_state_dict(best["state"])
-    out = Path(args.out_dir)
+    out = Path(args.out_dir) if args.out_dir else output_dir() / "unet-runs" / args.name
     out.mkdir(parents=True, exist_ok=True)
     weights = out / WEIGHTS_FILE
     torch.save(best["state"], weights)
@@ -301,7 +302,9 @@ def train(args: argparse.Namespace) -> dict:
                     "seconds": round(time.time() - t0)},
         "versions": {"python": platform.python_version(), "torch": torch.__version__,
                      "numpy": np.__version__},
-        "command": "python -m floodvalue.model.unet.train " + " ".join(sys.argv[1:]),
+        "command": "python -m floodvalue.model.unet.train " + " ".join(
+            f"--{k.replace('_', '-')} {v}" for k, v in vars(args).items()
+            if k not in ("out_dir", "device", "max_chips")),
         "gpu_tolerance_note": "GPU training is not bit-exact across hardware; CPU inference of "
                               "the stored weights is deterministic",
     })

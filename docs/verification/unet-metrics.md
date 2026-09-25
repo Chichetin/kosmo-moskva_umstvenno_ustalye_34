@@ -37,8 +37,9 @@ p ≥ 0,5, до калибровки. Валидный пиксель: S1 кон
   JRC нигде не подаются; метки нужны только для потерь и метрик.
 - **Итоговая модель**: ансамбль из 5 seed (20260925, 1, 2, 3, 4) одной конфигурации;
   p — среднее вероятностей членов. Состав `members` и sha256 каждого файла — в `config.json`.
-- **Inference на CPU**: 0,46 с на чип 512×512 для всего ансамбля из 5 членов (вывод
-  `predict` ниже).
+- **Inference на CPU**: 0,46–1,0 с на чип 512×512 для всего ансамбля из 5 членов, включая
+  первую загрузку весов (поле `seconds` в `prediction.json`; зависит от CPU). Полный
+  `predict` с чтением и записью растров — около 2 с.
 
 ## Baseline → U-Net (одни и те же валидные пиксели)
 
@@ -50,9 +51,13 @@ p ≥ 0,5, до калибровки. Валидный пиксель: S1 кон
 | validation | Sri-Lanka | 9 963 261 | **0,585** | 0,526 | — | 0,963 / 0,537 |
 
 Источники: `docs/verification/baseline-metrics.csv` (#5) и `docs/verification/unet-metrics.csv`
-(= `models/unet/metrics.csv`). CI — `models/unet/summary.json`.
+(= `models/unet/metrics.csv`). CI — `models/unet/summary.json`. Эти метрики считались на GPU
+(bf16). Пересчёт на CPU в fp32 (`unet-vs-baseline-bootstrap.json` и независимая сверка
+`unet-evaluator.md`) отличается на десятки пикселей из миллионов: IoU dev 0,58447 против
+0,58448, выводы те же. Колонка `method` = `unet`; в `metrics.csv` комплекта экспорт пишет `main`.
 
-**Парный бутстрэп по чипам** (2000 повторов, U-Net и baseline на одних выборках чипов):
+**Парный бутстрэп по чипам** (2000 повторов, U-Net и baseline на одних выборках чипов;
+`python -m floodvalue.model.unet.report` → `unet-vs-baseline-bootstrap.json`):
 разность IoU U-Net − baseline на dev составляет +0,194, 95 % CI [+0,141; +0,250]. На
 validation — +0,020, CI [−0,070; +0,078]: при сыром пороге разница с baseline на validation
 **статистически не значима**. Baseline, пересчитанный этим же скриптом (VH ≤ −23 dB),
@@ -137,9 +142,11 @@ train, канал выбран на dev (`models/baseline/config.json`), validat
 ```bash
 # обучение (GPU; на CPU работает, но медленно): 5 seed → ансамбль в models/unet/
 FLOODVALUE_DATA_DIR=… uv run --frozen python -m floodvalue train
-# один вариант эксперимента
-python -m floodvalue.model.unet.train --name unet_vvvh --channels vv,vh --seed 1 --out-dir <dir>
+# один вариант эксперимента (по умолчанию пишет в $FLOODVALUE_OUTPUT_DIR/unet-runs/<name>)
+python -m floodvalue.model.unet.train --name unet_vvvh --channels vv,vh --seed 1
 python -m floodvalue.model.unet.ensemble --members <dir1>,<dir2>,… --out-dir models/unet
+# таблица вариантов, кривые, парный бутстрэп против baseline
+python -m floodvalue.model.unet.report --runs $FLOODVALUE_OUTPUT_DIR/unet-runs
 # inference на CPU по lock-файлу
 uv run --frozen python -m floodvalue predict --chip Sri-Lanka_713926 --out <tmp>
 ```
