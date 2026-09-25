@@ -1,0 +1,189 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.01954970770383,
+              7.790399640015672
+            ],
+            [
+              80.03095029229615,
+              7.790399640015672
+            ],
+            [
+              80.03095029229615,
+              7.79910040401274
+            ],
+            [
+              80.01954970770383,
+              7.79910040401274
+            ],
+            [
+              80.01954970770383,
+              7.790399640015672
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "candidate_id": "Z1",
+        "sensor_type": "optical",
+        "resolution_m": 1,
+        "acquisition_type": "new",
+        "data_role": "event_observation",
+        "observation_at": "2017-05-30T18:00:00+00:00",
+        "available_at": "2017-05-30T20:00:00+00:00",
+        "processing_level": "L2",
+        "usage_type": "internal",
+        "guaranteed_purchase": true,
+        "area_km2": 1.21,
+        "base_rate_rub_km2": 788.64,
+        "base_rate_status": "scenario",
+        "base_rate_source": "Учебная сценарная ставка из материалов кейса (task.md); подтверждённый размер БРЕ не установлен"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.01130881189911,
+              7.77909749367737
+            ],
+            [
+              80.0221911881009,
+              7.77909749367737
+            ],
+            [
+              80.0221911881009,
+              7.787402546377309
+            ],
+            [
+              80.01130881189911,
+              7.787402546377309
+            ],
+            [
+              80.01130881189911,
+              7.77909749367737
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "candidate_id": "Z2",
+        "sensor_type": "sar",
+        "resolution_m": 3,
+        "acquisition_type": "operational",
+        "data_role": "event_observation",
+        "observation_at": "2017-05-30T00:40:00+00:00",
+        "available_at": "2017-05-30T06:00:00+00:00",
+        "processing_level": "L1",
+        "usage_type": "internal",
+        "guaranteed_purchase": false,
+        "area_km2": 1.103,
+        "base_rate_rub_km2": 788.64,
+        "base_rate_status": "scenario",
+        "base_rate_source": "Учебная сценарная ставка из материалов кейса (task.md); подтверждённый размер БРЕ не установлен"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.00454970770383,
+              7.770399842100272
+            ],
+            [
+              80.01595029229615,
+              7.770399842100272
+            ],
+            [
+              80.01595029229615,
+              7.779100201809583
+            ],
+            [
+              80.00454970770383,
+              7.779100201809583
+            ],
+            [
+              80.00454970770383,
+              7.770399842100272
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "candidate_id": "Z3",
+        "sensor_type": "optical",
+        "resolution_m": 1,
+        "acquisition_type": "archive",
+        "data_role": "context",
+        "observation_at": "2016-12-01T05:00:00+00:00",
+        "available_at": "2016-12-05T00:00:00+00:00",
+        "processing_level": "L2",
+        "usage_type": "internal",
+        "guaranteed_purchase": false,
+        "area_km2": 1.21,
+        "base_rate_rub_km2": 788.64,
+        "base_rate_status": "scenario",
+        "base_rate_source": "Учебная сценарная ставка из материалов кейса (task.md); подтверждённый размер БРЕ не установлен"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.01704970770383,
+              7.767899867323182
+            ],
+            [
+              80.02845029229616,
+              7.767899867323182
+            ],
+            [
+              80.02845029229616,
+              7.776600176571853
+            ],
+            [
+              80.01704970770383,
+              7.776600176571853
+            ],
+            [
+              80.01704970770383,
+              7.767899867323182
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "candidate_id": "Z4",
+        "sensor_type": "optical",
+        "resolution_m": 1,
+        "acquisition_type": "new",
+        "data_role": "event_observation",
+        "observation_at": null,
+        "available_at": "2017-06-02T00:00:00+00:00",
+        "processing_level": "L2",
+        "usage_type": "internal",
+        "guaranteed_purchase": true,
+        "area_km2": 1.21,
+        "base_rate_rub_km2": 788.64,
+        "base_rate_status": "scenario",
+        "base_rate_source": "Учебная сценарная ставка из материалов кейса (task.md); подтверждённый размер БРЕ не установлен"
+      }
+    }
+  ]
+}
