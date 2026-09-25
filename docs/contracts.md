@@ -93,6 +93,17 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
 одной маске валидных пикселей (`valid_mask_sha256` совпадает). `threshold_curve.csv` —
 «порог → метрики» на validation.
 
+- **Строки `split=train`** пишет только baseline в `docs/verification/baseline-metrics.csv`
+  (порог подобран на train — это качество подгонки, не проверка). В `metrics.csv` комплекта
+  экспорт их не переносит (`export.assemble.METRICS_SPLITS` = dev/validation/test).
+- **Единица `threshold`** — своя у каждого метода: у `baseline` — dB канала правила
+  (`VH ≤ −23,0` → `-23.0`), у `main` — вероятность p (mask = 1 ⇔ p ≥ threshold). В
+  `metrics.csv` комплекта единицу называет доп. столбец `threshold_units` (`dB VH` / `p`).
+- **Один алгоритм на всех** (D-032): маска валидности — `floodvalue.data.io.valid_mask`
+  (S1 конечен в обоих каналах **и** метка ≠ −1, D-015); счёт TP/FP/FN/TN, IoU/F1/P/R и
+  `valid_mask_sha256` (упакованные маски в порядке `chip_id`) —
+  `floodvalue.model.metrics`. Изменение его формул или хеша — изменение контракта §7.
+
 ## 7a. Уточнения к §6, v1 (проверяет валидатор)
 
 - Пустая ячейка CSV = нет значения; литералы `nan`/`inf`/`Infinity` — ошибка. Булевы в

@@ -1,13 +1,13 @@
 # Baseline: порог по S1 — проверка на dev и validation
 
-Сгенерировано `make baseline` (commit `cbf7637832d6`, 2026-09-25). Числа ниже — из `docs/verification/baseline-metrics.csv`, `baseline-variants.csv`, `baseline-threshold-curve.csv`. Test не читался (D-010).
+Сгенерировано `make baseline` (commit `a32284b81ffc`, 2026-09-25). Числа ниже — из `docs/verification/baseline-metrics.csv`, `baseline-variants.csv`, `baseline-threshold-curve.csv`. Test не читался (D-010).
 
 ## Правило
 
 - Вода ⇔ **VH ≤ -23.0 dB** (S1 уже в dB). Порог — максимум IoU по всем валидным пикселям train (пулинг пикселей), перебор от −60 до +30 dB с шагом 0,1.
 - Для каждого канала порог подобран на train; канал выбран по IoU на **dev** (D-012: dev — выбор варианта, validation — только отчёт): VV: порог -16.5 dB, IoU train 0.381, IoU dev 0.326; VH: порог -23.0 dB, IoU train 0.378, IoU dev 0.391.
 - Вероятность (временный основной метод, D-009): p = sigmoid((-23.0 − VH) / s), **s = 2.131 dB** — минимум log-loss на train при фиксированном пороге. p ≥ 0,5 ⇔ маска baseline. Порог 0,5 и сигмоида не выбраны на validation (калибровка — отдельный этап): доля воды среди валидных пикселей train 8.8 %, dev 4.6 %, validation 15.2 %.
-- Валидный пиксель: VV и VH конечны **и** LabelHand ≠ −1 (`floodvalue.model.metrics`). `valid_mask_sha256` — отпечаток этой маски; основной метод обязан получить тот же хеш.
+- Валидный пиксель: VV и VH конечны **и** LabelHand ≠ −1 (`floodvalue.data.io.valid_mask`, D-015). `valid_mask_sha256` — отпечаток этой маски (`floodvalue.model.metrics.mask_sha256`, D-032); основной метод обязан получить тот же хеш.
 - Чипов: train 237, dev 69, validation 60.
 
 ## Метрики baseline по событиям
