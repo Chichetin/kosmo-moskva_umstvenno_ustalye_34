@@ -1,0 +1,134 @@
+{
+  "method": "unet",
+  "arch": {
+    "name": "UNet",
+    "base": 16,
+    "dropout": 0.1,
+    "levels": 4
+  },
+  "features": {
+    "channels": [
+      "vv",
+      "vh",
+      "vv_minus_vh"
+    ],
+    "mean": [
+      -10.132124772521061,
+      -17.13152241681879,
+      6.998618424815942
+    ],
+    "std": [
+      3.947127013520782,
+      4.538833858701836,
+      3.448694621300268
+    ],
+    "validity_channel": true,
+    "clip_db": {
+      "vv": [
+        -40.0,
+        10.0
+      ],
+      "vh": [
+        -45.0,
+        0.0
+      ],
+      "vv_minus_vh": [
+        -5.0,
+        25.0
+      ]
+    }
+  },
+  "n_parameters": 1942721,
+  "threshold": 0.5,
+  "threshold_status": "uncalibrated: raw p >= 0.5; calibration and final threshold are chosen on validation by calibration (#20, D-012)",
+  "split": {
+    "file": "splits/split_v1.json",
+    "sha256": "0098346e0f87297501409a1a8522afab6209e35f56e8cf1b68996909c8b63c75",
+    "train_chips": 237,
+    "dev_chips": 69
+  },
+  "train": {
+    "epochs": 60,
+    "batch": 16,
+    "crop": 256,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "dice_weight": 0.5,
+    "db_jitter": 1.0,
+    "seed": 20260925,
+    "loss": "masked BCE + dice_weight * soft Dice",
+    "optimizer": "AdamW",
+    "schedule": "OneCycle",
+    "steps_per_epoch": 29,
+    "amp": "bfloat16",
+    "augment": "crop, rot90, hflip, global dB offset U(-db_jitter, db_jitter) on VV and VH",
+    "device": "NVIDIA GeForce RTX 4080",
+    "seconds": 78
+  },
+  "versions": {
+    "python": "3.12.13",
+    "torch": "2.11.0+cu128",
+    "numpy": "2.5.3"
+  },
+  "gpu_tolerance_note": "GPU training is not bit-exact across hardware; CPU inference of the stored weights is deterministic",
+  "name": "unet",
+  "members": [
+    {
+      "file": "member_0.pt",
+      "sha256": "6c2df137d957997581f3901051baf07cb2da911520cb7308fe33a243be08ba29",
+      "seed": 20260925,
+      "epoch": 18,
+      "dev_iou_single": 0.5711760893527038,
+      "run": "unet"
+    },
+    {
+      "file": "member_1.pt",
+      "sha256": "e077be954088147f8c08edd358c7bd26b7b2f1ba595b36055f13ea6ac7d7dfc8",
+      "seed": 1,
+      "epoch": 28,
+      "dev_iou_single": 0.5555317184472152,
+      "run": "unet_s1"
+    },
+    {
+      "file": "member_2.pt",
+      "sha256": "8ff688abfde68f15d0a4782ae264f267ef1f7bb23e75f5d4a7c991b0201ed5a9",
+      "seed": 2,
+      "epoch": 19,
+      "dev_iou_single": 0.5830131680052208,
+      "run": "unet_s2"
+    },
+    {
+      "file": "member_3.pt",
+      "sha256": "80745de0edbe4f3dd309796caea1192b2ed7fc394194680c295362d86f207008",
+      "seed": 3,
+      "epoch": 21,
+      "dev_iou_single": 0.5769569545668618,
+      "run": "unet_s3"
+    },
+    {
+      "file": "member_4.pt",
+      "sha256": "6aa232704693a2252d7e24271f9a4bc7a52893574e54c7dbbe941660319793d3",
+      "seed": 4,
+      "epoch": 14,
+      "dev_iou_single": 0.5554289714430818,
+      "run": "unet_s4"
+    }
+  ],
+  "weights_sha256": "504944cd880c0b2e94acf2481e6ddc4db985ddbd64d550a3591321e8b0cc1bb3",
+  "weights_sha256_note": "sha256 of 'file:sha256' lines of members (each member's sha256 is checked on load)",
+  "ensemble": "mean of member probabilities (seed ensemble)",
+  "selection": {
+    "part": "dev",
+    "metric": "pooled IoU at p >= 0.5; per member best epoch",
+    "dev_iou": 0.5844846299417957
+  },
+  "command": "python -m floodvalue.model.unet.ensemble --members /tmp/claude-1000/-home-m1hairu-Documents-final-cosmohack/ed342af7-c543-4c2c-a8ed-2f12e9efd4e3/scratchpad/runs/unet,/tmp/claude-1000/-home-m1hairu-Documents-final-cosmohack/ed342af7-c543-4c2c-a8ed-2f12e9efd4e3/scratchpad/runs/unet_s1,/tmp/claude-1000/-home-m1hairu-Documents-final-cosmohack/ed342af7-c543-4c2c-a8ed-2f12e9efd4e3/scratchpad/runs/unet_s2,/tmp/claude-1000/-home-m1hairu-Documents-final-cosmohack/ed342af7-c543-4c2c-a8ed-2f12e9efd4e3/scratchpad/runs/unet_s3,/tmp/claude-1000/-home-m1hairu-Documents-final-cosmohack/ed342af7-c543-4c2c-a8ed-2f12e9efd4e3/scratchpad/runs/unet_s4",
+  "member_commands": [
+    "python -m floodvalue.model.unet.train --name unet --out-dir /tmp/claude-1000/-home-m1hairu-Documents-final-cosmohack/ed342af7-c543-4c2c-a8ed-2f12e9efd4e3/scratchpad/runs/unet",
+    "python -m floodvalue.model.unet.train --name unet_s1 --out-dir /tmp/claude-1000/-home-m1hairu-Documents-final-cosmohack/ed342af7-c543-4c2c-a8ed-2f12e9efd4e3/scratchpad/runs/unet_s1 --seed 1",
+    "python -m floodvalue.model.unet.train --name unet_s2 --out-dir /tmp/claude-1000/-home-m1hairu-Documents-final-cosmohack/ed342af7-c543-4c2c-a8ed-2f12e9efd4e3/scratchpad/runs/unet_s2 --seed 2",
+    "python -m floodvalue.model.unet.train --name unet_s3 --out-dir /tmp/claude-1000/-home-m1hairu-Documents-final-cosmohack/ed342af7-c543-4c2c-a8ed-2f12e9efd4e3/scratchpad/runs/unet_s3 --seed 3",
+    "python -m floodvalue.model.unet.train --name unet_s4 --seed 4 --out-dir /tmp/claude-1000/-home-m1hairu-Documents-final-cosmohack/ed342af7-c543-4c2c-a8ed-2f12e9efd4e3/scratchpad/runs/unet_s4"
+  ],
+  "reproduce": "python -m floodvalue train  (trains ENSEMBLE_SEEDS of the default configuration and runs this assembly; GPU training is not bit-exact)"
+}
