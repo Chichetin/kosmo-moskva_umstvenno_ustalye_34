@@ -1,0 +1,1002 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowDownToLine,
+  ArrowLeft,
+  BarChart3,
+  ChevronDown,
+  Globe2,
+  Layers3,
+  Search,
+  X,
+} from "lucide-react";
+import MapPanel from "./MapPanel";
+import { mapProviders } from "./mapProviders";
+import type { Feature, Plan, SceneSummary, Session } from "./types";
+
+const money = (value: unknown) =>
+  value == null || value === ""
+    ? "—"
+    : new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(
+        Number(value),
+      );
+const pct = (value: number | null | undefined) =>
+  value == null ? "—" : `${Math.round(value * 100)}%`;
+const date = (value: string | null | undefined) =>
+  value
+    ? new Intl.DateTimeFormat("ru-RU", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        timeZone: "UTC",
+      }).format(new Date(value))
+    : "Дата неизвестна";
+const labels: Record<string, string> = {
+  warehouse: "Склад",
+  substation: "Подстанция",
+  road_unit: "Дорожный узел",
+  facility: "Объект инфраструктуры",
+  pumping_station: "Насосная станция",
+  hospital: "Медицинский объект",
+  school: "Образовательный объект",
+  bridge: "Мост",
+  water_treatment: "Очистные сооружения",
+  telecom: "Узел связи",
+  water_intake: "Водозабор",
+  workshop: "Мастерская",
+  clinic: "Медпункт",
+};
+const assetName = (feature: Feature) =>
+  labels[String(feature.properties.asset_class)] ??
+  String(feature.properties.asset_class).replaceAll("_", " ");
+const sensitivityValue = (row: Record<string, string>) => {
+  if (row.covered_expected_loss_rub) return row.covered_expected_loss_rub;
+  try {
+    return String(
+      JSON.parse(row.changed_inputs_json).portfolio_expected_loss_rub ?? "",
+    );
+  } catch {
+    return "";
+  }
+};
+const pointInZone = (asset: Feature, zone: Feature) => {
+  if (asset.geometry.type !== "Point" || zone.geometry.type !== "Polygon")
+    return false;
+  const [x, y] = asset.geometry.coordinates as number[];
+  const rings = zone.geometry.coordinates as number[][][];
+  const inside = (ring: number[][]) => {
+    let hit = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i],
+        [xj, yj] = ring[j];
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi)
+        hit = !hit;
+    }
+    return hit;
+  };
+  return !!rings[0] && inside(rings[0]) && !rings.slice(1).some(inside);
+};
+const parseRoute = () => {
+  const match = /^#\/(earth|scene|analysis)(?:\/([^/]+))?/.exec(location.hash);
+  return {
+    view: match?.[1] === "analysis" ? "analysis" : "map",
+    chipId:
+      match?.[1] === "earth"
+        ? null
+        : match?.[2]
+          ? decodeURIComponent(match[2])
+          : null,
+  };
+};
+const navigate = (mode: "earth" | "scene" | "analysis", id?: string) => {
+  location.hash = `#/${mode}${id ? `/${encodeURIComponent(id)}` : ""}`;
+};
+async function json<T>(url: string, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(url, { signal });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail ?? `Ошибка ${response.status}`);
+  }
+  return response.json() as Promise<T>;
+}
+type LayerFlags = {
+  s1: boolean;
+  probability: boolean;
+  mask: boolean;
+  assets: boolean;
+  zones: boolean;
+};
+const defaults: LayerFlags = {
+  s1: true,
+  probability: false,
+  mask: false,
+  assets: true,
+  zones: true,
+};
+
+export default function App() {
+  const [scenes, setScenes] = useState<SceneSummary[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [route, setRoute] = useState(parseRoute);
+  const [session, setSession] = useState<Session | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const cache = useRef<Record<string, Session>>({});
+  const budgets = useRef<Record<string, number>>({});
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [budget, setBudget] = useState<number | null>(null);
+  const [baseMap, setBaseMap] = useState<"map" | "optical">("map");
+  const [layers, setLayers] = useState<LayerFlags>(defaults);
+  const [opacity, setOpacity] = useState(0.76);
+  const [assetId, setAssetId] = useState<string | null>(null);
+  const [zoneId, setZoneId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(() => window.innerWidth >= 700);
+  const [panelOpen, setPanelOpen] = useState(true);
+  const [overviewRequest, setOverviewRequest] = useState(0);
+  const [mapIssue, setMapIssue] = useState<string | null>(null);
+  const [zoneView, setZoneView] = useState<"plan" | "all">("plan");
+  const scene = scenes.find((item) => item.chip_id === route.chipId) ?? null;
+  const activeSession = scene?.run_id === session?.run_id ? session : null;
+  const mapActive = route.view === "map";
+  useEffect(() => {
+    const onHash = () => setRoute(parseRoute());
+    addEventListener("hashchange", onHash);
+    if (!location.hash) navigate("earth");
+    return () => removeEventListener("hashchange", onHash);
+  }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    json<SceneSummary[]>("/api/scenes", controller.signal)
+      .then(setScenes)
+      .catch((error) => {
+        if (error.name !== "AbortError") setCatalogError(String(error.message));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setCatalogLoading(false);
+      });
+    return () => controller.abort();
+  }, []);
+  useEffect(() => {
+    if (!scene?.run_id) {
+      setSession(null);
+      setPlan(null);
+      setSessionLoading(false);
+      setSessionError(null);
+      return;
+    }
+    const runId = scene.run_id;
+    const cached = cache.current[runId];
+    if (cached) {
+      setSession(cached);
+      setBudget(
+        budgets.current[runId] ?? Number(cached.metadata.budget.budget_rub),
+      );
+      setSessionLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    setSession(null);
+    setPlan(null);
+    setSessionLoading(true);
+    setSessionError(null);
+    json<Session>(
+      `/api/session?run_id=${encodeURIComponent(runId)}`,
+      controller.signal,
+    )
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        cache.current[runId] = result;
+        setSession(result);
+        setBudget(
+          budgets.current[runId] ?? Number(result.metadata.budget.budget_rub),
+        );
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError") setSessionError(String(error.message));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setSessionLoading(false);
+      });
+    return () => controller.abort();
+  }, [scene?.run_id]);
+  useEffect(() => {
+    if (!activeSession || budget === null) return;
+    const runId = activeSession.run_id;
+    budgets.current[runId] = budget;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      json<Plan>(
+        `/api/plan?budget=${budget}&run_id=${encodeURIComponent(runId)}`,
+        controller.signal,
+      )
+        .then((result) => {
+          if (!controller.signal.aborted) {
+            setPlan(result);
+            setPlanError(null);
+          }
+        })
+        .catch((error) => {
+          if (error.name !== "AbortError") setPlanError(String(error.message));
+        });
+    }, 140);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [activeSession?.run_id, budget]);
+  const selectScene = useCallback((selected: SceneSummary) => {
+    setPanelOpen(true);
+    setSearchOpen(false);
+    setAssetId(null);
+    setZoneId(null);
+    setPlan(null);
+    navigate("scene", selected.chip_id);
+  }, []);
+  const overview = () => {
+    navigate("earth");
+    setSearchOpen(true);
+    setOverviewRequest((value) => value + 1);
+  };
+  const toggle = (key: keyof LayerFlags) =>
+    setLayers((value) => ({ ...value, [key]: !value[key] }));
+  const assets = useMemo(
+    () =>
+      [...(activeSession?.assets.features ?? [])].sort(
+        (a, b) =>
+          Number(a.properties.rank || 999) - Number(b.properties.rank || 999),
+      ),
+    [activeSession],
+  );
+  const zones = activeSession?.candidates.features ?? [];
+  const chosen = plan?.comparison.find((row) => row.strategy === "C");
+  const chosenZoneIds = new Set(plan?.plans.C ?? []);
+  const filtered = scenes
+    .filter((item) =>
+      `${item.territory} ${item.chip_id} ${item.observation_date}`
+        .toLowerCase()
+        .includes(query.toLowerCase()),
+    )
+    .slice(0, query ? 30 : 10);
+  const activeAsset = assets.find(
+    (item) => item.properties.asset_id === assetId,
+  );
+  const activeZone = zones.find(
+    (item) => item.properties.candidate_id === zoneId,
+  );
+  const zoneAssets = activeZone
+    ? assets.filter((item) => pointInZone(item, activeZone))
+    : [];
+  const totalLoss = assets.reduce(
+    (sum, item) => sum + Number(item.properties.expected_loss_rub || 0),
+    0,
+  );
+  const exportUrl = activeSession
+    ? `/api/download?run_id=${encodeURIComponent(activeSession.run_id)}`
+    : null;
+  return (
+    <div className="app">
+      <header className="topbar">
+        <button className="brand" onClick={overview}>
+          <span className="brand-mark">
+            <Globe2 size={19} />
+          </span>
+          FloodValue
+        </button>
+        <span className="top-divider" />
+        <nav className="top-nav">
+          <button
+            className={mapActive ? "active" : ""}
+            onClick={() =>
+              scene ? navigate("scene", scene.chip_id) : overview()
+            }
+          >
+            <Globe2 size={16} /> Земля
+          </button>
+          <button
+            className={!mapActive ? "active" : ""}
+            disabled={!activeSession}
+            onClick={() => scene && navigate("analysis", scene.chip_id)}
+          >
+            <BarChart3 size={16} /> Анализ
+          </button>
+        </nav>
+        <span className="top-spacer" />
+        {scene && (
+          <div className="top-scene">
+            <b>{scene.territory.replaceAll("-", " ")}</b>
+            <small>{scene.chip_id}</small>
+          </div>
+        )}
+        {exportUrl && (
+          <a className="top-export" href={exportUrl}>
+            <ArrowDownToLine size={16} />
+            <span>Выгрузить комплект</span>
+          </a>
+        )}
+      </header>
+      <main className="workspace">
+        <div
+          className={`map-screen ${mapActive ? "" : "map-hidden"} ${scene ? "scene-mode" : ""}`}
+        >
+          <MapPanel
+            scenes={scenes}
+            scene={scene}
+            session={activeSession}
+            plan={plan}
+            baseMap={baseMap}
+            visibleLayers={layers}
+            overlayOpacity={opacity}
+            selectedAsset={assetId}
+            selectedZone={zoneId}
+            active={mapActive}
+            overviewRequest={overviewRequest}
+            onSelectScene={selectScene}
+            onSelectAsset={(id) => {
+              setAssetId(id);
+              setZoneId(null);
+              setPanelOpen(true);
+            }}
+            onSelectZone={(id) => {
+              setZoneId(id);
+              setAssetId(null);
+              setPanelOpen(true);
+            }}
+            onIssue={setMapIssue}
+          />
+          <div className="map-top-left">
+            <button className="earth-button" onClick={overview}>
+              <Globe2 size={17} /> Вся Земля
+            </button>
+            <div className="search-panel">
+              <label className="search-box">
+                <Search size={17} />
+                <input
+                  value={query}
+                  onFocus={() => setSearchOpen(true)}
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    setSearchOpen(true);
+                  }}
+                  placeholder="Территория или ID сцены"
+                  aria-label="Поиск наблюдений"
+                />
+                {query && (
+                  <button onClick={() => setQuery("")} aria-label="Очистить">
+                    <X size={15} />
+                  </button>
+                )}
+              </label>
+              <button
+                className="search-toggle"
+                onClick={() => setSearchOpen(!searchOpen)}
+                aria-expanded={searchOpen}
+              >
+                {query
+                  ? `Результаты: ${filtered.length}${filtered.length === 30 ? "+" : ""}`
+                  : `${scenes.length} архивных наблюдений`}{" "}
+                <ChevronDown size={16} />
+              </button>
+              {searchOpen && (
+                <div
+                  className="scene-results"
+                  role="listbox"
+                  aria-label="Доступные сцены"
+                >
+                  {catalogError && <p>{catalogError}</p>}
+                  {!catalogError && !scenes.length && (
+                    <p>
+                      {catalogLoading
+                        ? "Загружаем каталог…"
+                        : "Нет доступных наблюдений. Добавьте исходные данные или готовый комплект."}
+                    </p>
+                  )}
+                  {filtered.map((item) => (
+                    <button
+                      key={item.chip_id}
+                      role="option"
+                      aria-selected={scene?.chip_id === item.chip_id}
+                      onClick={() => selectScene(item)}
+                    >
+                      <span className={`scene-status ${item.status}`} />
+                      <span>
+                        <strong>{item.territory.replaceAll("-", " ")}</strong>
+                        <small>
+                          {date(item.observation_date)} · {item.chip_id}
+                        </small>
+                      </span>
+                      <em>
+                        {item.fixture
+                          ? "Тест"
+                          : item.status === "analyzed"
+                            ? "Анализ"
+                            : "S1"}
+                      </em>
+                    </button>
+                  ))}
+                  {!filtered.length && scenes.length > 0 && (
+                    <p>Сцен не найдено</p>
+                  )}
+                  {scenes.length > 10 && !query && (
+                    <small className="search-hint">
+                      Другие снимки доступны через поиск или точки на Земле.
+                    </small>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="map-top-center">
+            <div className="basemap-switch">
+              <button
+                className={baseMap === "map" ? "active" : ""}
+                onClick={() => setBaseMap("map")}
+              >
+                Карта
+              </button>
+              <button
+                className={baseMap === "optical" ? "active" : ""}
+                onClick={() => setBaseMap("optical")}
+              >
+                Спутник
+              </button>
+            </div>
+            <span>
+              {baseMap === "map"
+                ? mapProviders.map.label
+                : mapProviders.optical.label}
+            </span>
+          </div>
+          {scene && panelOpen && (
+            <aside className="context-panel">
+              <div className="context-heading">
+                <div>
+                  <small>АРХИВНОЕ НАБЛЮДЕНИЕ · SENTINEL-1</small>
+                  <h1>{scene.territory.replaceAll("-", " ")}</h1>
+                  <p>
+                    {date(scene.observation_date)} ·{" "}
+                    <code>{scene.chip_id}</code>
+                  </p>
+                </div>
+                <button
+                  onClick={() => setPanelOpen(false)}
+                  aria-label="Свернуть панель"
+                >
+                  <X size={17} />
+                </button>
+              </div>
+              {scene.preview_url && (
+                <img
+                  className="scene-preview"
+                  src={scene.preview_url}
+                  alt={`Радарный снимок ${scene.chip_id}`}
+                />
+              )}
+              <div className="scene-message">
+                {scene.fixture
+                  ? "Синтетический тестовый эталон"
+                  : scene.status === "analyzed"
+                    ? "Результаты модели доступны"
+                    : "Исходный снимок есть; анализ не выполнен"}
+              </div>
+              {!scene.bounds && (
+                <p className="inline-error">
+                  Геопривязка отсутствует. Снимок нельзя разместить на карте.
+                </p>
+              )}
+              {sessionLoading && <p>Загружаем расчёт…</p>}
+              {sessionError && <p className="inline-error">{sessionError}</p>}
+              <section className="context-section">
+                <h2>
+                  <Layers3 size={17} /> Данные наблюдения
+                </h2>
+                <label className="layer-row">
+                  <input
+                    type="checkbox"
+                    checked={layers.s1}
+                    disabled={
+                      scene.status === "analyzed" && !activeSession?.layers.s1
+                    }
+                    onChange={() => toggle("s1")}
+                  />
+                  <span>
+                    Радарный снимок S1
+                    <small>{date(scene.observation_date)} · VV/VH</small>
+                  </span>
+                </label>
+                {activeSession && (
+                  <>
+                    <label className="layer-row">
+                      <input
+                        type="checkbox"
+                        checked={layers.probability}
+                        onChange={() => toggle("probability")}
+                      />
+                      <span>
+                        Вероятность воды<small>Оценка модели · 0–100%</small>
+                      </span>
+                    </label>
+                    <label className="layer-row">
+                      <input
+                        type="checkbox"
+                        checked={layers.mask}
+                        onChange={() => toggle("mask")}
+                      />
+                      <span>
+                        Бинарная маска
+                        <small>
+                          Порог ≥ {activeSession.metadata.threshold}
+                        </small>
+                      </span>
+                    </label>
+                    {(layers.probability || layers.mask) && (
+                      <label className="opacity-control">
+                        Прозрачность наложения{" "}
+                        <b>{Math.round(opacity * 100)}%</b>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={Math.round(opacity * 100)}
+                          onChange={(event) =>
+                            setOpacity(Number(event.target.value) / 100)
+                          }
+                        />
+                      </label>
+                    )}
+                    {layers.probability && (
+                      <div className="prob-legend">
+                        <span>0% · низкая</span>
+                        <i />
+                        <span>100% · высокая</span>
+                      </div>
+                    )}
+                    <label className="layer-row">
+                      <input
+                        type="checkbox"
+                        checked={layers.assets}
+                        onChange={() => toggle("assets")}
+                      />
+                      <span>
+                        Объекты<small>{assets.length} точек</small>
+                      </span>
+                    </label>
+                    <label className="layer-row">
+                      <input
+                        type="checkbox"
+                        checked={layers.zones}
+                        onChange={() => toggle("zones")}
+                      />
+                      <span>
+                        Зоны съёмки
+                        <small>
+                          {zones.length} кандидатов · план C выделен синим
+                        </small>
+                      </span>
+                    </label>
+                  </>
+                )}
+              </section>
+              {activeSession && (
+                <>
+                  <section className="context-section">
+                    <h2>План дополнительной съёмки</h2>
+                    <label className="budget-field">
+                      Бюджет данных, ₽
+                      <input
+                        type="number"
+                        min="0"
+                        max="1000000000"
+                        step="100"
+                        value={budget ?? 0}
+                        onChange={(event) =>
+                          setBudget(
+                            Math.max(0, Number(event.target.value) || 0),
+                          )
+                        }
+                      />
+                    </label>
+                    <input
+                      className="budget-slider"
+                      type="range"
+                      min="0"
+                      max="50000"
+                      step="100"
+                      value={Math.min(budget ?? 0, 50000)}
+                      onChange={(event) =>
+                        setBudget(Number(event.target.value))
+                      }
+                      aria-label="Изменить бюджет"
+                    />
+                    <div className="plan-summary">
+                      <span>План C · {plan?.plans.C.length ?? "—"} зон</span>
+                      <strong>{money(chosen?.data_cost_rub)} ₽</strong>
+                    </div>
+                    <div className="plan-summary">
+                      <span>Охват ожидаемого ущерба</span>
+                      <strong>{pct(chosen?.coverage_share)}</strong>
+                    </div>
+                    {planError && <p className="inline-error">{planError}</p>}
+                    <button
+                      className="analysis-link"
+                      onClick={() => navigate("analysis", scene.chip_id)}
+                    >
+                      Подробный анализ <BarChart3 size={17} />
+                    </button>
+                  </section>
+                  {(activeAsset || activeZone) && (
+                    <section className="context-section focus-section">
+                      <h2>
+                        {activeAsset ? "Выбранный объект" : "Выбранная зона"}
+                      </h2>
+                      {activeAsset && (
+                        <>
+                          <strong>{assetName(activeAsset)}</strong>
+                          <p>
+                            {String(activeAsset.properties.asset_id)} ·
+                            вероятность воды{" "}
+                            {pct(Number(activeAsset.properties.p_flood))}
+                          </p>
+                          <p>
+                            Ожидаемый ущерб{" "}
+                            {money(activeAsset.properties.expected_loss_rub)} ₽
+                          </p>
+                        </>
+                      )}
+                      {activeZone && (
+                        <>
+                          <strong>
+                            {String(activeZone.properties.candidate_id)}
+                          </strong>
+                          <p>
+                            {activeZone.properties.area_km2} км² · отдельно{" "}
+                            {money(activeZone.properties.solo_cost_rub)} ₽
+                          </p>
+                          <p>
+                            Доступна{" "}
+                            {date(
+                              String(activeZone.properties.available_at ?? ""),
+                            )}
+                          </p>
+                          <p>
+                            Объекты в зоне:{" "}
+                            {zoneAssets.length
+                              ? zoneAssets.map(assetName).join(", ")
+                              : "нет объектов портфеля"}
+                          </p>
+                        </>
+                      )}
+                    </section>
+                  )}
+                </>
+              )}
+              <p className="context-foot">
+                Маркеры — места снимков, не подтверждённые зоны затопления.
+                Оптическая мозаика 2019 года — географический контекст; дата
+                отдельного пикселя неизвестна.
+              </p>
+            </aside>
+          )}
+          {scene && !panelOpen && (
+            <button className="reopen-panel" onClick={() => setPanelOpen(true)}>
+              <Layers3 size={17} /> Слои и сцена
+            </button>
+          )}
+          {mapIssue && (
+            <div className="map-issue" role="status">
+              {mapIssue}
+            </div>
+          )}
+        </div>
+        {!mapActive && (
+          <div className="analysis-screen">
+            <div className="analysis-head">
+              <button
+                onClick={() =>
+                  scene ? navigate("scene", scene.chip_id) : overview()
+                }
+              >
+                <ArrowLeft size={17} /> К карте
+              </button>
+              <div>
+                <span>АНАЛИТИКА СЦЕНЫ</span>
+                <h1>
+                  {scene?.territory.replaceAll("-", " ") ?? "Сцена не выбрана"}
+                </h1>
+                <p>
+                  {scene
+                    ? `${date(scene.observation_date)} · ${scene.chip_id}`
+                    : "Выберите наблюдение на Земле"}
+                </p>
+              </div>
+              {exportUrl && (
+                <a href={exportUrl}>
+                  <ArrowDownToLine size={17} /> Скачать комплект
+                </a>
+              )}
+            </div>
+            {!activeSession && (
+              <div className="analysis-empty">
+                {sessionLoading
+                  ? "Загружаем анализ…"
+                  : (sessionError ??
+                    (scene
+                      ? "Для этой сцены есть исходный S1, но расчёт объектов и плана не выполнен."
+                      : "Вернитесь на Землю и выберите сцену."))}
+              </div>
+            )}
+            {activeSession && (
+              <div className="analysis-body">
+                <div className="analysis-metrics">
+                  <div>
+                    <span>Объектов</span>
+                    <strong>{assets.length}</strong>
+                  </div>
+                  <div>
+                    <span>Ожидаемый ущерб</span>
+                    <strong>{money(totalLoss)} ₽</strong>
+                  </div>
+                  <div>
+                    <span>План C · данные</span>
+                    <strong>{money(chosen?.data_cost_rub)} ₽</strong>
+                  </div>
+                  <div>
+                    <span>Охват ущерба</span>
+                    <strong>{pct(chosen?.coverage_share)}</strong>
+                  </div>
+                </div>
+                <div className="analysis-columns">
+                  <section className="analysis-card">
+                    <div className="card-title">
+                      <h2>Приоритет осмотра</h2>
+                      <span>Выбор выделит объект на карте</span>
+                    </div>
+                    <div className="table-scroll">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Объект</th>
+                            <th>Вероятность воды</th>
+                            <th>Ожидаемый ущерб</th>
+                            <th>Неопределённость</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {assets.map((item) => (
+                            <tr
+                              key={String(item.properties.asset_id)}
+                              tabIndex={0}
+                              className={
+                                assetId === item.properties.asset_id
+                                  ? "selected"
+                                  : ""
+                              }
+                              onClick={() => {
+                                setAssetId(String(item.properties.asset_id));
+                                setZoneId(null);
+                              }}
+                              onKeyDown={(event) => {
+                                if (
+                                  event.key === "Enter" ||
+                                  event.key === " "
+                                ) {
+                                  event.preventDefault();
+                                  setAssetId(String(item.properties.asset_id));
+                                  setZoneId(null);
+                                }
+                              }}
+                            >
+                              <td>
+                                <strong>{assetName(item)}</strong>
+                                <small>
+                                  {String(item.properties.asset_id)} ·{" "}
+                                  {item.properties.status === "no_data"
+                                    ? "нет данных"
+                                    : "оценка доступна"}
+                                </small>
+                              </td>
+                              <td>
+                                {item.properties.status === "no_data"
+                                  ? "—"
+                                  : pct(Number(item.properties.p_flood))}
+                              </td>
+                              <td>
+                                {money(item.properties.expected_loss_rub)} ₽
+                              </td>
+                              <td>
+                                {item.properties.uncertainty == null ||
+                                item.properties.uncertainty === ""
+                                  ? "—"
+                                  : Number(item.properties.uncertainty).toFixed(
+                                      2,
+                                    )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {activeAsset && (
+                      <div className="card-foot">
+                        {assetName(activeAsset)} · стоимость{" "}
+                        {money(activeAsset.properties.asset_value_rub)} ₽ ·
+                        уязвимость{" "}
+                        {Number(
+                          activeAsset.properties.vulnerability_coef,
+                        ).toFixed(2)}
+                      </div>
+                    )}
+                  </section>
+                  <div className="analysis-stack">
+                    <section className="analysis-card">
+                      <div className="card-title">
+                        <h2>Стратегии A / B / C</h2>
+                        <span>Стоимость данных и охват</span>
+                      </div>
+                      {(plan?.comparison ?? []).map((row) => (
+                        <div
+                          key={row.strategy}
+                          className={`strategy ${row.strategy === "C" ? "chosen" : ""}`}
+                        >
+                          <b>{row.strategy}</b>
+                          <div>
+                            <strong>
+                              {row.strategy === "A"
+                                ? "Текущие данные"
+                                : row.strategy === "B"
+                                  ? "Сплошная съёмка"
+                                  : "Приоритетный заказ"}
+                            </strong>
+                            <small>
+                              Данные {money(row.data_cost_rub)} ₽ · охват{" "}
+                              {pct(row.coverage_share)}
+                            </small>
+                            {row.strategy === "B" && !row.budget_feasible && (
+                              <small>Выше бюджета</small>
+                            )}
+                            {row.strategy === "C" && (
+                              <small>
+                                Полная стоимость решения{" "}
+                                {money(row.decision_cost_rub)} ₽
+                              </small>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      <div className="card-foot">
+                        Охват — доля ожидаемого ущерба в зонах, а не
+                        предотвращённый ущерб.
+                      </div>
+                    </section>
+                    <section className="analysis-card">
+                      <div className="card-title">
+                        <h2>Дополнительная съёмка</h2>
+                        <span>{zones.length} кандидатных зон</span>
+                      </div>
+                      <div className="zone-tabs">
+                        <button
+                          className={zoneView === "plan" ? "active" : ""}
+                          onClick={() => setZoneView("plan")}
+                        >
+                          План C · {chosenZoneIds.size}
+                        </button>
+                        <button
+                          className={zoneView === "all" ? "active" : ""}
+                          onClick={() => setZoneView("all")}
+                        >
+                          Все зоны
+                        </button>
+                      </div>
+                      <div className="zone-list">
+                        {zones
+                          .filter(
+                            (item) =>
+                              zoneView === "all" ||
+                              chosenZoneIds.has(
+                                String(item.properties.candidate_id),
+                              ),
+                          )
+                          .map((item) => (
+                            <button
+                              key={String(item.properties.candidate_id)}
+                              className={
+                                zoneId === item.properties.candidate_id
+                                  ? "active"
+                                  : ""
+                              }
+                              onClick={() => {
+                                setZoneId(String(item.properties.candidate_id));
+                                setAssetId(null);
+                              }}
+                            >
+                              <span>
+                                <b>{String(item.properties.candidate_id)}</b>
+                                <small>
+                                  {item.properties.area_km2} км² ·{" "}
+                                  {String(
+                                    item.properties.sensor_type,
+                                  ).toUpperCase()}{" "}
+                                  · доступна{" "}
+                                  {date(
+                                    String(item.properties.available_at ?? ""),
+                                  )}
+                                </small>
+                              </span>
+                              <strong>
+                                {money(item.properties.solo_cost_rub)} ₽
+                              </strong>
+                            </button>
+                          ))}
+                        {zoneView === "plan" && !chosenZoneIds.size && (
+                          <p>При текущем бюджете зон в плане C нет.</p>
+                        )}
+                      </div>
+                      {activeZone && (
+                        <div className="card-foot">
+                          {plan?.reasons.C[
+                            String(activeZone.properties.candidate_id)
+                          ] ??
+                            plan?.reasons.not_selected_C[
+                              String(activeZone.properties.candidate_id)
+                            ] ??
+                            "Причина отсутствует"}
+                        </div>
+                      )}
+                    </section>
+                  </div>
+                </div>
+                <section className="analysis-card sensitivity">
+                  <div className="card-title">
+                    <h2>Проверка устойчивости</h2>
+                    <span>Сценарии из комплекта</span>
+                  </div>
+                  <div className="sensitivity-grid">
+                    <div>
+                      <h3>Бюджет и ставка</h3>
+                      {activeSession.sensitivity
+                        .filter(
+                          (item) =>
+                            item.strategy === "C" &&
+                            /^(budget|rate)_/.test(item.scenario_id),
+                        )
+                        .slice(0, 10)
+                        .map((item) => (
+                          <div className="scenario" key={item.scenario_id}>
+                            <span>{item.scenario_id.replaceAll("_", " ")}</span>
+                            <b>
+                              {money(item.covered_expected_loss_rub)} ₽ охват
+                            </b>
+                          </div>
+                        ))}
+                    </div>
+                    <div>
+                      <h3>Вероятность и ущерб</h3>
+                      {activeSession.sensitivity
+                        .filter(
+                          (item) =>
+                            item.strategy === "A" &&
+                            /^[pVq]_portfolio_/.test(item.scenario_id),
+                        )
+                        .slice(0, 6)
+                        .map((item) => (
+                          <div className="scenario" key={item.scenario_id}>
+                            <span>{item.scenario_id.replaceAll("_", " ")}</span>
+                            <b>{money(sensitivityValue(item))} ₽</b>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                  <div className="card-foot">
+                    Чувствительность не пересчитывает карту вероятности воды и
+                    не меняет портфель.
+                  </div>
+                </section>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}

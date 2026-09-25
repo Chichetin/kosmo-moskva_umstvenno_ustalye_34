@@ -75,7 +75,7 @@ python3 scripts/download_sen1floods11.py            # HandLabeled + perm_water +
 | 10 объектов и ущерб | `make assets CHIP=<chip_id>` | готово — `assets: 10 объектов, оценено 10` (D-018; `pytest tests/assets`) |
 | Зоны, цена, A/B/C | `make procure BUDGET=<руб>` | готово — `procure: A/B/C` с ценой, охватом EL и `budget_feasible` (D-023; `pytest tests/procurement`) |
 | 12 обязательных файлов | `make export && make validate` | готово — реальный комплект `make all CHIP=Sri-Lanka_713926 BUDGET=5000` → `12/12 файлов прошли проверку`, `flood_mask.tif`/`flood_probability.tif` — с калиброванным порогом 0,37, `metrics.csv` — с калиброванными метриками main (D-027, D-029; `pytest tests/contracts tests/export`); `run_metadata.warnings` пуст на чистом дереве — `make all CHIP=Sri-Lanka_713926 BUDGET=5000` на commit `89c8e4f` (26.09) → `warnings: []`, validate 12/12 (ранее было предупреждение про рассинхрон порога метрик, снято подключением калибратора в `export`) |
-| Интерфейс оператора | `make app` | не реализовано — `stage 'app' not implemented yet (floodvalue.app.run); issue area:app` (выбран Streamlit, D-034) |
+| Интерфейс оператора | `make app` | готово — React + MapLibre, карта Земли, слои и пересчёт бюджета (`pytest tests/app`) |
 | Отчёт QC данных | `make data-qc` | готово — `docs/verification/data-qc.md` из `interim/qc.csv` после `make data` |
 | Комплект и веса для релиза | `make release OUT=<комплект> [TAG=<тег>]` | готово — `run_<run_id>.zip`, `models_<commit>.zip`, `SHA256SUMS` (D-037, `pytest tests/test_release_bundle.py`); загрузка финального комплекта — после `eval-test` |
 | Перенос рецепта U-Net между событиями (LOEO) | `python -m floodvalue.model.unet.loeo` через `notebooks/loeo_colab.ipynb` (D-036) | прогнан `MODE=full` на commit `1eaf2cc9e572` (локально на RTX 4080 вместо Colab, 6 фолдов): IoU U-Net на невиданном событии 0,206–0,532, ΔIoU к порогу фолда значимо > 0 в 4 из 6 фолдов — `docs/verification/transfer-loeo.md` (таблица из отчёта прогона в #86, CSV/JSON фолдов не приложены); проводка — `pytest tests/model/test_loeo.py tests/model/test_loeo_notebook.py` |
@@ -94,6 +94,48 @@ python3 scripts/download_sen1floods11.py            # HandLabeled + perm_water +
 pytest` → 473 passed, `make all` → validate 12/12 (`docs/verification/clean-clone-gitverse.md`).
 На commit `89c8e4f` (26.09) `make check` → 646 passed, 4 skipped, `test-hooks.sh` OK,
 `validate` 12/12. Число тестов растёт с каждым PR.
+
+## Интерфейс оператора
+
+Запустите `make app` и откройте `http://127.0.0.1:8000`. Интерфейс
+показывает исходный S1, вероятность воды и маску, объекты с ожидаемым ущербом,
+кандидатные и выбранные зоны, сравнение A/B/C и сценарии чувствительности. Бюджет
+можно менять числом или ползунком: пересчитывается только план закупки, без запуска
+модели и изменения растров. Кнопка «Скачать комплект» выгружает архив результатов.
+Начальный экран — интерактивная Земля MapLibre. Маркеры и поиск показывают реальные
+локальные наблюдения Sen1Floods11; прямой выбор точки открывает её территорию на той
+же карте. Каталог читает даты из `data/interim/source_manifest_s1.json`, а границы и
+центр — из геопривязки каждого GeoTIFF. Сейчас локально доступны 446 исходных S1,
+но только один комплект с вероятностью воды, объектами и планом. Для остальных
+снимков приложение не подставляет чужие расчёты. Сцены без геопривязки остаются в
+поиске, но не появляются как точка на Земле. При отсутствии готовых результатов и
+сырого каталога приложение показывает пустой каталог; тестовый эталон доступен
+только при явном указании `FLOODVALUE_APP_RUN_DIR=tests/fixtures/good`.
+
+В локальном режиме доступны географическая карта OpenFreeMap / OpenStreetMap и
+оптическая мозаика EOX Sentinel-2 cloudless за 2019 год, а отдельно — исходный S1,
+вероятность воды, маска, объекты и зоны. Внешняя оптика служит только контекстом:
+она не является снимком паводка за 2017 год и не входит в модель. Мозаика 2019 года
+распространяется на условиях CC BY-NC-SA 4.0; её использование ограничено
+некоммерческими сценариями ([условия EOX](https://cloudless.eox.at/documentation/license),
+[схема WMTS](https://cloudless.eox.at/documentation/usage)). Для обычной карты действуют
+[условия сервиса OpenFreeMap](https://openfreemap.org/tos/) и атрибуция OpenStreetMap. Внешние тайлы требуют сети; локальные результаты и
+аналитика доступны при их отказе. Смена бюджета пересчитывает только план закупки.
+
+Раздел «Анализ» показывает полный портфель, каталог зон, сравнение A/B/C и
+чувствительность. Прямая ссылка `#/scene/<chip_id>` открывает сцену, а
+`#/analysis/<chip_id>` — её анализ; кнопки браузера сохраняют этот переход.
+
+Для открытия конкретного комплекта: `make app OUT=outputs/<run_id>`. Порт задаётся
+`FLOODVALUE_APP_PORT`. Собранный React-бандл хранится в репозитории, поэтому для
+`make app` нужен только Python из `uv.lock`; после правки `web/` пересоберите его
+командой `make web` (Node.js нужен только для сборки).
+Для просмотра изменений во время разработки запустите `make app` в одном терминале
+и `cd web && npm install && npm run dev` в другом, затем откройте
+`http://127.0.0.1:5173`. Скриншоты: [Земля](docs/verification/ui-global.png),
+[оптическая подложка](docs/verification/ui-territory-optical.png),
+[вероятность воды](docs/verification/ui-territory-probability.png),
+[анализ](docs/verification/ui-analysis.png).
 
 ## S1-only и выбор метода
 
