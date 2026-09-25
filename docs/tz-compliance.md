@@ -17,8 +17,8 @@
 | 8 | Контролируемый эксперимент | `docs/verification/experiment-*.md` | таблица на validation (признаки / вариант / постобработка) | ⬜ |
 | 9 | Надёжность вероятностей | калибратор, reliability на test | `make calibrate`; ECE/Brier до и после; параметры опубликованы | ⬜ |
 | 10 | Неопределённость | `uncertainty.tif`, `asset_loss.csv:uncertainty` | неопределённость выше на ошибках (val/test); влияние на выбор зон | ⬜ |
-| 11 | Повторный запуск | README, `uv.lock`, веса в GitVerse LFS | чистый клон GitVerse → `make setup && make all` | ⬜ |
-| 12 | Обязательные файлы и проверки | `src/floodvalue/contracts/` (схемы v1), `src/floodvalue/export/validate.py`, `tests/fixtures/good/` | `make validate OUT=<комплект>` → N/12 с причинами; `uv run --frozen pytest tests/contracts` (эталон 12/12 и сломанные: NaN, дыра, 0,9996 км², дубль `asset_id`, маска ≠ порогу, C сверх бюджета; совместимость с `assets` и `procurement.pricing`) | 🟡 валидатор и эталон `make validate OUT=tests/fixtures/good` → 12/12; реального комплекта ещё нет (export) |
+| 11 | Повторный запуск | README, `uv.lock`, веса в GitVerse LFS; `make all` (D-027), `run_metadata.reproduce`/`versions`/`commit` | `make all CHIP=Sri-Lanka_713926 BUDGET=5000` → комплект `outputs/Sri-Lanka_713926_5000_<commit>/` и validate; чистый клон GitVerse → `make setup && make all` | 🟡 сквозной путь из кода (predict пока baseline D-009); чистый клон — не проверен |
+| 12 | Обязательные файлы и проверки | `src/floodvalue/contracts/` (схемы v1), `src/floodvalue/export/validate.py`, `src/floodvalue/export/run.py` (D-027), `tests/fixtures/good/`, `tests/export/` | `make all CHIP=Sri-Lanka_713926 BUDGET=5000` → `make validate OUT=outputs/Sri-Lanka_713926_5000_<commit>`; `uv run --frozen pytest tests/contracts tests/export` (эталон 12/12, сломанные комплекты; e2e на синтетическом чипе: predict → assets → procure → export → validate 12/12) | 🟡 реальный комплект 11/12: `sensitivity.csv` без сценариев p/V/q до #9; метрики main = baseline (D-009) до #16/#17 |
 | 13 | Ожидаемый прямой ущерб | `src/floodvalue/assets/`, `assets.*`, `asset_loss.csv`, seed и правила в `assets_metadata.json` → `run_metadata.json` (D-018) | `uv run --frozen pytest tests/assets` (EL = 1 000 000 при p=0,4, V=10 млн, q=0,25; p из растра, не обнуляется ниже порога; no_data пусто; 10 по одному типу; размещение не зависит от p и меток); `make assets CHIP=…` | 🟡 код и тесты; seed — константа до `configs/run.yaml`, в `run_metadata.json` — после export |
 | 14 | Приоритеты и интерпретация | `asset_loss.csv:rank`, `sensitivity.csv`, прокси-проверка | `pytest tests/assets` (rank: 1 = max EL, тай по `asset_id`, пусто у no_data); чувствительность p, V, q по отдельности; прокси-ошибка на test-чипе | 🟡 rank и временная `uncertainty` (энтропия p); чувствительность и прокси — нет |
 | 15 | План съёмки в бюджете | `candidate_orders.geojson`, `procurement_plan.csv`, `procurement_metadata.json`; D-023 | `make assets CHIP=Sri-Lanka_713926 && make procure BUDGET=5000` (C: Z-A02, Z-A10 — 4 905,96 ≤ 5 000); `uv run --frozen pytest tests/procurement` (≥ 1 км² до округления, covers, срок, C ≤ бюджета, пересчёт корзины) | 🟡 зоны v0 |
@@ -32,15 +32,15 @@
 
 | Файл | Производит (`area:`) | Проверка | Статус |
 |---|---|---|---|
-| `flood_probability.tif` | model / export | `make validate`: Float32, [0,1], nodata −9999, сетка = S1 | ⬜ |
-| `flood_mask.tif` | calibration / export | UInt8, 0/1/255, mask ⇔ p ≥ threshold | ⬜ |
-| `assets.geojson` | assets | 10 Point, [lon, lat], типы и V/q | ⬜ |
-| `assets.csv` | assets | = geojson | ⬜ |
-| `asset_loss.csv` | assets | EL = p·V·q, rank, пустые у no_data | ⬜ |
-| `candidate_orders.geojson` | procurement | Polygon, без дыр, ≥ 1 км², площадь EPSG:6933 | ⬜ |
-| `procurement_plan.csv` | procurement | цена пересчитывается, скидка по корзине | ⬜ |
-| `strategy_plans.json` | procurement | = строкам плана | ⬜ |
-| `strategy_comparison.csv` | procurement | суммы, бюджет, охват по `asset_id` | ⬜ |
-| `sensitivity.csv` | assets / procurement | p, V, q, бюджет, ставка | ⬜ |
-| `run_metadata.json` | export | ключи, threshold = маска | ⬜ |
-| `source_manifest.json` | data / export | S1 демо-чипа, даты, лицензии | ⬜ |
+| `flood_probability.tif` | model / export | `make validate`: Float32, [0,1], nodata −9999, сетка = S1 | ✅ `make all` (baseline D-009) |
+| `flood_mask.tif` | calibration / export | UInt8, 0/1/255, mask ⇔ p ≥ threshold | ✅ `make all` (порог 0,5, D-009) |
+| `assets.geojson` | assets | 10 Point, [lon, lat], типы и V/q | ✅ `make all` |
+| `assets.csv` | assets | = geojson | ✅ `make all` |
+| `asset_loss.csv` | assets | EL = p·V·q, rank, пустые у no_data | ✅ `make all` |
+| `candidate_orders.geojson` | procurement | Polygon, без дыр, ≥ 1 км², площадь EPSG:6933 | ✅ `make all` |
+| `procurement_plan.csv` | procurement | цена пересчитывается, скидка по корзине | ✅ `make all` |
+| `strategy_plans.json` | procurement | = строкам плана | ✅ `make all` |
+| `strategy_comparison.csv` | procurement | суммы, бюджет, охват по `asset_id` | ✅ `make all` |
+| `sensitivity.csv` | assets / procurement | p, V, q, бюджет, ставка | 🟡 бюджет и ставка есть; p/V/q — #9 |
+| `run_metadata.json` | export | ключи, threshold = маска | ✅ `make all` (proxy_check=planned, P24a) |
+| `source_manifest.json` | data / export | S1 демо-чипа, даты, лицензии | ✅ `make all` |
