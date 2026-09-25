@@ -20,7 +20,7 @@
 | 11 | Повторный запуск | README, `uv.lock`, веса в GitVerse LFS | чистый клон GitVerse → `make setup && make all` | ⬜ |
 | 12 | Обязательные файлы и проверки | `src/floodvalue/export/`, `src/floodvalue/contracts/` | `make validate` → 12/12 | ⬜ |
 | 13 | Ожидаемый прямой ущерб | `src/floodvalue/assets/`, `assets.*`, `asset_loss.csv`, seed и правила в `assets_metadata.json` → `run_metadata.json` (D-018) | `uv run --frozen pytest tests/assets` (EL = 1 000 000 при p=0,4, V=10 млн, q=0,25; p из растра, не обнуляется ниже порога; no_data пусто; 10 по одному типу; размещение не зависит от p и меток); `make assets CHIP=…` | 🟡 код и тесты; seed — константа до `configs/run.yaml`, в `run_metadata.json` — после export |
-| 14 | Приоритеты и интерпретация | `asset_loss.csv:rank`, `sensitivity.csv`, прокси-проверка | `pytest tests/assets` (rank: 1 = max EL, тай по `asset_id`, пусто у no_data); чувствительность p, V, q по отдельности; прокси-ошибка на test-чипе | 🟡 rank и временная `uncertainty` (энтропия p); чувствительность и прокси — нет |
+| 14 | Приоритеты и интерпретация | `asset_loss.csv:rank`, `src/floodvalue/assets/sensitivity.py` → `assets_sensitivity.csv` (D-024), прокси-проверка | `uv run --frozen pytest tests/assets` (rank: 1 = max EL, тай по `asset_id`, пусто у no_data; чувствительность p, V, q по отдельности, ≥ 3 сценария на каждый, смена порога бинаризации не меняет EL); `make assets CHIP=…` | 🟡 rank, временная `uncertainty` (энтропия p) и чувствительность p/V/q — код и тесты; прокси-проверка — нет |
 | 15 | План съёмки в бюджете | `candidate_orders.geojson`, `procurement_plan.csv` | `make procure BUDGET=…`; валидатор геометрии; C ≤ бюджета | ⬜ |
 | 16 | Сравнение A/B/C | `strategy_plans.json`, `strategy_comparison.csv` | `make validate`; B сверх бюджета помечена | ⬜ |
 | 17 | Стоимость платных данных | `procurement_plan.csv`, `configs/pricing.yaml`, `src/floodvalue/procurement/pricing.py`, `geometry.py` (D-017) | `uv run --frozen pytest tests/procurement` → 1 703,46 / 946,37 / 567,82; 90 дн. → Т = 1, 91 → 0,6; `new` без гарантии — ошибка; скидка по всей группе корзины; S в км²; 0,9996 км² отклонён | 🟡 функции цены и площади проверены тестами; `procurement_plan.csv` — после #8 |
@@ -41,6 +41,6 @@
 | `procurement_plan.csv` | procurement | цена пересчитывается, скидка по корзине | ⬜ |
 | `strategy_plans.json` | procurement | = строкам плана | ⬜ |
 | `strategy_comparison.csv` | procurement | суммы, бюджет, охват по `asset_id` | ⬜ |
-| `sensitivity.csv` | assets / procurement | p, V, q, бюджет, ставка | ⬜ |
+| `sensitivity.csv` | assets / procurement | p, V, q (`assets_sensitivity.csv`, D-024), бюджет, ставка (`procurement_sensitivity.csv`, export #10 сливает) | 🟡 p/V/q готовы, бюджет/ставка и слияние — нет |
 | `run_metadata.json` | export | ключи, threshold = маска | ⬜ |
 | `source_manifest.json` | data / export | S1 демо-чипа, даты, лицензии | ⬜ |
