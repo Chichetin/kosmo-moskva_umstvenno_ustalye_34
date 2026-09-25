@@ -49,7 +49,7 @@ def ap_table(runs: list[Path]) -> None:
           + f" {sum(r0.values()) / 6:7.3f}")
     for d in runs:
         a = load_ap(d)
-        for meth in ("unet_e60", "unet_e19"):
+        for meth in ("unet_e60", "unet_eft", "unet_e19"):
             vals = {e: a[(e, meth)] for e in events if (e, meth) in a}
             if not vals:
                 continue
@@ -63,7 +63,7 @@ def main(argv: list[str]) -> None:
     runs = [Path(a) for a in argv] or sorted(p for p in HERE.iterdir() if (p / "loeo-metrics.csv").exists())
     ref = load(REF)
     events = sorted({e for e, _ in ref})
-    methods = ["unet_e60", "unet_e60_tta", "unet_e19"]
+    methods = ["unet_e60", "unet_eft", "unet_e60_tta", "unet_e19"]
     base = {e: float(ref[(e, "baseline_fold")]["iou"]) for e in events}
     r0 = {e: float(ref[(e, "unet_e60")]["iou"]) for e in events}
     print(f"{'run':22s} {'method':13s} " + " ".join(f"{e[:8]:>8s}" for e in events)

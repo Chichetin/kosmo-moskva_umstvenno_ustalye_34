@@ -267,6 +267,42 @@ def train_fold(x, y, m, cfg: dict, eval_epochs=EVAL_EPOCHS, device: str = "cpu",
     missing = set(eval_epochs) - set(states)
     if missing:
         raise ValueError(f"eval epochs {sorted(missing)} exceed --epochs {cfg['epochs']}")
+    ft = cfg.get("finetune_epochs") or 0
+    if ft:
+        # Stage 2: fine-tune on the hand-labeled rows only (mask code 2 when weak data are mixed
+        # in, else every row), fresh OneCycle at lr * finetune_lr_mult. Scored as "ft" — fixed
+        # in advance, no selection.
+        hand = (m.flatten(1).amax(1) == 2).nonzero().flatten() if weak_w is not None else \
+            torch.arange(len(x))
+        opt = torch.optim.AdamW(model.parameters(), lr=cfg["lr"] * cfg["finetune_lr_mult"],
+                                weight_decay=cfg["weight_decay"])
+        steps_ft = max(1, (2 * len(hand)) // cfg["batch"])
+        sched = torch.optim.lr_scheduler.OneCycleLR(
+            opt, max_lr=cfg["lr"] * cfg["finetune_lr_mult"], pct_start=0.1,
+            total_steps=ft * steps_ft)
+        for epoch in range(1, ft + 1):
+            model.train()
+            te, losses = time.time(), []
+            for _ in range(steps_ft):
+                idx = hand[torch.randint(0, len(hand), (cfg["batch"],), generator=gen)]
+                if weak_w is None:
+                    idx = idx.to(device)
+                    xs, ys, ms = x[idx], y[idx], m[idx]
+                else:
+                    xs, ys, ms = (t[idx].to(device, non_blocking=True) for t in (x, y, m))
+                xb, yb, mb = augment(xs, ys, ms, cfg["crop"], cfg["db_jitter"], jstd,
+                                     len(channels), gen)
+                with torch.autocast(device_type=device.split(":")[0], dtype=torch.bfloat16,
+                                    enabled=amp):
+                    logits = model(xb)
+                loss = masked_loss(logits, yb, mb.bool(), cfg["dice_weight"])
+                opt.zero_grad(set_to_none=True)
+                loss.backward()
+                opt.step()
+                sched.step()
+                losses.append(loss.item())
+            log(f"  finetune {epoch:3d}/{ft} loss {np.mean(losses):.4f} {time.time() - te:.1f}s")
+        states["ft"] = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
     return model, states, steps
 
 
@@ -406,6 +442,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--weak-weight", type=float, default=None,
                    help=f"add weakly-labeled chips ({WEAK_LABEL}) of the fold's training events "
                         f"among {', '.join(WEAK_EVENTS)} with this loss weight (hand = 1)")
+    p.add_argument("--finetune-epochs", type=int, default=0,
+                   help="stage 2: fine-tune on hand-labeled chips only for N epochs (scored as unet_eft)")
+    p.add_argument("--finetune-lr-mult", type=float, default=0.3)
     p.add_argument("--tta", action="store_true",
                    help="also score the mean of 8 rot90/flip predictions at each eval epoch")
     p.add_argument("--events", default="", help="comma list: run only these folds (smoke)")
@@ -457,7 +496,8 @@ def main(argv: list[str] | None = None) -> int:
     cfg |= {k: getattr(args, k) for k in ("base", "dropout", "batch", "lr", "weight_decay",
                                           "dice_weight", "db_jitter")}
     cfg |= {"epochs": args.epochs, "crop": args.crop, "seed": args.seed,
-            "steps_mult": args.steps_mult, "tta": args.tta, "weak_weight": args.weak_weight}
+            "steps_mult": args.steps_mult, "tta": args.tta, "weak_weight": args.weak_weight,
+            "finetune_epochs": args.finetune_epochs, "finetune_lr_mult": args.finetune_lr_mult}
     shipped = shipped_baseline_rule()
     only = {e.strip() for e in args.events.split(",") if e.strip()}
     command = "python -m floodvalue.model.unet.loeo " + " ".join(
