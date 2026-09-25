@@ -185,7 +185,8 @@ def write_outputs(res: dict, method: str, cal_path: Path, cal: dict, config: dic
                           "mutual_info) wins when the chip-bootstrap 95 % interval of the "
                           "difference contains 0; error = (p >= threshold) != LabelHand",
         "status": "связь с ошибками проверена на validation (часть подбора калибровки и порога) "
-                  "и на dev (USA, не участвовал в выборе); на test — через eval-test",
+                  "и на dev (USA: в выборе показателя и калибровке не участвовал, но на нём "
+                  "выбиралась эпоха модели, D-019); на test не проверено до eval-test",
         "validation": {s: {k: va[s][chosen][k] for k in ("auroc", "mean_u_error", "mean_u_correct")}
                        for s in va if not s.startswith("_")},
         "dev": {s: {k: res["parts"]["dev"][s][chosen][k] for k in ("auroc", "mean_u_error",

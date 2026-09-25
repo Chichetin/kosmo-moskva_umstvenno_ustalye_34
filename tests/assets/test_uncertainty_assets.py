@@ -107,6 +107,7 @@ def test_without_predict_rasters_uncertainty_is_unverified_entropy(run_dir):
 def test_uncertainty_nodata_at_ok_asset_is_empty_not_zero(run_dir):
     args, out, _ = run_dir
     _write(out / "uncertainty.tif", np.full((H, W), PROB_NODATA, "float32"))
+    (out / "prediction.json").write_text(json.dumps({"uncertainty": {"measure": "entropy_p"}}))
     assert assets_run.run(args) == 0
     for r in _read(out / "asset_loss.csv").values():
         assert r["status"] == "ok" and r["uncertainty"] == ""
@@ -135,3 +136,29 @@ def test_mask_unstable_boundaries():
     assert mask_unstable({"p_low": 0.1, "p_high": 0.2}, 0.37) is False
     assert mask_unstable({"p_low": None, "p_high": None}, 0.37) is None
     assert mask_unstable({"p_low": 0.1, "p_high": 0.5}, None) is None
+
+
+def test_raster_without_its_measure_in_prediction_is_ignored(run_dir):
+    args, out, _ = run_dir
+    _write(out / "uncertainty.tif", np.full((H, W), 0.123, "float32"))
+    (out / "prediction.json").write_text(json.dumps({"chip_id": "Other_9", "threshold": 0.37,
+                                                     "uncertainty": {"measure": "entropy_p"}}))
+    assert assets_run.run(args) == 0
+    for r in _read(out / "asset_loss.csv").values():
+        assert float(r["uncertainty"]) == pytest.approx(binary_entropy(float(r["p_flood"])))
+    meta = json.loads((out / "assets_metadata.json").read_text(encoding="utf-8"))
+    assert meta["uncertainty"]["status"] == "temporary_unverified"
+
+
+def test_inspection_threshold_only_for_entropy_measures(run_dir):
+    args, out, _ = run_dir
+    _write(out / "uncertainty.tif", np.full((H, W), 0.9, "float32"))
+    for measure, expect_none in (("member_std", True), ("entropy_p", False)):
+        (out / "prediction.json").write_text(json.dumps(
+            {"threshold": 0.37, "uncertainty": {"measure": measure, "units": "u",
+                                                "status": "s"}}))
+        assert assets_run.run(args) == 0
+        prio = json.loads((out / "assets_metadata.json").read_text(encoding="utf-8"))[
+            "inspection_priority"]
+        assert prio["uncertainty_measure"] == measure
+        assert (prio["uncertainty_high"] is None) is expect_none

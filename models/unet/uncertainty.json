@@ -3,7 +3,7 @@
   "measure": "entropy_p",
   "units": "биты, 0…1",
   "selection_rule": "max worst-event AUROC(u -> error) on validation (Sri-Lanka, Nigeria); a simpler measure (order entropy_p, threshold_margin, member_std, mutual_info) wins when the chip-bootstrap 95 % interval of the difference contains 0; error = (p >= threshold) != LabelHand",
-  "status": "связь с ошибками проверена на validation (часть подбора калибровки и порога) и на dev (USA, не участвовал в выборе); на test — через eval-test",
+  "status": "связь с ошибками проверена на validation (часть подбора калибровки и порога) и на dev (USA: в выборе показателя и калибровке не участвовал, но на нём выбиралась эпоха модели, D-019); на test не проверено до eval-test",
   "validation": {
     "Nigeria": {
       "auroc": 0.8931111210882091,

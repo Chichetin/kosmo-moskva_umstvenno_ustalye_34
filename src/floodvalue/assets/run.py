@@ -138,6 +138,10 @@ def run(args) -> int:
     if prediction.get("chip_id") not in (None, chip_id):
         prediction = {}
     mask_threshold = prediction.get("threshold")
+    if not (prediction.get("uncertainty") or {}).get("measure"):
+        # values and their meaning must come from the same predict run: a raster without its
+        # measure in prediction.json of this chip is ignored (entropy fallback, unverified)
+        unc_raster = None
     unc_meta = uncertainty_meta(unc_raster is not None, p_range is not None,
                                 prediction.get("uncertainty") or {})
 
