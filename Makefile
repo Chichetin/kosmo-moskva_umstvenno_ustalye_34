@@ -5,7 +5,7 @@ BUDGET ?=
 OUT ?=
 GPU ?=
 TAG ?=
-STAGE_ARGS = $(if $(CHIP),--chip $(CHIP)) $(if $(BUDGET),--budget $(BUDGET)) $(if $(OUT),--out $(OUT))
+STAGE_ARGS = $(if $(CHIP),--chip $(CHIP)) $(if $(S1),--s1 $(S1)) $(if $(BUDGET),--budget $(BUDGET)) $(if $(OUT),--out $(OUT))
 
 # GPU-окружение для обучения (scripts/setup_gpu_env.sh, D-024): отдельный venv вне
 # репозитория, вне uv.lock (тот фиксирует CPU-torch для инференса у жюри, D-003).
