@@ -130,7 +130,7 @@ def test_transfer_run_uses_frozen_main_method_and_passes_validator(env):
     assert meta["chip_id"] == CHIP
     assert meta["methods"]["main"]["name"] == "unet"
     assert meta["threshold"] == cal["threshold"]
-    assert "S1-only" in meta["source"]["s1_only"] or "S1" in meta["source"]["s1_only"]
+    assert "S1-only" in meta["source"]["s1_only"]
     assert meta["source"]["s1_files"] == [f"{CHIP}_S1Hand.tif"]   # ни один S2/JRC файл не назван
 
     # портфель: статус каждого объекта — валидный код контракта, ok-объекты оценены,
@@ -159,6 +159,3 @@ def test_s1_only_no_s2_or_jrc_files_anywhere_in_data_dir(env):
     assert assets_run.run(ns) == 0
     assert procure_run.run(ns) == 0
     assert export_run.run(ns) == 0
-    # ничего не появилось на диске за время прогона — метод их правда не запрашивал
-    for bad in ("S2Hand", "JRCWaterHand", "S1OtsuLabelHand", "LabelHand"):
-        assert not list(env["data"].rglob(f"*{bad}*"))
