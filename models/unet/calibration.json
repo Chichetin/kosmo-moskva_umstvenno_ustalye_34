@@ -54,7 +54,7 @@
   },
   "post_processing": "none (3x3 mean of p checked on validation, see report)",
   "nodata": "NaN in raw p (S1 not finite) stays NaN -> -9999 / 255 in rasters; label -1 excluded from fit and metrics",
-  "created_at": "2026-09-25T16:45:00+00:00",
-  "commit": "496d22e0ffb82d573a4afbe0bcde400e4a4e2c14",
+  "created_at": "2026-09-25T16:53:23+00:00",
+  "commit": "f3b06fbe55098ffd7312453e96c6ad6ed79ed639",
   "report": "docs/verification/calibration-val.md"
 }
