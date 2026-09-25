@@ -33,6 +33,9 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--chip", help="chip_id, например Ghana_103272")
         p.add_argument("--budget", type=float, help="бюджет платных данных, руб.")
         p.add_argument("--out", help="каталог результатов (по умолчанию FLOODVALUE_OUTPUT_DIR)")
+        if name == "eval-test":
+            p.add_argument("--part", choices=["dev", "validation", "test"], default="test",
+                           help="часть split; test — только с FLOODVALUE_EVAL_TEST_CONFIRM")
     return parser
 
 
