@@ -115,7 +115,32 @@ CHIP=Sri-Lanka_713926` — проверено в этом PR. Inference на д�
 (`uv run --frozen python -m floodvalue predict --chip Nigeria_1095404`, вход только
 `S1Hand`, `valid_pixels: 262144`) — до заморозки функций чипы `test`-части (Spain,
 Mekong, Bolivia) не используются нигде, кроме будущего `make eval-test` (D-010,
-раздел «Ограничения и развитие»).
+раздел «Ограничения и развитие»). Полный сквозной путь до 12 файлов на другом чипе —
+подраздел ниже.
+
+### Полный запуск на другом официальном чипе
+
+Жюри может самостоятельно повторить inference на любом другом официальном S1-чипе
+Sen1Floods11 (task.md, «Проверка на защите») — без подгонки: метод, калибратор и порог
+зафиксированы в `models/unet/` и не зависят от `--chip`.
+
+```bash
+set -a; . ./.env; set +a
+make all CHIP=<chip_id> BUDGET=<руб>     # например CHIP=Nigeria_81933 BUDGET=5000
+make validate OUT=outputs/<chip_id>_<руб>_<commit>
+```
+
+Основной метод и baseline читают **только** `S1Hand` (VV/VH) — ни `S2Hand`, ни
+`JRCWaterHand`, ни метка не нужны и не читаются на этапах `predict`/`assets`/`procure`
+(проверено запуском на изолированном каталоге данных без единого файла S2/JRC —
+`docs/verification/transfer-val.md` §4). Перенос на 4 официальных чипах из
+`dev`/`validation` (USA, Nigeria, Sri-Lanka, включая чип с 66,6 % nodata в S1) — метрики,
+причины ошибок и картинки в `docs/verification/transfer-val.md`; `12/12` на каждом.
+
+`decision_at`/`decision_deadline` (сроки для A/B/C) берутся от даты S1 обрабатываемого
+чипа (D-043, #84): например, `USA_198411` → `2019-05-22T23:59:59+00:00` /
+`2019-05-23T11:59:59+00:00` — правка `configs/run.yaml` при смене чипа не нужна
+(`docs/verification/transfer-val.md` §7).
 
 ## Результаты
 
