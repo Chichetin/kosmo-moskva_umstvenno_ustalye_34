@@ -7,9 +7,11 @@ and missing estimates move assets between groups, the social rule is a position 
 
 from floodvalue.assets.portfolio import binary_entropy
 
-# Operator policy, not fitted on data: with p calibrated on validation (D-029), p < 0.1 reads
-# as "water (the map shows all water, not only the flood) at the asset pixel in about <= 10 % of
-# such cases" -> likely dry. The mask threshold is a pixel-map choice (IoU), not this one.
+# Operator policy, not fitted on data. Calibrated p on validation (D-029,
+# docs/verification/calibration/reliability.csv): water (all water, not only the flood) in 1.5 %
+# of pixels with p < 0.067, but 16.9 % in the bin 0.067-0.133 (mean p 0.094) -- near the
+# boundary about one pixel in six is water, so "likely_dry" is a priority, not a guarantee.
+# The mask threshold is a pixel-map choice (IoU), not this one.
 P_DRY = 0.1
 # High uncertainty for the current measure (binary entropy of p in bits, D-018): H(P_DRY), so
 # "the model is not sure" <=> p in [0.1, 0.9] -- the same boundary, no second tuned number.
@@ -40,8 +42,11 @@ RULE = (
     f"не ниже места {SOCIAL_MAX_POSITION} (первая волна осмотра, треть портфеля); из likely_dry "
     "не поднимаются; EL, V, q и rank при этом не меняются, рубли на коэффициент важности не "
     f"умножаются. p = {P_DRY} — граница политики оператора, не подобрана на данных: по "
-    "калибровке на validation (D-029) в пикселе объекта вода (карта воды, не только затопление) "
-    "примерно в ≤ 10 % таких случаев; порог маски карты для осмотра не используется. Порог "
+    "калибровке на validation (D-029, docs/verification/calibration/reliability.csv) вода (карта "
+    "воды, не только затопление) при p < 0,067 — в 1,5 % пикселей, но в корзине 0,067–0,133 "
+    "(среднее p 0,094) — в 16,9 %: у границы примерно каждый шестой пиксель — вода, поэтому "
+    "likely_dry — последняя очередь осмотра, а не гарантия «сухо»; порог маски карты для "
+    "осмотра не используется. Порог "
     f"неопределённости для бинарной энтропии p (D-018) = H({P_DRY}) ≈ {UNCERTAINTY_HIGH:.3f} "
     "бит, т. е. та же граница по p; пересмотреть после замены показателя неопределённости "
     "(#21). Если порог для показателя не задан — неопределённость только тай-брейк."

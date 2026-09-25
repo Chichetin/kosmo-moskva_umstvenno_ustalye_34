@@ -115,10 +115,13 @@ def run(args) -> int:
     _write_csv(out / "asset_loss.csv", LOSS_FIELDS, [{**r, "chip_id": chip_id} for r in loss_rows])
 
     sensitivity_rows = el_sensitivity(assets, loss_rows)
-    # flood_mask.tif threshold, only to explain "dry on the map but at risk" in the reasons.
+    # flood_mask.tif threshold, only to explain "dry on the map but at risk" in the reasons;
+    # a prediction.json of another chip is ignored (same chip_id rule as export).
     prediction_path = out / "prediction.json"
-    mask_threshold = (json.loads(prediction_path.read_text(encoding="utf-8")).get("threshold")
-                      if prediction_path.is_file() else None)
+    prediction = (json.loads(prediction_path.read_text(encoding="utf-8"))
+                  if prediction_path.is_file() else {})
+    mask_threshold = (prediction.get("threshold")
+                      if prediction.get("chip_id") in (None, chip_id) else None)
     order = inspection_order(loss_rows, {a.asset_id: a.asset_class for a in assets},
                              mask_threshold=mask_threshold)
     _write_csv(out / "assets_sensitivity.csv", SENSITIVITY_FIELDS, sensitivity_rows)

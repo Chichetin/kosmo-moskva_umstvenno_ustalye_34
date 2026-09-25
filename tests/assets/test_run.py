@@ -139,3 +139,17 @@ def test_run_writes_inspection_priority_and_keeps_el_rank(setup):
     assert all(o["el_rank"] == rank[o["asset_id"]] for o in order)
     assert set(ip["scenario_changes"]) == {
         r["scenario_id"] for r in read_csv(out / "assets_sensitivity.csv")}
+
+
+@pytest.mark.parametrize("pred_chip, expected", [("Test_1", 0.5), ("Other_2", None)])
+def test_run_takes_mask_threshold_only_from_prediction_of_same_chip(setup, pred_chip, expected):
+    # A stale prediction.json of another chip must not put its threshold into the reasons.
+    args, out, _ = setup
+    (out / "prediction.json").write_text(json.dumps({"chip_id": pred_chip, "threshold": 0.5}),
+                                         encoding="utf-8")
+    assert assets_run.run(args) == 0
+    ip = json.loads((out / "assets_metadata.json").read_text(encoding="utf-8"))[
+        "inspection_priority"]
+    assert ip["mask_threshold"] == expected
+    below_map = any("ниже порога карты" in o["reason"] for o in ip["order"])
+    assert below_map == (expected is not None)  # p = 0.4 everywhere, below 0.5
