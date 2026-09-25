@@ -6,6 +6,7 @@ import json
 import numpy as np
 import rasterio
 from rasterio.transform import from_origin
+from shapely.geometry import Point, box, shape
 
 from floodvalue import procurement
 from floodvalue.cli import main
@@ -72,7 +73,8 @@ def test_cli_procure_writes_contract_files(tmp_path):
         cmp_ = {r["strategy"]: r for r in csv.DictReader(f)}
     assert float(cmp_["C"]["data_cost_rub"]) <= 5000
     assert cmp_["B"]["budget_feasible"] == "false"
-    assert cmp_["B"]["residual_uncertainty"] == ""
+    assert cmp_["B"]["uncertainty_status"] == "scenario"
+    assert float(cmp_["B"]["residual_uncertainty"]) == 0.0  # B покрывает все объекты
     assert abs(sum(float(r["cost_rub"]) for r in rows if r["strategy"] == "C")
                - float(cmp_["C"]["data_cost_rub"])) < 1e-9
     with open(tmp_path / "procurement_sensitivity.csv", encoding="utf-8") as f:
@@ -81,7 +83,10 @@ def test_cli_procure_writes_contract_files(tmp_path):
     assert {r["scenario_id"] for r in sens if r["scenario_id"].startswith("rate_")} >= {
         "rate_x0.5", "rate_x1.5"}
     meta = json.loads((tmp_path / "procurement_metadata.json").read_text(encoding="utf-8"))
-    assert "N-OPT-LATE" in meta["zones"]["excluded_from_coverage"]
+    assert "W-CHIP-OL" in meta["zones"]["excluded_from_coverage"]
+    assert meta["other_cost"]["status"] == "scenario"
+    assert "бинарная энтропия" in meta["zones"]["uncertainty_source"]
+
 
 
 def test_cli_missing_assets(tmp_path):
@@ -107,9 +112,74 @@ def test_stale_catalog_file_is_not_used(tmp_path):
     assert "A10" in c["covered_asset_ids"].split()
 
 
-def test_late_optical_zone_inside_chip(tmp_path):
+def test_zones_inside_chip_except_asset_buffers(tmp_path):
     _write_run_dir(tmp_path)
     prun.write_outputs(tmp_path, 5000)
     cat = json.loads((tmp_path / "candidate_orders.geojson").read_text(encoding="utf-8"))
-    area = {f["properties"]["candidate_id"]: f["properties"]["area_km2"] for f in cat["features"]}
-    assert area["N-OPT-LATE"] <= area["W-CHIP"]
+    assert "build" not in cat  # служебные метаданные — в procurement_metadata.json
+    with rasterio.open(tmp_path / "flood_probability.tif") as src:
+        chip = box(*src.bounds).buffer(1e-9)
+    kinds = set()
+    for f in cat["features"]:
+        kinds.add(f["properties"]["zone_kind"])
+        if f["properties"]["zone_kind"] != "asset_buffer":
+            assert chip.covers(shape(f["geometry"])), f["properties"]["candidate_id"]
+    assert kinds == {"asset_buffer", "el_cluster", "uncertainty_cluster", "grid", "wide"}
+
+
+def test_uncertainty_tif_is_used_when_present(tmp_path):
+    """uncertainty.tif (контракт §2) заменяет запасную энтропию без правки кода."""
+    _write_run_dir(tmp_path)
+    with rasterio.open(tmp_path / "flood_probability.tif") as src:
+        prof = src.profile
+    u = np.zeros((512, 512), dtype="float32")
+    u[300:400, 300:400] = 1.0
+    with rasterio.open(tmp_path / "uncertainty.tif", "w", **prof) as f:
+        f.write(u, 1)
+    prun.write_outputs(tmp_path, 5000)
+    meta = json.loads((tmp_path / "procurement_metadata.json").read_text(encoding="utf-8"))
+    assert meta["zones"]["uncertainty_source"].startswith("uncertainty.tif")
+    cat = json.loads((tmp_path / "candidate_orders.geojson").read_text(encoding="utf-8"))
+    (u1,) = {f["properties"]["geometry_id"]: f for f in cat["features"]
+             if f["properties"]["zone_kind"] == "uncertainty_cluster"}.values()
+    x, y = prof["transform"] @ (350, 350)
+    assert shape(u1["geometry"]).covers(Point(x, y))
+
+
+def test_plan_social_switch(tmp_path):
+    """plan(..., social=True) включает ограничение без правки конфигов; в run.yaml — выключено."""
+    _write_run_dir(tmp_path)
+    with open(tmp_path / "assets.csv", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    rows[0]["asset_class"] = "clinic"  # A01 — наименьший EL
+    with open(tmp_path / "assets.csv", "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w.writeheader()
+        w.writerows(rows)
+    off = procurement.plan(tmp_path, 2500)
+    on = procurement.plan(tmp_path, 2500, social=True)
+    c_on = next(r for r in on["comparison"] if r["strategy"] == "C")
+    assert "A01" in c_on["covered_asset_ids"].split()
+    assert on["social_constraint"]["satisfied"] is True
+    assert off["plans"]["C"] != on["plans"]["C"]
+    prun.write_outputs(tmp_path, 2500)
+    with open(tmp_path / "procurement_sensitivity.csv", encoding="utf-8") as f:
+        sens = [r for r in csv.DictReader(f) if r["scenario_id"] == "social_constraint_on"]
+    assert len(sens) == 1 and "A01" in sens[0]["changed_inputs_json"]
+
+
+def test_procurement_files_pass_validator_on_fixture(tmp_path):
+    """Эталонный комплект с перестроенными procure файлами: 4 файла закупки без ошибок
+    валидатора (цена, скидка по корзине, охват covers, бюджет, статусы неопределённости)."""
+    import shutil
+
+    from floodvalue.export.validate import FIXTURE_RUN, validate_run
+    run = tmp_path / "run"
+    shutil.copytree(FIXTURE_RUN, run)
+    meta = json.loads((run / "run_metadata.json").read_text(encoding="utf-8"))
+    budget = meta["budget"]["budget_rub"]
+    prun.write_outputs(run, budget)
+    errors = validate_run(run)
+    for name in ("candidate_orders.geojson", "procurement_plan.csv", "strategy_plans.json",
+                 "strategy_comparison.csv"):
+        assert errors[name] == [], (name, errors[name])
