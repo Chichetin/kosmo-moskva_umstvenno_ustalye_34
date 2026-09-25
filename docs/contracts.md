@@ -152,6 +152,16 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
   1e-4), пусто ⇔ Σ EL = 0; `residual_uncertainty` пусто ⇔ `not_estimated`; A — `baseline`;
   у A платных зон нет, поэтому её `covered_expected_loss_rub` = 0, иное — только с
   объяснением в `run_metadata.strategies.coverage_A`.
+- `metrics.csv` комплекта (§7): каждая строка `method=main` (любой `split` —
+  dev/validation/test — и любой `event`) имеет `threshold`, равный `run_metadata.threshold`
+  (единицы p, допуск 1e-9), — метрики main посчитаны тем же порогом, что и `flood_mask.tif`;
+  пустой или нечисловой `threshold` у main — ошибка. Строки `baseline` (порог в dB канала)
+  с `run_metadata.threshold` не сравниваются. Ошибка приписывается `run_metadata.json` (#75).
+  Производитель — `export/run.py::_metrics` (строки main — из
+  `docs/verification/calibration/<method>-metrics.csv` при калибраторе, #62). Если
+  калибратор применён, а калиброванных метрик нет, export пишет предупреждение и берёт
+  сырые строки с другим порогом — `validate` на таком комплекте даёт FAIL (так задумано:
+  метрики не описывают маску; лечится `make calibrate`).
 - `sensitivity.csv`: ключи `changed_inputs_json` для обязательных вариаций —
   `p_flood`, `asset_value_rub`, `vulnerability_coef`, `budget_rub`, `base_rate_rub_km2`;
   на каждый — хотя бы одна строка, где из этих пяти изменён только он (другие ключи,
@@ -196,6 +206,8 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
 `assets_metadata.json` модуля `assets` (D-018) экспорт переносит так: `seed`,
 `placement_rule` → `portfolio`; `el_model`, `p_extraction_rule`, `status_rule` →
 `expected_loss`; `uncertainty` → `uncertainty` (пока `binary_entropy_bits`, биты, временно).
+Необязательный `inspection_priority` (D-035: очерёдность осмотра рядом с `rank`, который
+не меняется) → `expected_loss.inspection_priority`; в прогоне до D-035 — `null`.
 
 ## 9. `source_manifest.json` (схема `SourceManifest`)
 
