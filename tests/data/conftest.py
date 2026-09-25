@@ -94,7 +94,20 @@ def raw(tmp_path, monkeypatch):
          "properties": {"location": "Cambodia", "s1_date": "2018/08/05"}}]}
     (raw / "Sen1Floods11_Metadata.geojson").write_text(json.dumps(meta))
     write_bucket_manifest(raw)
+    write_split(tmp_path / "split_v1.json", monkeypatch)
     return raw
+
+
+def write_split(path, monkeypatch, *, validation=("Sri-Lanka_713926",), test=("Mekong_922373",)):
+    """Frozen-split stand-in: Sri-Lanka chip open (validation), Mekong chip sealed (test)."""
+    from floodvalue.data import fetch, split
+
+    doc = {"train": [], "dev": [], "validation": list(validation), "test": list(test),
+           "excluded": {}}
+    doc["sha256"] = split.canonical_hash(doc)
+    path.write_text(json.dumps(doc))
+    monkeypatch.setattr(fetch, "SPLIT_PATH", path)
+    return path
 
 
 @pytest.fixture

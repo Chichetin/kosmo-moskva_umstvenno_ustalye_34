@@ -3,8 +3,8 @@
 Layout under $FLOODVALUE_DATA_DIR/raw mirrors the bucket without the `v1.1/data/flood_events/`
 prefix: raw/HandLabeled/<LAYER>/<EVENT>_<ID>_<LAYER>.tif.
 
-The readers do not know the split. Callers must not pass test chips: only `eval-test`
-reads them (D-010).
+`load_label` refuses chips of test events unless `allow_test=True` (only `eval-test`,
+D-010). `load_s1` is split-agnostic: inference on any official chip is allowed.
 """
 
 from pathlib import Path
@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 import rasterio
 
+from floodvalue.data.split import EVENT_PARTS, SealedTestError
 from floodvalue.paths import data_dir
 
 S1_LAYER = "S1Hand"
@@ -65,9 +66,13 @@ def load_s1(chip_id: str) -> tuple[np.ndarray, dict]:
     return arr, profile
 
 
-def load_label(chip_id: str) -> tuple[np.ndarray, dict]:
+def load_label(chip_id: str, *, allow_test: bool = False) -> tuple[np.ndarray, dict]:
     """LabelHand as int16 (H, W): -1 no reliable label, 0 not water, 1 water.
-    -1 is not declared as nodata in the file; mask it yourself. Train/validation only."""
+    -1 is not declared as nodata in the file; mask it yourself.
+    Chips of test events are sealed (D-010, D-016): only eval-test passes allow_test=True."""
+    event, _ = parse_chip_id(chip_id)
+    if event in EVENT_PARTS["test"] and not allow_test:
+        raise SealedTestError(f"{chip_id}: test labels are sealed; only eval-test reads them")
     with rasterio.open(layer_path(chip_id, LABEL_LAYER)) as src:
         arr = src.read(1).astype(np.int16, copy=False)
         profile = dict(src.profile)

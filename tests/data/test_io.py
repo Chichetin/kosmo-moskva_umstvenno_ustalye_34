@@ -32,8 +32,16 @@ def test_load_s1_returns_db_values_unchanged_with_nan(raw):
     assert profile["crs"].to_string() == "EPSG:4326"
 
 
+def test_load_label_refuses_test_event_without_flag(raw):
+    from floodvalue.data.split import SealedTestError
+    with pytest.raises(SealedTestError):
+        io.load_label("Mekong_922373")
+    lab, _ = io.load_label("Mekong_922373", allow_test=True)
+    assert lab.dtype == np.int16
+
+
 def test_load_label_int16(raw):
-    lab, _ = io.load_label("Mekong_922373")
+    lab, _ = io.load_label("Sri-Lanka_713926")
     assert lab.dtype == np.int16
     np.testing.assert_array_equal(lab, label_array())
 

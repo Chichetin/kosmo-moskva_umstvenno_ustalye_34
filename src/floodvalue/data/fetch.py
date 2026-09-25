@@ -30,6 +30,7 @@ from floodvalue.data.io import (
     parse_chip_id,
     raw_dir,
 )
+from floodvalue.data.split import OPEN_PARTS, SPLIT_PATH, load_split
 
 BUCKET = "sen1floods11"
 API = f"https://storage.googleapis.com/storage/v1/b/{BUCKET}/o"
@@ -62,6 +63,7 @@ QC_FIELDS = [
     "chip_id", "event_id", "s1_file", "s1_sha256", "s1_md5_ok", "label_file", "label_sha256",
     "label_md5_ok", "jrc_file", "jrc_sha256", "width", "height", "crs", "s1_bands", "s1_dtype",
     "s1_nodata", "s1_band_names", "label_bands", "label_dtype", "grid_match",
+    "label_checked",
     "vv_nan_frac", "vh_nan_frac", "vv_min", "vv_median", "vv_max", "vh_min", "vh_median",
     "vh_max", "db_scale_ok", "label_values", "label_values_ok", "label_invalid_frac",
     "valid_frac", "qc_pass", "usable", "issues",
@@ -184,6 +186,17 @@ def event_s1_date(event_id: str, dates: dict[str, str]) -> str | None:
     return dates.get(EVENT_ALIASES.get(event_id, event_id))
 
 
+def label_readable_chips(path: Path | None = None) -> set[str]:
+    """Chips whose label pixels QC may read: train/dev/validation and `excluded` of the
+    frozen split. Test chips are sealed (D-010): QC sees only their header and file hash.
+    No split file -> no label pixels are read at all (fail closed)."""
+    path = path or SPLIT_PATH
+    if not path.exists():
+        return set()
+    split = load_split(path)
+    return {c for part in OPEN_PARTS for c in split[part]} | set(split.get("excluded", {}))
+
+
 # --- QC ------------------------------------------------------------------------------------
 
 def file_hashes(path: Path) -> tuple[str, str]:
@@ -224,7 +237,9 @@ def db_scale_ok(vv: np.ndarray, vh: np.ndarray) -> bool | None:
     return bool(np.median(fv) < 0 and np.median(fh) < 0 and max(fv.max(), fh.max()) <= DB_MAX)
 
 
-def qc_chip(chip_id: str, raw: Path, bucket: dict) -> dict:
+def qc_chip(chip_id: str, raw: Path, bucket: dict, read_label: bool = True) -> dict:
+    """QC one chip. With read_label=False (sealed test chip) the label file is hashed and
+    its header (dtype, bands, CRS, grid) checked, but its pixels are never read."""
     event_id, _ = parse_chip_id(chip_id)
     issues: list[str] = []  # format / integrity problems -> qc_pass=False
     notes: list[str] = []  # data properties worth knowing (all-NaN, all -1, extremes)
@@ -238,11 +253,12 @@ def qc_chip(chip_id: str, raw: Path, bucket: dict) -> dict:
             continue
         sha, md5 = file_hashes(raw / rel)
         row[f"{key}_sha256"] = sha
+        expected = bucket.get(bucket_name(rel), {}).get("md5Hash")
         if key != "jrc":
-            expected = bucket.get(bucket_name(rel), {}).get("md5Hash")
             row[f"{key}_md5_ok"] = "" if expected is None else md5 == expected
-            if expected is not None and md5 != expected:
-                issues.append(f"{layer} md5 mismatch")
+        if expected is not None and md5 != expected:
+            # a corrupted file fails the chip, JRC included; only a missing JRC is tolerated
+            issues.append(f"md5 mismatch: {layer}")
     if any(i.endswith("missing") and not i.startswith(JRC_LAYER) for i in issues):
         row.update(qc_pass=False, usable=False, issues="; ".join(issues))
         return row
@@ -254,7 +270,8 @@ def qc_chip(chip_id: str, raw: Path, bucket: dict) -> dict:
                    label_bands=lb.count, label_dtype=",".join(sorted(set(lb.dtypes))),
                    grid_match=grids_match(s1, lb))
         s1_arr = s1.read()
-        label = lb.read(1)
+        label = lb.read(1) if read_label else None
+    row["label_checked"] = read_label
     if row["s1_bands"] != 2:
         issues.append(f"S1 bands={row['s1_bands']} (expected 2)")
     if row["s1_dtype"] != "float32":
@@ -263,6 +280,10 @@ def qc_chip(chip_id: str, raw: Path, bucket: dict) -> dict:
         issues.append(f"label bands={row['label_bands']}")
     if row["label_dtype"] != "int16":
         issues.append(f"label dtype={row['label_dtype']}")
+    if row["s1_nodata"] != "nan":
+        issues.append(f"S1 nodata={row['s1_nodata']} (expected nan)")
+    if row["s1_band_names"] != "VV/VH":
+        issues.append(f"S1 band names={row['s1_band_names']} (expected VV/VH)")
     if row["crs"] != "EPSG:4326":
         issues.append(f"crs={row['crs']}")
     if not row["grid_match"]:
@@ -281,26 +302,28 @@ def qc_chip(chip_id: str, raw: Path, bucket: dict) -> dict:
         if lows and min(float(v) for v in lows) < DB_LOW_WARN:
             notes.append(f"S1 min < {DB_LOW_WARN:g} dB (clip)")
 
-    values = sorted(int(v) for v in np.unique(label))
-    row["label_values"] = " ".join(str(v) for v in values)
-    row["label_values_ok"] = set(values) <= {-1, 0, 1}
-    if not row["label_values_ok"]:
-        issues.append(f"label values {values}")
-    row["label_invalid_frac"] = _num(float((label == -1).mean()))
-
-    valid = (label != -1)
-    if s1_arr.shape[0] >= 2 and s1_arr.shape[1:] == label.shape:
-        valid = valid & np.isfinite(s1_arr[:2]).all(axis=0)
-    row["valid_frac"] = _num(float(valid.mean()))
+    valid = np.isfinite(s1_arr[:2]).all(axis=0)
+    if label is not None:
+        values = sorted(int(v) for v in np.unique(label))
+        row["label_values"] = " ".join(str(v) for v in values)
+        row["label_values_ok"] = set(values) <= {-1, 0, 1}
+        if not row["label_values_ok"]:
+            issues.append(f"label values {values}")
+        row["label_invalid_frac"] = _num(float((label == -1).mean()))
+        if valid.shape == label.shape:
+            valid = valid & (label != -1)
+        if (label == -1).all():
+            notes.append("label all -1")
+        row["valid_frac"] = _num(float(valid.mean()))
+    else:
+        notes.append("label pixels sealed (test)")
     if not np.isfinite(s1_arr).any():
         notes.append("S1 all NaN")
-    if (label == -1).all():
-        notes.append("label all -1")
 
     # JRC is diagnostics only (D-007): its absence does not fail the chip.
     hard = [i for i in issues if not i.startswith(JRC_LAYER)]
     row["qc_pass"] = not hard
-    # usable = format is fine and at least one pixel has finite S1 and a label.
+    # usable = format is fine and at least one pixel has finite S1 (and a label, if read).
     row["usable"] = row["qc_pass"] and bool(valid.any())
     row["issues"] = "; ".join(issues + notes)
     return row
@@ -381,8 +404,12 @@ def run(args=None) -> int:
     print(f"data: {len(chips)} чипов, скачано файлов: {n_base + n_chips}", flush=True)
 
     bucket = load_bucket_manifest(raw)
+    readable = label_readable_chips()
+    if not readable:
+        print(f"data: нет {SPLIT_PATH.name} — пиксели меток не читаются (test запечатан)",
+              flush=True)
     with ThreadPoolExecutor(min(8, os.cpu_count() or 1)) as ex:
-        rows = list(ex.map(lambda c: qc_chip(c, raw, bucket), chips))
+        rows = list(ex.map(lambda c: qc_chip(c, raw, bucket, c in readable), chips))
     out = interim_dir()
     write_qc(rows, out / "qc.csv")
     dates = event_dates(raw)
@@ -393,6 +420,9 @@ def run(args=None) -> int:
 
     failed = [r for r in rows if not r["qc_pass"]]
     unusable = [r for r in rows if r["qc_pass"] and not r["usable"]]
+    n_lab = sum(bool(r.get("label_checked")) for r in rows)
+    print(f"data: пиксели меток прочитаны у {n_lab} чипов (train/dev/validation/excluded), "
+          f"у {len(rows) - n_lab} — только заголовок и хеш", flush=True)
     print(f"data: QC формата {len(rows) - len(failed)}/{len(rows)}; без валидных пикселей "
           f"{len(unusable)}: {' '.join(r['chip_id'] for r in unusable)} -> {out / 'qc.csv'}",
           flush=True)

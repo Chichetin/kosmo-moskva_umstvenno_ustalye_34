@@ -107,6 +107,25 @@ def test_qc_flags_broken_chip(raw, kw, issue):
     assert issue in r["issues"]
 
 
+@pytest.mark.parametrize("layer", ["S1Hand", "JRCWaterHand"])
+def test_qc_flags_md5_mismatch_any_layer(raw, layer):
+    write_chip(raw, "USA_1")
+    write_bucket_manifest(raw)
+    p = raw / f"HandLabeled/{layer}/USA_1_{layer}.tif"
+    p.write_bytes(p.read_bytes() + b"x")
+    r = fetch.qc_chip("USA_1", raw, fetch.load_bucket_manifest(raw))
+    assert not r["qc_pass"] and f"md5 mismatch: {layer}" in r["issues"]
+
+
+def test_qc_checks_s1_nodata_and_band_names(raw):
+    from .conftest import write_tif
+    write_chip(raw, "USA_1")
+    write_tif(raw / "HandLabeled/S1Hand/USA_1_S1Hand.tif", s1_array(), "float32",
+              nodata=-9999.0, descriptions=("HH", "HV"))
+    r = fetch.qc_chip("USA_1", raw, {})
+    assert not r["qc_pass"] and "nodata" in r["issues"] and "band names" in r["issues"]
+
+
 def test_qc_flags_md5_mismatch(raw):
     write_chip(raw, "USA_1")
     write_bucket_manifest(raw)
@@ -164,3 +183,40 @@ def test_event_date_alias_and_unknown():
     dates = {"Cambodia": "2018-08-05"}
     assert fetch.event_s1_date("Mekong", dates) == "2018-08-05"
     assert fetch.event_s1_date("Atlantis", dates) is None
+
+
+def test_test_chip_label_pixels_are_never_read(raw, offline):
+    # Sealed test chip with an impossible label value: QC must not see it.
+    write_chip(raw, "Mekong_922373", label=np.full((8, 8), 7, np.int16))
+    write_bucket_manifest(raw)
+    assert fetch.run(None) == 0
+    r = read_qc(raw.parent)["Mekong_922373"]
+    assert r["label_checked"] == "False"
+    assert r["label_values"] == r["label_values_ok"] == r["label_invalid_frac"] == ""
+    assert r["valid_frac"] == "" and "sealed" in r["issues"]
+    assert r["label_sha256"] and r["grid_match"] == "True" and r["qc_pass"] == "True"
+    assert read_qc(raw.parent)["Sri-Lanka_713926"]["label_checked"] == "True"
+
+
+def test_test_chip_label_header_still_checked(raw, offline):
+    write_chip(raw, "Mekong_922373", dtype="uint8")
+    write_bucket_manifest(raw)
+    assert fetch.run(None) == 1
+    r = read_qc(raw.parent)["Mekong_922373"]
+    assert "label dtype" in r["issues"] and r["label_values"] == ""
+
+
+def test_no_split_file_reads_no_label_pixels(raw, offline, monkeypatch):
+    monkeypatch.setattr(fetch, "SPLIT_PATH", raw / "absent.json")
+    assert fetch.label_readable_chips() == set()
+    assert fetch.run(None) == 0
+    assert {r["label_checked"] for r in read_qc(raw.parent).values()} == {"False"}
+
+
+def test_readable_chips_are_open_parts_and_excluded(tmp_path, monkeypatch):
+    from floodvalue.data import split
+    doc = {"train": ["A_1"], "dev": ["B_2"], "validation": ["C_3"], "test": ["D_4"],
+           "excluded": {"E_5": "all -1"}}
+    doc["sha256"] = split.canonical_hash(doc)
+    (tmp_path / "s.json").write_text(json.dumps(doc))
+    assert fetch.label_readable_chips(tmp_path / "s.json") == {"A_1", "B_2", "C_3", "E_5"}
