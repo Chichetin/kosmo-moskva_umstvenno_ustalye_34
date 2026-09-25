@@ -47,12 +47,13 @@ def test_rows_match_direct_confusion_and_share_mask_hash():
         tot = None
         for cid in ids:
             s1, label = data[cid]
-            valid = metrics.valid_mask(s1, label)
+            valid = run.core.valid_mask(s1, label)
             pred = s1[ch] <= params["threshold_db"]
-            tot = metrics.add_counts(metrics.confusion(pred, label, valid), tot)
+            c = metrics.confusion(pred, label, valid)
+            tot = c if tot is None else metrics.add(tot, c)
         row = next(r for r in res["rows"] if r["split"] == part and r["event"] == "ALL")
         assert {k: row[k] for k in tot} == tot
-        h = metrics.valid_mask_sha256((c, metrics.valid_mask(*data[c])) for c in ids)
+        h = metrics.mask_sha256([run.core.valid_mask(*data[c]) for c in sorted(ids)])
         assert row["valid_mask_sha256"] == h
     assert {r["method"] for r in res["rows"]} == {"baseline"}
     assert {r["event"] for r in res["rows"]} == {"Tr", "Dv", "Va", "ALL"}

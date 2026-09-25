@@ -7,7 +7,7 @@ from rasterio.transform import from_origin
 
 from floodvalue.baseline import predict
 
-CFG = {"channel": "VH", "threshold_db": -20.0, "scale_db": 2.0, "prob_threshold": 0.5}
+CFG = {"channel": "VH", "threshold_db": -20.0, "scale_db": 2.0, "threshold": 0.5}
 
 
 def test_predict_proba_contract():
@@ -30,7 +30,7 @@ def test_rasters_mask_equals_p_ge_threshold_and_nodata():
     p, m = r["flood_probability"], r["flood_mask"]
     ok = p != predict.P_NODATA
     assert p[0, 0] == predict.P_NODATA and m[0, 0] == 255 and r["baseline_mask"][0, 0] == 255
-    assert np.array_equal(m[ok] == 1, p[ok] >= CFG["prob_threshold"])
+    assert np.array_equal(m[ok] == 1, p[ok] >= CFG["threshold"])
     assert set(np.unique(m)) <= {0, 1, 255}
     assert np.array_equal(r["baseline_mask"][ok] == 1, s1[1][ok] <= CFG["threshold_db"])
 
@@ -55,7 +55,7 @@ def test_predict_chip_writes_on_s1_grid(tmp_path, monkeypatch):
             assert (r.width, r.height, r.count) == (12, 8, 1)
             assert r.dtypes[0] == dtype and r.nodata == nodata
             assert r.read(1)[2, 2] == nodata
-    assert json.loads((out / "predict.json").read_text())["threshold"] == 0.5
+    assert json.loads((out / "prediction.json").read_text())["threshold"] == 0.5
 
 
 def test_run_without_chip_is_error():
@@ -66,7 +66,8 @@ def test_run_without_chip_is_error():
 
 def test_committed_config_is_complete():
     cfg = predict.load_config()
-    for k in ("channel", "threshold_db", "scale_db", "prob_threshold", "commit", "created_at"):
+    for k in ("channel", "threshold_db", "scale_db", "threshold", "threshold_status",
+              "weights_sha256", "commit", "created_at"):
         assert k in cfg
     assert cfg["channel"] in ("VV", "VH") and cfg["scale_db"] > 0
     assert cfg["fitted_on"] == "train"

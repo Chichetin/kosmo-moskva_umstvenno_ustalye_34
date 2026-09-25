@@ -2,11 +2,11 @@
 
     uv run --frozen python -m floodvalue.baseline.predict --chip Sri-Lanka_713926
 
-Writes to --out (default $FLOODVALUE_OUTPUT_DIR/predict/<chip>/), on the S1 grid:
+Writes to --out (default $FLOODVALUE_OUTPUT_DIR/<chip>/, as model.predict), on the S1 grid:
   flood_probability.tif  Float32, p in [0, 1], nodata -9999
-  flood_mask.tif         UInt8 1/0, nodata 255, 1 <=> p >= prob_threshold
+  flood_mask.tif         UInt8 1/0, nodata 255, 1 <=> p >= threshold
   baseline_mask.tif      UInt8 1/0, nodata 255, the threshold rule itself
-  predict.json           method, thresholds, config sha256
+  prediction.json           method, thresholds, config sha256
 Reads only S1 (S1-only mode); labels are never opened.
 """
 
@@ -42,7 +42,7 @@ def to_rasters(s1_db: np.ndarray, config: dict) -> dict[str, np.ndarray]:
     """Arrays ready to write: p with -9999, masks with 255 where S1 is not finite."""
     p = predict_proba(s1_db, config)
     nodata = ~np.isfinite(p)
-    mask = (p >= config["prob_threshold"]).astype(np.uint8)
+    mask = (p >= config["threshold"]).astype(np.uint8)
     mask[nodata] = MASK_NODATA
     base = core.threshold_mask(s1_db, core.CHANNELS[config["channel"]],
                                config["threshold_db"]).astype(np.uint8)
@@ -72,12 +72,13 @@ def predict_chip(chip_id: str, out_dir: Path, config_path: Path = CONFIG_PATH) -
         with rasterio.open(out_dir / f"{name}.tif", "w", **profile) as dst:
             dst.write(arr, 1)
     meta = {"chip_id": chip_id, "method": "baseline_sigmoid (temporary main method, D-009)",
-            "threshold": config["prob_threshold"],
+            "threshold": config["threshold"],
+            "threshold_status": config.get("threshold_status", ""),
             "baseline_threshold_db": config["threshold_db"], "channel": config["channel"],
             "scale_db": config["scale_db"],
             "config_sha256": hashlib.sha256(config_path.read_bytes()).hexdigest(),
             "s1_file": s1_path(chip_id).name}
-    (out_dir / "predict.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1) + "\n")
+    (out_dir / "prediction.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1) + "\n")
     return out_dir
 
 
@@ -85,7 +86,7 @@ def run(args) -> int:
     if not getattr(args, "chip", None):
         print("predict: нужен --chip <chip_id> (make predict CHIP=...)")
         return 2
-    out = Path(args.out) if getattr(args, "out", None) else output_dir() / "predict" / args.chip
+    out = Path(args.out) if getattr(args, "out", None) else output_dir() / args.chip
     predict_chip(args.chip, out)
     print(f"{args.chip}: flood_probability.tif, flood_mask.tif, baseline_mask.tif -> {out}")
     return 0
