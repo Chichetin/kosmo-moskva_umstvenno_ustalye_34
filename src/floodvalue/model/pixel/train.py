@@ -158,7 +158,7 @@ def eval_chips(parts: dict[str, list[str]], read: Reader, names: list[str], clip
 
 def chip_proba(model, c: EvalChip, cols: list[int] | None = None) -> tuple[np.ndarray, np.ndarray]:
     """(p, water) at the metrics-valid pixels of the chip."""
-    p = np.full(c.s1_ok.shape, np.nan)  # float64 like chip_pred: identical >= t decisions
+    p = np.full(c.s1_ok.shape, np.nan, np.float32)  # float32 as in the p-raster (contract §3)
     if len(c.x):
         p[c.s1_ok] = model.predict_proba(c.x if cols is None else c.x[:, cols])[:, 1]
     return p[c.valid], (c.label == 1)[c.valid]
@@ -192,7 +192,9 @@ def chip_pred(model, c: EvalChip, cols: list[int] | None = None,
     pred = np.zeros(c.s1_ok.shape, bool)
     if len(c.x):
         x = c.x if cols is None else c.x[:, cols]
-        pred[c.s1_ok] = model.predict_proba(x)[:, 1] >= threshold
+        # compare in float32 like predict_proba / flood_probability.tif, so the reported
+        # mask is exactly the published one (float64 differs at p ~ 0.5 - 1e-8)
+        pred[c.s1_ok] = model.predict_proba(x)[:, 1].astype(np.float32) >= threshold
     return pred
 
 

@@ -185,3 +185,19 @@ def test_water_backscatter_medians_use_only_water_pixels():
                          for c in parts["validation"]])
     assert got["validation:Va"][1] == pytest.approx(float(np.median(vh)))
     assert got["validation:Va"][1] < -20 < got["validation:Va"][0]
+
+
+def test_reported_mask_equals_published_predict_proba(fitted):
+    """Metrics use exactly the mask of the contract p-raster (float32 p >= 0.5)."""
+    from floodvalue.model.pixel import predict
+
+    parts, data, sample, chips = fitted
+    names = train.FEATURE_SETS["tex3"]
+    cols = train.columns(names)
+    model = train.fit(sample["x"][:, cols], sample["y"],
+                      {"max_leaf_nodes": 15, "water_weight": 1.0, "max_iter": 20})
+    cfg = {"features": names, "clip_db": CLIP}
+    for c in chips:
+        p = predict.predict_proba(data[c.chip_id][0], model, cfg)
+        np.testing.assert_array_equal(train.chip_pred(model, c, cols),
+                                      np.nan_to_num(p, nan=-1.0) >= 0.5)
