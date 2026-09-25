@@ -20,7 +20,8 @@ from pathlib import Path
 import numpy as np
 
 from floodvalue.baseline import core
-from floodvalue.paths import MODELS_DIR, data_dir, output_dir
+from floodvalue.data import io  # chip reader, exception D-015
+from floodvalue.paths import MODELS_DIR, output_dir
 
 CONFIG_PATH = MODELS_DIR / "baseline" / "config.json"
 P_NODATA = -9999.0
@@ -51,18 +52,12 @@ def to_rasters(s1_db: np.ndarray, config: dict) -> dict[str, np.ndarray]:
             "flood_mask": mask, "baseline_mask": base}
 
 
-def s1_path(chip_id: str) -> Path:
-    return data_dir() / "raw" / "HandLabeled" / "S1Hand" / f"{chip_id}_S1Hand.tif"
-
-
 def predict_chip(chip_id: str, out_dir: Path, config_path: Path = CONFIG_PATH) -> Path:
     import rasterio
 
     config = load_config(config_path)
-    with rasterio.open(s1_path(chip_id)) as src:
-        s1 = src.read().astype(np.float32)
-        grid = {"crs": src.crs, "transform": src.transform, "width": src.width,
-                "height": src.height}
+    s1, profile = io.load_s1(chip_id)  # float32 dB, NaN = no data; never re-logged
+    grid = {k: profile[k] for k in ("crs", "transform", "width", "height")}
     arrays = to_rasters(s1, config)
     out_dir.mkdir(parents=True, exist_ok=True)
     for name, arr in arrays.items():
@@ -77,7 +72,7 @@ def predict_chip(chip_id: str, out_dir: Path, config_path: Path = CONFIG_PATH) -
             "baseline_threshold_db": config["threshold_db"], "channel": config["channel"],
             "scale_db": config["scale_db"],
             "config_sha256": hashlib.sha256(config_path.read_bytes()).hexdigest(),
-            "s1_file": s1_path(chip_id).name}
+            "s1_file": io.layer_path(chip_id, io.S1_LAYER).name}
     (out_dir / "prediction.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return out_dir
 

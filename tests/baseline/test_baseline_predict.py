@@ -73,5 +73,31 @@ def test_committed_config_is_complete():
     assert cfg["fitted_on"] == "train"
 
 
+
+def test_predict_chip_reads_s1_through_shared_loader(tmp_path, monkeypatch):
+    """S1 comes from data.io.load_s1 (D-015), not from a private reader."""
+    from floodvalue.data import io
+
+    tr = from_origin(81.6, 7.7, 8.983152841195215e-05, 8.983152841195215e-05)
+    s1 = np.full((2, 4, 5), -30.0, np.float32)
+    s1[0] = -10.0  # VV bright, VH dark: CFG thresholds VH, so all water only if bands kept
+    seen = []
+
+    def fake_load_s1(chip_id):
+        seen.append(chip_id)
+        return s1, {"crs": rasterio.crs.CRS.from_epsg(4326), "transform": tr,
+                    "width": 5, "height": 4}
+
+    monkeypatch.setattr(io, "load_s1", fake_load_s1)
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps(CFG))
+    out = predict.predict_chip("Sri-Lanka_1", tmp_path / "out", cfg)
+    assert seen == ["Sri-Lanka_1"]
+    with rasterio.open(out / "flood_mask.tif") as r:
+        assert r.transform == tr and (r.read(1) == 1).all()
+    assert json.loads((out / "prediction.json").read_text())["s1_file"] == \
+        "Sri-Lanka_1_S1Hand.tif"
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

@@ -77,9 +77,9 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
 | `assets.geojson` | FeatureCollection из 10 Point; `asset_id`, `chip_id`, `asset_class`, `asset_value_rub`, `vulnerability_coef` | ровно 10, по одному типу, V/q = `configs/assets.yaml`, точка внутри чипа |
 | `assets.csv` | `asset_id`, `chip_id`, `asset_class`, `asset_value_rub`, `vulnerability_coef`, `longitude`, `latitude` | совпадает с geojson |
 | `asset_loss.csv` | `asset_id`, `chip_id`, `p_flood`, `expected_loss_rub`, `uncertainty`, `rank`, `status` (ok/partial/no_data) | EL = p·V·q; p = значение растра в пикселе объекта; `rank` 1 = max EL, тай — по `asset_id`; `partial`/`no_data` → пустые p/EL/rank |
-| `candidate_orders.geojson` | Polygon; `candidate_id`, `sensor_type`, `resolution_m`, `acquisition_type` (new/operational/archive), `data_role` (event_observation/context), `observation_at`, `available_at`, `processing_level` (L0/L1/L2), `usage_type` (internal/limited/unrestricted), `guaranteed_purchase`, `area_km2`, `base_rate_rub_km2`, `base_rate_status`, `base_rate_source` | valid, без дыр, площадь EPSG:6933 ≥ 1 км² до округления, `area_km2` = ROUND_HALF_UP(0,001), уникальные id, существующие снимки → `guaranteed_purchase=false`; `guaranteed_purchase=true` только при `acquisition_type=new`; `new` без гарантии — ошибка |
+| `candidate_orders.geojson` | Polygon; `candidate_id`, `sensor_type`, `resolution_m`, `acquisition_type` (new/operational/archive), `data_role` (event_observation/context), `observation_at`, `available_at`, `processing_level` (L0/L1/L2), `usage_type` (internal/limited/unrestricted), `guaranteed_purchase`, `area_km2`, `base_rate_rub_km2`, `base_rate_status`, `base_rate_source` | кольца замкнуты и ≥ 4 точек, valid, без дыр, координаты в диапазоне [lon, lat], зона пересекает чип, площадь EPSG:6933 ≥ 1 км² до округления, `area_km2` = ROUND_HALF_UP(0,001), уникальные id, `base_rate_rub_km2`/`base_rate_status` = `configs/pricing.yaml`, существующие снимки → `guaranteed_purchase=false`; `guaranteed_purchase=true` только при `acquisition_type=new`; `new` без гарантии — ошибка (подробно §7a) |
 | `procurement_plan.csv` | `strategy`, `candidate_id`, `area_km2`, `base_rate_rub_km2`, `base_rate_status`, `processing_level`, `usage_type`, `guaranteed_purchase`, `processing_coef`, `usage_coef`, `freshness_coef`, `discount_coef`, `discount_group_id`, `group_area_km2`, `unit_price_rub_km2`, `cost_rub`, `formula`, `legal_edition`; доп.: `sensor_type`, `resolution_m`, `acquisition_type` (критерий 17) | уникальна пара (strategy, candidate_id); нет строк A; категории = каталог; цена пересчитывается; скидка по группе целиком |
-| `strategy_plans.json` | `{"A": [], "B": [...], "C": [...]}` | = строкам плана; id из каталога |
+| `strategy_plans.json` | `{"A": [], "B": [...], "C": [...]}` | состав B и C = множеству `candidate_id` строк плана своей стратегии; id из каталога |
 | `strategy_comparison.csv` | `strategy`, `data_cost_rub`, `other_cost_rub`, `decision_cost_rub`, `budget_rub`, `budget_feasible`, `covered_expected_loss_rub`, `coverage_share`, `residual_uncertainty`, `uncertainty_status`, `uncertainty_basis` | data_cost = сумма плана; decision = data + other; C в бюджете; B сверх — `budget_feasible=false` = контрфактическая; охват уникален по `asset_id` через `covers` и только по зонам `data_role=event_observation` с `available_at ≤ decision_deadline`; `coverage_share` пуст при нулевом знаменателе (причина в `run_metadata`); `uncertainty_status` ∈ baseline/scenario/measured/not_estimated; A — `baseline`; `not_estimated` → пустое число |
 | `sensitivity.csv` | `scenario_id`, `strategy`, `changed_inputs_json`, `decision_cost_rub`, `covered_expected_loss_rub`, `result_status`, `interpretation` | p, V, q по отдельности; бюджет; ставка; JSON валиден |
 | `run_metadata.json` | `run_id`, `chip_id`, `event_id`, источники/S1-файлы, split, seed и правило размещения, commit, версии/веса и пороги обоих методов, модель EL, бюджет и deadline, тариф и скидка, построение и доступность зон, неопределённость, прокси-проверка ущерба, ссылки на метрики, команды воспроизведения | ключи есть; `threshold` согласован с маской |
@@ -93,6 +93,17 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
 одной маске валидных пикселей (`valid_mask_sha256` совпадает). `threshold_curve.csv` —
 «порог → метрики» на validation.
 
+- **Строки `split=train`** пишет только baseline в `docs/verification/baseline-metrics.csv`
+  (порог подобран на train — это качество подгонки, не проверка). В `metrics.csv` комплекта
+  экспорт их не переносит (`export.assemble.METRICS_SPLITS` = dev/validation/test).
+- **Единица `threshold`** — своя у каждого метода: у `baseline` — dB канала правила
+  (`VH ≤ −23,0` → `-23.0`), у `main` — вероятность p (mask = 1 ⇔ p ≥ threshold). В
+  `metrics.csv` комплекта единицу называет доп. столбец `threshold_units` (`dB VH` / `p`).
+- **Один алгоритм на всех** (D-032): маска валидности — `floodvalue.data.io.valid_mask`
+  (S1 конечен в обоих каналах **и** метка ≠ −1, D-015); счёт TP/FP/FN/TN, IoU/F1/P/R и
+  `valid_mask_sha256` (упакованные маски в порядке `chip_id`) —
+  `floodvalue.model.metrics`. Изменение его формул или хеша — изменение контракта §7.
+
 ## 7a. Уточнения к §6, v1 (проверяет валидатор)
 
 - Пустая ячейка CSV = нет значения; литералы `nan`/`inf`/`Infinity` — ошибка. Булевы в
@@ -105,7 +116,26 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
   `ok` по (−EL, `asset_id`). `uncertainty` может быть пустым; смысл — `run_metadata.uncertainty`.
 - `candidate_orders.geojson`: только `Polygon` (не MultiPolygon); `observation_at`,
   `available_at` — ключи обязательны, значение может быть `null` (неизвестно);
-  `base_rate_status` ∈ {scenario, official}.
+  `base_rate_status` ∈ {scenario, official}. Геометрия проверяется до разбора shapely
+  (он молча замыкает кольца): каждое кольцо — ≥ 4 позиций, первая = последней (RFC 7946
+  §3.1.6), иначе ошибка; при такой ошибке или ошибке схемы любой зоны каталог дальше (в т. ч.
+  план ↔ каталог) не проверяется. Затем: все вершины внешнего кольца в
+  диапазоне |lon| ≤ 180, |lat| ≤ 90; зона **пересекает** охват чипа (прямоугольник сетки
+  `flood_probability.tif` в WGS 84, только если растр прочитан; целиком внутри быть не
+  обязана — буфер у края чипа допустим); valid, без внутренних колец. `base_rate_rub_km2` и `base_rate_status` каждой
+  зоны равны `configs/pricing.yaml` (`base_rate.rub_per_km2`, `base_rate.status`).
+  **Ограничение:** порядок осей проверяется только косвенно — через диапазон и пересечение с
+  чипом. Перепутанные [широта, долгота], которые случайно тоже пересекают чип (чип около
+  диагонали lon = lat), валидатор не ловит; гарантия порядка — производитель
+  (`shapely.mapping` от геометрии в [lon, lat], `always_xy=True`) и round-trip тест.
+- `procurement_plan.csv` ↔ каталог: каждый `candidate_id` есть в каталоге; `area_km2`,
+  `base_rate_rub_km2`, `base_rate_status`, `processing_level`, `usage_type`,
+  `guaranteed_purchase` строки = полям зоны каталога; доп. поля `sensor_type`,
+  `acquisition_type`, `resolution_m`, если заполнены, тоже = каталогу.
+- `strategy_plans.json` ↔ план ↔ каталог: все id B и C есть в каталоге; множество id
+  стратегии = множеству `candidate_id` её строк в `procurement_plan.csv`.
+- `run_metadata.pricing`: `legal_edition`, `base_rate_rub_km2`, `base_rate_status` =
+  `configs/pricing.yaml` (ошибка приписывается `run_metadata.json`).
 - `procurement_plan.csv`: группа скидки — строки одной стратегии с одним
   `discount_group_id` (D-017: `<семейство>_<r>m_<год>`), одно семейство сенсора и одно
   `resolution_m`; `group_area_km2` одинакова в группе и ≥ суммы `area_km2` корзины группы
