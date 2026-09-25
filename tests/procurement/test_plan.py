@@ -4,6 +4,7 @@ import hashlib
 import json
 
 import numpy as np
+import pytest
 import rasterio
 from rasterio.transform import from_origin
 from shapely.geometry import Point, box, shape
@@ -13,6 +14,17 @@ from floodvalue.cli import main
 from floodvalue.procurement import run as prun
 
 FILES = ["flood_probability.tif", "flood_mask.tif", "assets.csv", "asset_loss.csv"]
+
+
+@pytest.fixture(autouse=True)
+def _s1_manifest(tmp_path_factory, monkeypatch):
+    """Дата S1 синтетических чипов (decision_at от неё, D-042) — как у Sri-Lanka."""
+    data = tmp_path_factory.mktemp("data")
+    (data / "interim").mkdir()
+    (data / "interim" / "source_manifest_s1.json").write_text(json.dumps({"sources": [
+        {"chip_id": c, "observation_date": "2017-05-30"} for c in ("X_1", "Synthetic_000001")]}),
+        encoding="utf-8")
+    monkeypatch.setenv("FLOODVALUE_DATA_DIR", str(data))
 
 
 def _write_run_dir(d):
@@ -179,6 +191,10 @@ def test_procurement_files_pass_validator_on_fixture(tmp_path):
     meta = json.loads((run / "run_metadata.json").read_text(encoding="utf-8"))
     budget = meta["budget"]["budget_rub"]
     prun.write_outputs(run, budget)
+    # export takes decision_at/decision_deadline from procurement_metadata.json (D-042)
+    proc = json.loads((run / "procurement_metadata.json").read_text(encoding="utf-8"))
+    meta["budget"].update({k: proc[k] for k in ("decision_at", "decision_deadline")})
+    (run / "run_metadata.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
     errors = validate_run(run)
     for name in ("candidate_orders.geojson", "procurement_plan.csv", "strategy_plans.json",
                  "strategy_comparison.csv"):

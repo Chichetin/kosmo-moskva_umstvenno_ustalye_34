@@ -328,6 +328,9 @@ def test_all_stages_to_valid_result_set(env):
     assert manifest["citation"] == S1_TOP["citation"] and manifest["events"] == S1_TOP["events"]
     s1 = next(s for s in manifest["sources"] if s.get("chip_id") == CHIP)
     assert s1["label"]["read_note"] == _read_note("none")  # fixture chip is outside the split
+    # D-042: the decision is taken on the S1 date of the chip, never before the observation
+    assert meta["budget"]["decision_at"][:10] == s1["observation_date"] == meta["event_date"]
+    assert meta["budget"]["decision_deadline"] > meta["budget"]["decision_at"]
     assert not [w for w in meta["warnings"] if "source_manifest_s1.json" in w]
     with open(dest / F.SENSITIVITY, encoding="utf-8") as f:
         sens = list(csv.DictReader(f))

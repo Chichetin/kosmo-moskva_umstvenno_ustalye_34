@@ -13,12 +13,13 @@ from __future__ import annotations
 
 import csv
 import json
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 from floodvalue.contracts import load_run_config
-from floodvalue.paths import output_dir
+from floodvalue.paths import data_dir, output_dir
 from floodvalue.procurement import strategies, zones
 from floodvalue.procurement.pricing import load_pricing
 
@@ -55,6 +56,34 @@ def run_config() -> dict[str, Any]:
             "social_constraint": dict(extra.get("social_constraint") or {"enabled": False,
                                                                         "asset_classes": []}),
             "source": "configs/run.yaml"}
+
+
+def chip_s1_date(chip_id: str) -> date:
+    """Дата S1 чипа: ``observation_date`` в ``$FLOODVALUE_DATA_DIR/interim/source_manifest_s1.json``.
+
+    Манифест пишет ``make data`` из ``s1_date`` события в Sen1Floods11_Metadata.geojson; то же
+    поле export кладёт в ``run_metadata.event_date`` — порядок времени сверяется с одним источником.
+    """
+    path = data_dir() / "interim" / "source_manifest_s1.json"
+    if not path.exists():
+        raise FileNotFoundError(f"нет {path} — дата S1 чипа неизвестна, сначала `make data`")
+    sources = json.loads(path.read_text(encoding="utf-8")).get("sources", [])
+    obs = next((s.get("observation_date") for s in sources if s.get("chip_id") == chip_id), None)
+    if not obs:
+        raise ValueError(f"в {path} нет observation_date чипа {chip_id} — сначала "
+                         f"`make data` (дата S1 из метаданных события)")
+    return date.fromisoformat(str(obs)[:10])
+
+
+def decision_times(template_at: datetime, template_deadline: datetime,
+                   s1_date: date) -> tuple[datetime, datetime]:
+    """(decision_at, decision_deadline) для чипа с датой S1 ``s1_date`` (D-042).
+
+    Из run.yaml берутся только сценарное время суток с поясом (``decision_at``) и окно
+    ``decision_deadline − decision_at`` (D-001: 12 ч); дата — дата S1 чипа.
+    """
+    at = datetime.combine(s1_date, template_at.timetz())
+    return at, at + (template_deadline - template_at)
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
@@ -116,8 +145,17 @@ def _context(run_dir: Path) -> dict[str, Any]:
     pricing_cfg = load_pricing()
     assets = _read_csv(run_dir / "assets.csv")
     loss = _read_csv(run_dir / "asset_loss.csv")
-    decision_at = zones.parse_dt(rc["decision_at"])
-    deadline = zones.parse_dt(rc["decision_deadline"])
+    chips = {a["chip_id"] for a in assets}
+    if len(chips) != 1:
+        raise ValueError(f"{run_dir / 'assets.csv'}: ожидается один chip_id, получено {sorted(chips)}")
+    (chip_id,) = chips
+    s1_date = chip_s1_date(chip_id)
+    template_at = zones.parse_dt(rc["decision_at"])
+    if chip_id == rc["chip_id"] and template_at.date() != s1_date:
+        raise ValueError(f"configs/run.yaml: дата decision_at {template_at.date()} ≠ дате S1 "
+                         f"{s1_date} чипа {chip_id} из run.yaml — исправить конфиг")
+    decision_at, deadline = decision_times(template_at, zones.parse_dt(rc["decision_deadline"]),
+                                           s1_date)
     # The catalog is always rebuilt from current inputs (deterministic, budget-independent):
     # a stale candidate_orders.geojson never drives coverage.
     bounds, bounds_src = _chip_bounds(run_dir, assets)
@@ -137,6 +175,7 @@ def _context(run_dir: Path) -> dict[str, Any]:
     return {"rc": rc, "pricing": pricing_cfg, "assets": assets, "loss": loss,
             "catalog": catalog, "cov": cov, "excluded": excluded, "eligible": eligible,
             "decision_at": decision_at, "deadline": deadline, "as_of": decision_at.date(),
+            "chip_id": chip_id, "s1_date": s1_date,
             "bounds_source": bounds_src, "uncertainty_source": unc_src,
             "social_ids": social_ids,
             "required": social_ids if social_cfg.get("enabled") else []}
@@ -249,8 +288,19 @@ def write_outputs(run_dir: Path, budget_rub: float) -> dict[str, Any]:
         "run_config_source": ctx["rc"]["source"],
         "decision_at": ctx["decision_at"].isoformat(),
         "decision_deadline": ctx["deadline"].isoformat(),
+        "decision_at_rule": ("decision_at = дата S1 чипа + сценарное время суток decision_at из "
+                             "configs/run.yaml; decision_deadline = decision_at + окно run.yaml "
+                             "(12 ч, D-001); D-042"),
+        "chip_id": ctx["chip_id"],
+        "s1_observation_date": ctx["s1_date"].isoformat(),
+        "s1_observation_date_source": ("observation_date в interim/source_manifest_s1.json "
+                                       "(s1_date события, Sen1Floods11_Metadata.geojson)"),
         "pricing_as_of": ctx["as_of"].isoformat(),
-        "pricing_as_of_rule": "дата расчёта цены = календарная дата decision_at (UTC), D-023",
+        "pricing_as_of_rule": ("дата расчёта цены = календарная дата decision_at (UTC), D-023, "
+                               "D-042: давность снимков и год группы скидки — от даты события; "
+                               "формула, коэффициенты и сценарная ставка Б — по проверенной "
+                               "редакции ПП 840 (configs/pricing.yaml), которой на дату события "
+                               "могло не быть: гибридный учебный сценарий, не историческая цена"),
         "zones": {
             "construction": ZONES_CONSTRUCTION,
             "decision": "D-038 (каталог), D-023 (v0, правила A/B/C)",
