@@ -7,7 +7,7 @@ methods (e.g. `pixel`) plug in by adding a line to METHODS.
 import importlib
 import os
 
-METHODS = {"unet": "floodvalue.model.unet.train"}
+METHODS = {"unet": "floodvalue.model.unet.train", "pixel": "floodvalue.model.pixel.train"}
 DEFAULT_METHOD = "unet"
 
 
