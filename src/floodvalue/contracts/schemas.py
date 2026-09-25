@@ -11,6 +11,7 @@ from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import (
+    AliasChoices,
     BaseModel,
     BeforeValidator,
     ConfigDict,
@@ -346,17 +347,26 @@ class RunMetadata(_Model):
 # --- source_manifest.json ----------------------------------------------------------------------
 
 class SourceEntry(_Model):
-    id: NonEmptyStr
+    # data.fetch.s1_source_entries (D-015) writes `source_id` and `published_at`; both spellings
+    # are accepted so export can copy its entries as is (docs/contracts.md §9).
+    id: NonEmptyStr = Field(validation_alias=AliasChoices("id", "source_id"))
     file: str | None
     url: NonEmptyStr
     version: NonEmptyStr
     observation_date: date | None
-    available_date: date | None
+    available_date: date | None = None
+    published_at: datetime | date | None = None
     license: NonEmptyStr
     purpose: NonEmptyStr
     limitations: NonEmptyStr
     applies_to: str | None = None
     after_event_note: str | None = None  # mandatory if observation_date > event_date
+
+    @model_validator(mode="after")
+    def _availability(self):
+        if self.available_date is None and self.published_at is None:
+            raise ValueError("нужна дата публикации/доступности: available_date или published_at")
+        return self
 
 
 class SourceManifest(_Model):

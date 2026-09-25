@@ -105,10 +105,9 @@ def _lonlat_ok(geom) -> bool:
 # --- rasters -----------------------------------------------------------------------------------
 
 def _find_s1(chip_id: str) -> Path | None:
-    root = data_dir()
-    if not root.is_dir():
-        return None
-    return next(root.rglob(f"{chip_id}_S1Hand.tif"), None)
+    """S1 of the chip in the raw layout of docs/data.md §3 (raw/HandLabeled/S1Hand/)."""
+    path = data_dir() / "raw" / "HandLabeled" / "S1Hand" / f"{chip_id}_S1Hand.tif"
+    return path if path.is_file() else None
 
 
 def _check_rasters(report: _Report, run_dir: Path, meta: RunMetadata | None):

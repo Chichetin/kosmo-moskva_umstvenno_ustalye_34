@@ -169,11 +169,14 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
 
 ## 9. `source_manifest.json` (схема `SourceManifest`)
 
-`{"sources": [{"id", "file", "url", "version", "observation_date", "available_date",
-"license", "purpose", "limitations", "applies_to", "after_event_note"}]}`; даты —
-`YYYY-MM-DD` или `null`. Есть источник с `<chip_id>_S1Hand` в `id` или `file`; `id`
-уникальны; `observation_date` позже `run_metadata.event_date` — только с непустым
-`after_event_note`.
+`{"sources": [{"id" | "source_id", "file", "url", "version", "observation_date",
+"available_date" | "published_at", "license", "purpose", "limitations", "applies_to",
+"after_event_note"}]}`; `observation_date`, `available_date` — `YYYY-MM-DD` или `null`,
+`published_at` — ISO 8601; нужна хотя бы одна из `available_date`/`published_at`. Записи
+`$FLOODVALUE_DATA_DIR/interim/source_manifest_s1.json` (`floodvalue.data`, D-015:
+`source_id`, `published_at`, вложенный `label`) копируются экспортом как есть. Есть источник
+с `<chip_id>_S1Hand` в `id` или `file`; `id` уникальны; `observation_date` позже
+`run_metadata.event_date` — только с непустым `after_event_note`.
 
 ## 10. Пересчёт бюджета для интерфейса (D-005, D-013)
 

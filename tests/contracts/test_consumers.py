@@ -73,3 +73,34 @@ def test_procurement_price_basket_matches_reference_plan():
                           "freshness_coef", "discount_group_id"):
                 assert str(b[field]) == a[field] or float(b[field]) == float(a[field]), \
                     (strategy, a["candidate_id"], field, a[field], b[field])
+
+
+def test_data_s1_source_entries_pass_manifest_schema():
+    """floodvalue.data (D-015) entries, copied as is, satisfy SourceManifest and the S1 check."""
+    from floodvalue.contracts.schemas import SourceManifest
+    from floodvalue.data.fetch import bucket_name, s1_source_entries
+
+    rows = [{"chip_id": "Sri-Lanka_713926", "event_id": "Sri-Lanka",
+             "s1_file": "HandLabeled/S1Hand/Sri-Lanka_713926_S1Hand.tif",
+             "label_file": "HandLabeled/LabelHand/Sri-Lanka_713926_LabelHand.tif",
+             "s1_sha256": "0" * 64, "label_sha256": "1" * 64}]
+    bucket = {bucket_name(rows[0]["s1_file"]): {"updated": "2020-10-06T21:13:52.123Z",
+                                                "generation": "1"}}
+    entries = s1_source_entries(rows, {"Sri-Lanka": "2017-05-30"}, bucket)
+    manifest = SourceManifest.model_validate({"sources": entries})
+    src = manifest.sources[0]
+    assert "Sri-Lanka_713926" in src.id and src.file == "Sri-Lanka_713926_S1Hand.tif"
+
+
+def test_procurement_geometry_area_matches_validator():
+    """procurement.geometry.order_area_km2 = validator's ROUND_HALF_UP(EPSG:6933) on the set."""
+    from shapely.geometry import shape
+
+    from floodvalue.contracts.geo import area_km2, round_half_up
+    from floodvalue.procurement.geometry import order_area_km2
+
+    feats = json.loads((GOOD / F.CANDIDATE_ORDERS).read_text(encoding="utf-8"))["features"]
+    for f in feats:
+        geom = shape(f["geometry"])
+        assert float(order_area_km2(geom)) == round_half_up(area_km2(geom), "0.001") \
+            == f["properties"]["area_km2"]

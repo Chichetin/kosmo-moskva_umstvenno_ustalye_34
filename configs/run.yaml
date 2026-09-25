@@ -1,7 +1,7 @@
 # Параметры одного запуска (docs/contracts.md §5). Схема — floodvalue.contracts.schemas.RunConfig.
 # До заморозки основного метода сквозной путь и интерфейс гоняются на чипе validation
-# (D-010). После заморозки chip_id -> Spain_7370579 (test), event_id -> Spain,
-# chip_split -> test, decision_* -> от даты S1 этого чипа; только замороженной конфигурацией.
+# (D-010). После заморозки — демо-чип из test (D-010), chip_split -> test, decision_* -> от
+# даты S1 этого чипа; только замороженной конфигурацией, с записью в test-log.
 chip_id: Sri-Lanka_713926
 event_id: Sri-Lanka
 chip_split: validation
