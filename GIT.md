@@ -118,9 +118,13 @@ bash scripts/sync-gitverse.sh            # push origin/main → main и master, 
 bash scripts/sync-gitverse.sh --verify   # только сверка: commit совпадает, LFS в клоне — не указатели
 ```
 
-Скрипт пушит только `origin/main` (не локальную ветку), токен в URL и config не пишет,
-remote `gitverse` добавляет сам. `master` — ветка по умолчанию GitVerse, держится равной
-`main`. Пробный LFS-объект (2 МБ) 25.09 прошёл туда и обратно с тем же sha256.
+Скрипт пушит только `origin/main` (не локальную ветку) в `main`, `master` и ветку по
+умолчанию GitVerse (сейчас `lfs-probe` — сменить может только admin `hackrus.experts`;
+её держим равной `main`), плюс теги из origin. Токен в URL и config не пишет, remote
+`gitverse` ставит на `GITVERSE_URL`. Сверка клонирует ветку по умолчанию — как жюри.
+Перед сдачей: `FLOODVALUE_REQUIRE_WEIGHTS=1 bash scripts/sync-gitverse.sh --verify` —
+падает, если весов в LFS нет. Пробный LFS-объект (2 МБ) 25.09 прошёл туда и обратно с
+тем же sha256.
 
 Синхронизация — после каждой вехи и не реже раза в 3 часа с 26.09; последняя — до
 27.09 00:00, затем `--verify` и контрольный прогон из чистого клона GitVerse.
