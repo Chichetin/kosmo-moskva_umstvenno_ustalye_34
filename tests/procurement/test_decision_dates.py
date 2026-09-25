@@ -1,4 +1,4 @@
-"""decision_at/decision_deadline от даты S1 чипа (#84, D-001, D-023, D-042).
+"""decision_at/decision_deadline от даты S1 чипа (#84, D-001, D-023, D-043).
 
 decision_at = дата S1 чипа (source_manifest_s1.json ← s1_date Sen1Floods11_Metadata.geojson)
 + сценарное время суток из configs/run.yaml; decision_deadline = decision_at + окно run.yaml
@@ -138,7 +138,7 @@ def test_coverage_by_deadline_is_the_same_for_both_events(tmp_path, monkeypatch)
     """Сдвиг дат целиком: охват по available_at ≤ decision_deadline и планы не меняются."""
     res_sl, meta_sl, _ = _run(tmp_path, monkeypatch, "Sri-Lanka_713926", "2017-05-30")
     res_es, meta_es, _ = _run(tmp_path, monkeypatch, "Spain_7370579", "2019-09-17")
-    assert meta_sl["decision_at"] == "2017-05-30T23:59:59+00:00"  # run.yaml, D-042
+    assert meta_sl["decision_at"] == "2017-05-30T23:59:59+00:00"  # run.yaml, D-043
     assert meta_sl["decision_deadline"] == "2017-05-31T11:59:59+00:00"
     assert res_sl["plans"] == res_es["plans"] and res_es["plans"]["C"]
     assert meta_sl["zones"]["coverage"] == meta_es["zones"]["coverage"]

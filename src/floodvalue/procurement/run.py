@@ -77,7 +77,7 @@ def chip_s1_date(chip_id: str) -> date:
 
 def decision_times(template_at: datetime, template_deadline: datetime,
                    s1_date: date) -> tuple[datetime, datetime]:
-    """(decision_at, decision_deadline) для чипа с датой S1 ``s1_date`` (D-042).
+    """(decision_at, decision_deadline) для чипа с датой S1 ``s1_date`` (D-043).
 
     Из run.yaml берутся только сценарное время суток с поясом (``decision_at``) и окно
     ``decision_deadline − decision_at`` (D-001: 12 ч); дата — дата S1 чипа.
@@ -290,14 +290,14 @@ def write_outputs(run_dir: Path, budget_rub: float) -> dict[str, Any]:
         "decision_deadline": ctx["deadline"].isoformat(),
         "decision_at_rule": ("decision_at = дата S1 чипа + сценарное время суток decision_at из "
                              "configs/run.yaml; decision_deadline = decision_at + окно run.yaml "
-                             "(12 ч, D-001); D-042"),
+                             "(12 ч, D-001); D-043"),
         "chip_id": ctx["chip_id"],
         "s1_observation_date": ctx["s1_date"].isoformat(),
         "s1_observation_date_source": ("observation_date в interim/source_manifest_s1.json "
                                        "(s1_date события, Sen1Floods11_Metadata.geojson)"),
         "pricing_as_of": ctx["as_of"].isoformat(),
         "pricing_as_of_rule": ("дата расчёта цены = календарная дата decision_at (UTC), D-023, "
-                               "D-042: давность снимков и год группы скидки — от даты события; "
+                               "D-043: давность снимков и год группы скидки — от даты события; "
                                "формула, коэффициенты и сценарная ставка Б — по проверенной "
                                "редакции ПП 840 (configs/pricing.yaml), которой на дату события "
                                "могло не быть: гибридный учебный сценарий, не историческая цена"),
