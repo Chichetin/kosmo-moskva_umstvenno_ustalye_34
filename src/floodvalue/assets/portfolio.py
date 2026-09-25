@@ -37,6 +37,7 @@ STATUS_RULE = (
     "produced: every asset is a single pixel, so its p is either observed or not; partial is "
     "reserved for multi-pixel assets (part of the footprint without data)."
 )
+UNCERTAINTY_NAME = "binary_entropy_bits"
 UNCERTAINTY_RULE = (
     "Temporary: binary entropy of p_flood in bits, H(p) = -p*log2(p) - (1-p)*log2(1-p), "
     "0 at p in {0, 1}, 1 at p = 0.5. Measures only the model's own indecision at the pixel, "
