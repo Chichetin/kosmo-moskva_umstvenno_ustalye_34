@@ -124,6 +124,12 @@ def _metrics(work_prediction: dict, dest: Path, warnings: list[str]) -> list[str
     if main_rows is None and not assemble.is_baseline_prediction(work_prediction):
         warnings.append(f"основной метод {method!r} без {main_rel}: "
                         "в metrics.csv нет строк main")
+    stale = sorted({r.get("threshold") for r in main_rows or []
+                    if r.get("threshold") not in (None, "")
+                    and abs(float(r["threshold"]) - float(work_prediction["threshold"])) > 1e-9})
+    if stale:
+        warnings.append(f"{main_rel}: порог строк main {stale} ≠ порогу комплекта "
+                        f"{work_prediction['threshold']} — метрики не соответствуют маске")
     rows = assemble.metrics_rows(base_rows, main_rows, work_prediction, BASELINE_METRICS,
                                  main_rel if main_rows else None)
     _write_csv(dest / "metrics.csv", assemble.METRICS_FIELDS + assemble.METRICS_EXTRA, rows)

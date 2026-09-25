@@ -137,13 +137,13 @@ def fixed_plan_rows(assets_rows: list[dict], assets: list[dict], loss_rows: list
             warnings.append(f"{r['scenario_id']}: ΣEL {sum(el.values()):.2f} ≠ assets "
                             f"{float(total):.2f} — строка для плана C не добавлена")
             continue
-        covered = sum(el[a] for a in covered_ids)
+        covered = round_half_up(sum(el[a] for a in covered_ids), "0.01")
         out.append({
             "scenario_id": f"{r['scenario_id']}__C_fixed", "strategy": "C",
             "changed_inputs_json": json.dumps({**changed, "plan_C_fixed": sorted(plan_c)},
                                               ensure_ascii=False, sort_keys=True),
             "decision_cost_rub": c["decision_cost_rub"],
-            "covered_expected_loss_rub": f"{round_half_up(covered, '0.01'):.2f}",
+            "covered_expected_loss_rub": f"{covered:.2f}",
             "result_status": "fixed_plan",
             "interpretation": (
                 f"план C зафиксирован ({', '.join(sorted(plan_c)) or 'пусто'}), стоимость решения "
@@ -272,13 +272,13 @@ def run_metadata(*, run_id: str, chip_id: str, event_id: str, event_date: str, c
                    for m in cfg.get("members", []) if m.get("file") and m.get("sha256")]
         arch = cfg.get("arch")
         main = _method_info(
-            name, f"{name} {json.dumps(arch, sort_keys=True)}" if arch else name, weights,
+            name, f"{name}@{str(prediction.get("weights_sha256") or cfg.get("weights_sha256") or "")[:12]}", weights,
             float(prediction["threshold"]), "p",
             str(prediction.get("threshold_source") or prediction.get("threshold_status")
                 or "prediction.json"),
             weights_sha256=prediction.get("weights_sha256") or cfg.get("weights_sha256"),
             config=f"models/{name}/config.json" if cfg else None,
-            ensemble=cfg.get("ensemble"), selection=cfg.get("selection"))
+            ensemble=cfg.get("ensemble"), selection=cfg.get("selection"), arch=arch)
     unc = assets_meta.get("uncertainty", {})
     zones = procurement_meta.get("zones", {})
     split_hash = split_sha256(split)
