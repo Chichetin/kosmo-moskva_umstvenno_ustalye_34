@@ -12,7 +12,7 @@
 | 3 | Основной метод | `src/floodvalue/model/`, `models/<main>/`, `notebooks/` | `make train`, `make predict CHIP=…`; описание в README | ⬜ |
 | 4 | Сравнение методов | `docs/verification/test-comparison.md` | `make eval-test` → оба метода, идентичные валидные пиксели, по событиям, FP/FN | ⬜ |
 | 5 | Итоговая карта и порог | `flood_probability.tif`, `flood_mask.tif`, кривая порога на val | `make validate` (mask = p ≥ threshold); `docs/verification/threshold.md` | ⬜ |
-| 6 | Split без утечки | `splits/split_v1.json`, `docs/decisions.md` D-006, `test-log.md` | `make split` → хеш = decisions; `pytest tests/split` (события не пересекаются) | ⬜ |
+| 6 | Split без утечки | `splits/split_v1.json`, `splits/README.md`, `docs/decisions.md` D-006/D-012/D-016, `test-log.md` | `make split` → хеш = decisions (D-016); `uv run --frozen pytest tests/split` (события не пересекаются, 446 чипов учтены, test запечатан) | ✅ split заморожен; журнал test — при `eval-test` |
 | 7 | Перенос и неполные данные | test на новых событиях, S1-only, другой чип | `make predict CHIP=<другой>`; `docs/verification/transfer.md` | ⬜ |
 | 8 | Контролируемый эксперимент | `docs/verification/experiment-*.md` | таблица на validation (признаки / вариант / постобработка) | ⬜ |
 | 9 | Надёжность вероятностей | калибратор, reliability на test | `make calibrate`; ECE/Brier до и после; параметры опубликованы | ⬜ |
@@ -23,7 +23,7 @@
 | 14 | Приоритеты и интерпретация | `asset_loss.csv:rank`, `sensitivity.csv`, прокси-проверка | `pytest tests/assets` (rank: 1 = max EL, тай по `asset_id`, пусто у no_data); чувствительность p, V, q по отдельности; прокси-ошибка на test-чипе | 🟡 rank и временная `uncertainty` (энтропия p); чувствительность и прокси — нет |
 | 15 | План съёмки в бюджете | `candidate_orders.geojson`, `procurement_plan.csv` | `make procure BUDGET=…`; валидатор геометрии; C ≤ бюджета | ⬜ |
 | 16 | Сравнение A/B/C | `strategy_plans.json`, `strategy_comparison.csv` | `make validate`; B сверх бюджета помечена | ⬜ |
-| 17 | Стоимость платных данных | `procurement_plan.csv`, `configs/pricing.yaml` | `pytest tests/procurement` (1 703,46 / 946,37 / 567,82; 90 дней; скидка по корзине) | 🟡 конфиг и контрольная арифметика сверены |
+| 17 | Стоимость платных данных | `procurement_plan.csv`, `configs/pricing.yaml`, `src/floodvalue/procurement/pricing.py`, `geometry.py` (D-017) | `uv run --frozen pytest tests/procurement` → 1 703,46 / 946,37 / 567,82; 90 дн. → Т = 1, 91 → 0,6; `new` без гарантии — ошибка; скидка по всей группе корзины; S в км²; 0,9996 км² отклонён | 🟡 функции цены и площади проверены тестами; `procurement_plan.csv` — после #8 |
 | 18 | ПП 840 и допущения | `configs/pricing.yaml` (редакция, дата проверки), README | `legal_checked_at` заполнен; `base_rate_status=scenario` везде | 🟡 редакция записана, дата проверки — нет |
 | 19 | Интерфейс оператора | `src/floodvalue/app/` | `make app`; смена бюджета: хеши растров не меняются | ⬜ |
 | 20 | Границы прототипа | README «Ограничения и развитие» | `scribe` + `jury` | ⬜ |
