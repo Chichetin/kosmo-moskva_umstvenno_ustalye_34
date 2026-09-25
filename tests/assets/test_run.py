@@ -118,3 +118,24 @@ def test_run_places_only_where_both_vv_and_vh_finite(tmp_path, monkeypatch):
     for row in read_csv(out / "assets.csv"):
         c, r = ~TRANSFORM @ (float(row["longitude"]), float(row["latitude"]))
         assert 10 <= int(r) < 14 and 10 <= int(c) < 14
+
+
+def test_run_writes_inspection_priority_and_keeps_el_rank(setup):
+    # D-035: inspection order is a separate key in assets_metadata.json; asset_loss.csv rank
+    # stays "1 = max EL, ties by asset_id".
+    args, out, _ = setup
+    assert assets_run.run(args) == 0
+    loss = read_csv(out / "asset_loss.csv")
+    by_el = sorted(loss, key=lambda r: (-float(r["expected_loss_rub"]), r["asset_id"]))
+    assert [int(r["rank"]) for r in by_el] == list(range(1, 11))
+    meta = json.loads((out / "assets_metadata.json").read_text(encoding="utf-8"))
+    ip = meta["inspection_priority"]
+    assert ip["rule"] and ip["p_dry"] == 0.1 and ip["social_max_position"] == 3
+    assert ip["uncertainty_measure"] == meta["uncertainty"]["name"]
+    order = ip["order"]
+    assert sorted(o["asset_id"] for o in order) == [r["asset_id"] for r in loss]
+    assert [o["inspection_order"] for o in order] == list(range(1, 11))
+    rank = {r["asset_id"]: int(r["rank"]) for r in loss}
+    assert all(o["el_rank"] == rank[o["asset_id"]] for o in order)
+    assert set(ip["scenario_changes"]) == {
+        r["scenario_id"] for r in read_csv(out / "assets_sensitivity.csv")}

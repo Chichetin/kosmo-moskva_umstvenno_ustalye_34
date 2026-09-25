@@ -263,6 +263,8 @@ def test_all_stages_to_valid_result_set(env):
     assert meta["event_date"] == "2017-05-30" and meta["event_id"] == "Fixture"
     assert meta["split"]["chip_split"] == "none"
     assert meta["proxy_check"]["status"] == "planned"
+    assets_meta = json.loads((work / "assets_metadata.json").read_text(encoding="utf-8"))
+    assert meta["expected_loss"]["inspection_priority"] == assets_meta["inspection_priority"]
     assert any("D-009" in w for w in meta["warnings"])
     manifest = json.loads((dest / F.SOURCE_MANIFEST).read_text(encoding="utf-8"))
     assert f"{CHIP}_S1Hand.tif" in [s.get("file") for s in manifest["sources"]]
@@ -276,6 +278,21 @@ def test_all_stages_to_valid_result_set(env):
     with open(dest / "metrics.csv", encoding="utf-8") as f:
         metrics = list(csv.DictReader(f))
     assert {r["method"] for r in metrics} == {"baseline", "main"}
+
+
+def test_export_of_an_older_assets_run_without_inspection_priority(env):
+    # assets_metadata.json from before D-035 has no inspection_priority: export still works.
+    work, args = _stages(env)
+    meta_path = work / "assets_metadata.json"
+    assets_meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    del assets_meta["inspection_priority"]
+    meta_path.write_text(json.dumps(assets_meta, ensure_ascii=False), encoding="utf-8")
+    assert export_run.run(args) == 0
+    _, short, _ = export_run.git_commit()
+    dest = env / f"{CHIP}_5000_{short}"
+    assert _failing(validate_run(dest)) == set()
+    meta = json.loads((dest / F.RUN_METADATA).read_text(encoding="utf-8"))
+    assert meta["expected_loss"]["inspection_priority"] is None
 
 
 def test_export_carries_calibrator_into_run_metadata_and_drops_uncalibrated_warning(env):
