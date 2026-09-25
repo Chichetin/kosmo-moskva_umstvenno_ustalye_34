@@ -56,7 +56,7 @@ def test_transport_hardening_present() -> None:
     assert "http.version=HTTP/1.1" in TEXT
     assert "lfs.transfer.maxretries=" in TEXT
     assert "lfs.concurrenttransfers=" in TEXT
-    assert re.search(r'timeout "\$LFS_TIMEOUT"', TEXT)
+    assert re.search(r'timeout -k 30 "\$LFS_TIMEOUT"', TEXT)
     assert "--no-verify" in TEXT
     # zsh-safe refspec: braces around want
     assert '"${want}:refs/heads/' in TEXT

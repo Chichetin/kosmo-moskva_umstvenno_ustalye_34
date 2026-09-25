@@ -43,7 +43,7 @@ GV=(git -c credential.helper=
   -c lfs.transfer.maxretrydelay=10)
 gv() { "${GV[@]}" "$@"; }
 # git-lfs (Go): HTTP/2 выключен и через окружение — на случай, если http.version не подхвачен.
-gv_lfs() { GODEBUG=http2client=0 timeout "$LFS_TIMEOUT" "${GV[@]}" lfs "$@"; }
+gv_lfs() { GODEBUG="${GODEBUG:+$GODEBUG,}http2client=0" timeout -k 30 "$LFS_TIMEOUT" "${GV[@]}" lfs "$@"; }
 
 # remote без токена и ровно на наш репозиторий
 if git remote get-url gitverse >/dev/null 2>&1; then git remote set-url gitverse "$GITVERSE_URL"
@@ -68,7 +68,7 @@ if [ "$mode" != verify ]; then
     rc=$?; lfs_ok=0
     if [ "$rc" = 124 ]; then
       echo "[sync] FAIL: LFS не уложился в ${LFS_TIMEOUT} с (GITVERSE_LFS_TIMEOUT)" >&2
-    elif grep -qiE '403|Authorization error|Forbidden' "$tmp/lfs.log"; then
+    elif grep -qiE '\b403\b|Authorization error|Forbidden' "$tmp/lfs.log"; then
       echo "[sync] FAIL: LFS PUT → 403: у токена нет записи в LFS GitVerse — нужен токен с правом записи/LFS (или права от admin hackrus.experts)" >&2
     else
       echo "[sync] FAIL: git lfs push завершился с кодом $rc" >&2
