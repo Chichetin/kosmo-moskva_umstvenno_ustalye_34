@@ -90,9 +90,10 @@ python3 scripts/download_sen1floods11.py            # HandLabeled + perm_water +
 `make check` (`test` + `hooks-test` + `validate`) — обязателен перед каждым push; без
 `OUT=` `validate` проверяет самый свежий комплект в `outputs/`, если он есть, иначе
 эталон `tests/fixtures/good` (12/12); `make validate OUT=<комплект>` — конкретный
-собранный комплект. Чистый клон GitVerse: `make setup && make check` зелёный —
-`docs/verification/clean-clone-gitverse.md` (число тестов растёт с каждым PR, актуальное —
-вывод `make check` в описании последнего PR).
+собранный комплект. Чистый клон GitVerse `6fe66f0`: `uv sync --frozen && uv run --frozen
+pytest` → 473 passed, `make all` → validate 12/12 (`docs/verification/clean-clone-gitverse.md`).
+На commit `89c8e4f` (26.09) `make check` → 646 passed, 4 skipped, `test-hooks.sh` OK,
+`validate` 12/12. Число тестов растёт с каждым PR.
 
 ## S1-only и выбор метода
 
