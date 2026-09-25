@@ -13,6 +13,13 @@
 #
 # Идемпотентно: повторный запуск на уже готовом окружении не пересобирает venv и не
 # перекачивает то, что уже установлено и подходит (uv сверяет и печатает "no changes").
+#
+# Один venv — один чекаут: если на машине несколько worktree (несколько параллельных
+# задач), у общего дефолтного пути $HOME/.cache/floodvalue-gpu editable-`floodvalue`
+# молча переключится на тот чекаут, откуда скрипт запущен последним (D-023, замечание
+# скептика). Скрипт это обнаруживает и громко предупреждает, но не запрещает — если
+# нужно держать несколько GPU-venv параллельно, у каждого worktree свой
+# FLOODVALUE_GPU_VENV.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -36,6 +43,11 @@ GPU_PYTHON="$VENV_DIR/bin/python"
 
 echo "setup_gpu_env: torch (cu128) — окружение обучения, не влияет на uv.lock/CPU-инференс"
 uv pip install --python "$GPU_PYTHON" --index-url "$TORCH_INDEX" torch
+
+CURRENT_TARGET="$("$GPU_PYTHON" -c 'import os, floodvalue; print(os.path.dirname(os.path.dirname(os.path.dirname(floodvalue.__file__))))' 2>/dev/null || true)"
+if [ -n "$CURRENT_TARGET" ] && [ "$CURRENT_TARGET" != "$REPO_ROOT" ]; then
+  echo "setup_gpu_env: ВНИМАНИЕ — venv сейчас смотрит на floodvalue из $CURRENT_TARGET, переключаю на $REPO_ROOT" >&2
+fi
 
 echo "setup_gpu_env: floodvalue -e . (torch уже поставлен выше — pip его не понижает до CPU-сборки)"
 uv pip install --python "$GPU_PYTHON" -e "$REPO_ROOT"
