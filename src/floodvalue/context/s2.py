@@ -9,8 +9,11 @@ Never an input to the model or the economics: see floodvalue/context/__init__.py
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import io
 import json
+import warnings
 import urllib.parse
 import urllib.request
 from datetime import date
@@ -21,6 +24,7 @@ import rasterio
 from PIL import Image
 
 from floodvalue.data.io import layer_path, parse_chip_id, raw_dir
+from floodvalue.data.split import EVENT_PARTS, SealedTestError
 
 S2_LAYER = "S2Hand"
 BUCKET_MEDIA = "https://storage.googleapis.com/sen1floods11/"
@@ -34,8 +38,11 @@ B2, B3, B4, B10 = 1, 2, 3, 10
 REFLECTANCE_SCALE = 10000.0
 
 ROLE = "context_only"
-DISCLAIMER = ("Контекст для наглядности, не вход модели и не наблюдение воды на момент "
-              "радарного снимка: дата оптического снимка отличается от даты Sentinel-1.")
+DISCLAIMER = ("Контекст для наглядности, не вход модели и расчётов. Дата оптического снимка "
+              "отличается от даты Sentinel-1: вода на нём — другое состояние местности, не то, "
+              "что видит радар; снимок после радара на момент решения ещё не существовал.")
+# Same tolerance as the S1/label grid check in data/fetch.py (GRID_ATOL_DEG).
+GRID_ATOL_DEG = 1e-9
 
 # Live basemaps for the interface. Tiles are loaded by the viewer, not bulk-downloaded:
 # the OSM and Esri usage policies forbid pre-seeding/bulk caching.
@@ -44,19 +51,23 @@ ONLINE_BASEMAPS = [
      "url": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
      "attribution": "Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
      "license": "Esri Master License Agreement / Terms of Use: display with attribution, no bulk download",
-     "imagery_date": "разная по месту, обычно годы до/после события — не наблюдение паводка",
-     "offline": False},
+     "imagery_date": "разная по месту, обычно годы после событий 2016–2019 — не наблюдение паводка",
+     "after_event": True, "offline": False},
     {"id": "eox_s2cloudless_2016", "name": "Sentinel-2 cloudless 2016 (EOX)",
      "url": "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg",
      "attribution": "Sentinel-2 cloudless — https://s2maps.eu by EOX IT Services GmbH "
                     "(contains modified Copernicus Sentinel data 2016)",
-     "license": "CC BY 4.0 (только выпуск 2016; поздние выпуски — CC BY-NC-SA 4.0)",
-     "imagery_date": "мозаика 2016 года", "offline": False},
+     "license": "CC BY 4.0 (только выпуск 2016; поздние выпуски — CC BY-NC-SA 4.0); "
+                "атрибуцию сверить с s2maps.eu перед показом",
+     "imagery_date": "мозаика выпуска 2016 (может содержать снимки 2017) — для событий "
+                     "2017 и раньше возможно позже события",
+     "after_event": None, "offline": False},
     {"id": "osm", "name": "OpenStreetMap",
      "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
      "attribution": "© OpenStreetMap contributors",
      "license": "ODbL; tile usage policy: без массовой загрузки, с атрибуцией",
-     "imagery_date": "векторная карта, текущее состояние", "offline": False},
+     "imagery_date": "векторная карта, текущее состояние (годы после событий)",
+     "after_event": True, "offline": False},
 ]
 
 
@@ -112,6 +123,18 @@ def context_metadata(chip_id: str, bounds: tuple[float, float, float, float], cr
             "в день радарного снимка" if delta == 0 else
             f"за {-delta} дн. до радарного снимка" if delta < 0 else
             f"через {delta} дн. после радарного снимка")
+    # Before S1: existed at decision time. After S1: did not exist yet (retrospective only).
+    # Same day or unknown: order within the day is not known -> not verified.
+    available = None if delta is None or delta == 0 else delta < 0
+    if available is False:
+        caption = (f"Sentinel-2, {s2} ({when}) — на момент решения недоступен, показан "
+                   "ретроспективно; не вход модели и расчётов")
+    elif available:
+        caption = (f"Sentinel-2, {s2} ({when}) — вода на снимке — другое состояние, "
+                   "не то, что на радаре; не вход модели и расчётов")
+    else:
+        caption = (f"Sentinel-2, {s2 or '?'} ({when}) — доступность к сроку решения не сверена; "
+                   "не вход модели и расчётов")
     return {
         "chip_id": chip_id,
         "role": ROLE,
@@ -126,7 +149,9 @@ def context_metadata(chip_id: str, bounds: tuple[float, float, float, float], cr
             "acquired": s2,
             "s1_date": s1,
             "days_from_s1": delta,
-            "caption": f"Sentinel-2, {s2 or '?'} ({when}) — контекст, не наблюдение воды",
+            "available_at_decision": available,
+            "after_event": None if delta is None else delta > 0,
+            "caption": caption,
             "cloud_fraction_rough": None if cloud is None else round(cloud, 4),
             "cloud_note": "грубая оценка по B2 и B10, в S2Hand нет маски облаков",
             "license": "не указана авторами (STAC: proprietary); цитирование Bonafilia et al. 2020",
@@ -139,17 +164,29 @@ def context_metadata(chip_id: str, bounds: tuple[float, float, float, float], cr
 
 
 def _download(chip_id: str, dest: Path) -> None:
-    url = BUCKET_MEDIA + urllib.parse.quote(BUCKET_PREFIX + f"HandLabeled/{S2_LAYER}/{chip_id}_{S2_LAYER}.tif")
+    name = BUCKET_PREFIX + f"HandLabeled/{S2_LAYER}/{chip_id}_{S2_LAYER}.tif"
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_name(dest.name + ".part")
-    with urllib.request.urlopen(url, timeout=120) as r, open(tmp, "wb") as f:
-        f.write(r.read())
+    with urllib.request.urlopen(BUCKET_MEDIA + urllib.parse.quote(name), timeout=120) as r:
+        body = r.read()
+    manifest = raw_dir() / "bucket_manifest.json"
+    if manifest.exists():
+        want = json.loads(manifest.read_text(encoding="utf-8")).get(name, {}).get("md5Hash")
+        got = base64.b64encode(hashlib.md5(body).digest()).decode()
+        if want and want != got:
+            raise OSError(f"md5 mismatch for {name}")
+    tmp.write_bytes(body)
     tmp.replace(dest)
 
 
-def build(chip_id: str, out: Path, *, download: bool = True) -> dict:
-    """Write context_s2_rgb.png and context_s2.json for `chip_id` into `out`."""
+def build(chip_id: str, out: Path, *, download: bool = True, allow_test: bool = False) -> dict:
+    """Write context_s2_rgb.png and context_s2.json for `chip_id` into `out`.
+
+    Test chips are refused unless `allow_test`: the Sen1Floods11 labels were drawn on this
+    very optical image, so looking at it before eval-test is looking at the test answers."""
     event_id, _ = parse_chip_id(chip_id)
+    if event_id in EVENT_PARTS["test"] and not allow_test:
+        raise SealedTestError(f"{chip_id}: optical context of a test chip is sealed until eval-test")
     s2_path, s1_path = layer_path(chip_id, S2_LAYER), layer_path(chip_id, "S1Hand")
     if not s2_path.exists():
         if not download:
@@ -160,8 +197,11 @@ def build(chip_id: str, out: Path, *, download: bool = True) -> dict:
         transform, shape, crs, b = r2.transform, r2.shape, r2.crs, r2.bounds
     if s1_path.exists():
         with rasterio.open(s1_path) as r1:
-            if r1.shape != shape or not r1.transform.almost_equals(transform) or r1.crs != crs:
+            if (r1.shape != shape or r1.crs != crs
+                    or not r1.transform.almost_equals(transform, precision=GRID_ATOL_DEG)):
                 raise ValueError(f"{chip_id}: S2Hand grid differs from S1Hand — overlay would be misplaced")
+    else:
+        warnings.warn(f"{chip_id}: S1Hand not found, S2/S1 grid not checked", stacklevel=2)
     meta_path = raw_dir() / METADATA
     metadata = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {"features": []}
     meta = context_metadata(chip_id, (b.left, b.bottom, b.right, b.top), str(crs),

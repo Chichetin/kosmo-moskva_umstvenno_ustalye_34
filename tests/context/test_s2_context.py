@@ -65,15 +65,39 @@ def test_event_dates_and_mekong_alias():
     assert ctx.event_dates("Nowhere", meta) == {"s1_date": None, "s2_date": None}
 
 
-@pytest.mark.parametrize("s2_date,expected", [("2017-05-28", "за 2 дн. до"), ("2017-05-30", "в день"),
-                                               ("2017-06-01", "через 2 дн. после")])
-def test_caption_states_the_date_gap(s2_date, expected):
+@pytest.mark.parametrize("s2_date,when,available,after,phrase", [
+    ("2017-05-28", "за 2 дн. до", True, False, "другое состояние"),
+    ("2017-05-30", "в день", None, False, "не сверена"),
+    ("2017-05-31", "через 1 дн. после", False, True, "недоступен, показан ретроспективно"),
+])
+def test_caption_and_availability_follow_the_date_gap(s2_date, when, available, after, phrase):
     m = ctx.context_metadata("Sri-Lanka_1", (81.6, 7.7, 81.7, 7.8), "EPSG:4326",
                              {"s1_date": "2017-05-30", "s2_date": s2_date}, 0.0)
-    assert expected in m["offline"]["caption"] and "не наблюдение воды" in m["offline"]["caption"]
+    o = m["offline"]
+    assert when in o["caption"] and phrase in o["caption"] and "не вход модели" in o["caption"]
+    assert o["available_at_decision"] is available and o["after_event"] is after
     assert m["role"] == "context_only" and m["used_by_model"] is False and m["used_by_economics"] is False
-    assert m["offline"]["bounds_lonlat"] == [81.6, 7.7, 81.7, 7.8]  # [west, south, east, north]
-    assert all(b["attribution"] and b["offline"] is False for b in m["online"])
+    assert o["bounds_lonlat"] == [81.6, 7.7, 81.7, 7.8]  # [west, south, east, north]
+
+
+def test_unknown_date_is_not_claimed_available():
+    o = ctx.context_metadata("X_1", (0, 0, 1, 1), "EPSG:4326", {"s1_date": None, "s2_date": None}, None)["offline"]
+    assert o["available_at_decision"] is None and o["after_event"] is None
+
+
+def test_online_basemaps_carry_attribution_and_after_event_flag():
+    m = ctx.context_metadata("X_1", (0, 0, 1, 1), "EPSG:4326", {"s1_date": None, "s2_date": None}, None)
+    by_id = {b["id"]: b for b in m["online"]}
+    assert all(b["attribution"] and b["offline"] is False and "after_event" in b for b in m["online"])
+    assert by_id["esri_world_imagery"]["after_event"] is True and by_id["osm"]["after_event"] is True
+
+
+def test_test_chips_are_sealed_before_eval_test(tmp_path, monkeypatch):
+    monkeypatch.setenv("FLOODVALUE_DATA_DIR", str(tmp_path / "data"))
+    with pytest.raises(ctx.SealedTestError):
+        ctx.build("Spain_1", tmp_path / "run", download=False)
+    with pytest.raises(FileNotFoundError):  # allowed explicitly -> goes on to read the file
+        ctx.build("Spain_1", tmp_path / "run", download=False, allow_test=True)
 
 
 def test_build_writes_png_and_json(tmp_path, monkeypatch):
@@ -97,7 +121,7 @@ def test_build_refuses_misaligned_grid(tmp_path, monkeypatch):
     raw = tmp_path / "data" / "raw"
     _write(raw / "HandLabeled/S2Hand/Sri-Lanka_1_S2Hand.tif", _s2())
     _write(raw / "HandLabeled/S1Hand/Sri-Lanka_1_S1Hand.tif", np.zeros((2, H, W), np.float32),
-           transform=TRANSFORM * Affine.translation(3, 0))
+           transform=Affine(0.0001, 0, 81.6 + 1e-7, 0, -0.0001, 7.8))  # 0.1 µdeg: tiny but wrong
     monkeypatch.setenv("FLOODVALUE_DATA_DIR", str(tmp_path / "data"))
     with pytest.raises(ValueError, match="grid differs"):
         ctx.build("Sri-Lanka_1", tmp_path / "run", download=False)
