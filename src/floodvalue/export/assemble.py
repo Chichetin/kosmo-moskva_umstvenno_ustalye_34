@@ -64,7 +64,7 @@ def metrics_rows(baseline_rows: list[dict], main_rows: list[dict] | None,
     channel = prediction.get("channel", "VH")
     out = [{**{k: r[k] for k in METRICS_FIELDS}, "threshold_units": f"dB {channel}",
             "method_name": "threshold_baseline", "source_file": baseline_file} for r in base]
-    if main_rows:
+    if main_rows and not is_baseline_prediction(prediction):
         for r in main_rows:
             if r.get("method") == "main" and r.get("split") in METRICS_SPLITS:
                 out.append({**{k: r[k] for k in METRICS_FIELDS},
@@ -120,11 +120,12 @@ def source_manifest(s1_manifest: dict, chip_id: str, label_read: bool,
         e.setdefault("chip_id", chip_id)
         e.setdefault("applies_to", chip_id)
         if "label" in e:
-            e["label"] = {**e["label"], "read_in_this_run": label_read,
-                          "read_note": ("метка этим запуском не читалась: predict, assets и "
-                                        "procure работают только по S1; метрики — из "
-                                        "docs/verification (расчёт по split вне этого запуска)")
-                          if not label_read else "метка читалась этим запуском"}
+            e["label"] = {**e["label"], "used_by_method": label_read,
+                          "read_note": ("метку читает только QC этапа data (формат и значения) "
+                                        "и расчёт метрик по split в docs/verification; в predict, "
+                                        "assets, procure и в выбор порога она не входит — метод "
+                                        "работает только по S1")
+                          if not label_read else "метка использована методом в этом запуске"}
         if e.get("published_after_event") and not e.get("after_event_note"):
             e["after_event_note"] = e.get("limitations", "")
         entries.append(e)

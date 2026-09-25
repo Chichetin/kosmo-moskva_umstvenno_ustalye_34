@@ -114,6 +114,10 @@ def _metrics(work_prediction: dict, dest: Path, warnings: list[str]) -> list[str
     else:
         base_rows = _read_csv(base_path)
     main_rows = _read_csv(main_path) if main_path.is_file() else None
+    if main_rows and assemble.is_baseline_prediction(work_prediction):
+        warnings.append(f"{MAIN_METRICS} есть, но растр комплекта — baseline (D-009): строки "
+                        "main взяты из baseline, чтобы метрики соответствовали растру")
+        main_rows = None
     if main_rows is None and not assemble.is_baseline_prediction(work_prediction):
         warnings.append(f"основной метод {work_prediction.get('method')!r} без {MAIN_METRICS}: "
                         "в metrics.csv нет строк main")

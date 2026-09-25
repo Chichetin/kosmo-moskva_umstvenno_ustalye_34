@@ -77,6 +77,9 @@ def test_metrics_real_main_uses_its_own_rows_and_never_copies_baseline():
         [("0.8", "0.42", "m.csv")]
     assert not [r for r in assemble.metrics_rows(BASE_ROWS, None, pred, "b.csv", None)
                 if r["method"] == "main"]
+    # baseline raster + stray main-metrics: main rows follow the raster, not the file
+    stray = assemble.metrics_rows(BASE_ROWS, main, BASELINE_PRED, "b.csv", "m.csv")
+    assert {r["iou"] for r in stray if r["method"] == "main"} == {"0.5"}
 
 
 def _sens(scenario, changed):
@@ -120,7 +123,7 @@ def test_source_manifest_keeps_only_this_chip_and_marks_label():
     m = assemble.source_manifest(_s1_manifest(CHIP), CHIP, label_read=False, extra_sources=[])
     assert [s["chip_id"] for s in m["sources"]] == [CHIP]
     s = m["sources"][0]
-    assert s["label"]["read_in_this_run"] is False and s["applies_to"] == CHIP
+    assert s["label"]["used_by_method"] is False and s["applies_to"] == CHIP
     assert s["after_event_note"]  # published after the event: the note is explicit
     with pytest.raises(ValueError):
         assemble.source_manifest(_s1_manifest(CHIP), "Missing_1", False, [])
