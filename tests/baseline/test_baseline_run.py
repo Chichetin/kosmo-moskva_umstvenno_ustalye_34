@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from floodvalue.baseline import run
+from floodvalue.data import io
 from floodvalue.model import metrics
 
 
@@ -47,13 +48,13 @@ def test_rows_match_direct_confusion_and_share_mask_hash():
         tot = None
         for cid in ids:
             s1, label = data[cid]
-            valid = run.core.valid_mask(s1, label)
+            valid = io.valid_mask(s1, label)
             pred = s1[ch] <= params["threshold_db"]
             c = metrics.confusion(pred, label, valid)
             tot = c if tot is None else metrics.add(tot, c)
         row = next(r for r in res["rows"] if r["split"] == part and r["event"] == "ALL")
         assert {k: row[k] for k in tot} == tot
-        h = metrics.mask_sha256([run.core.valid_mask(*data[c]) for c in sorted(ids)])
+        h = metrics.mask_sha256([io.valid_mask(*data[c]) for c in sorted(ids)])
         assert row["valid_mask_sha256"] == h
     assert {r["method"] for r in res["rows"]} == {"baseline"}
     assert {r["event"] for r in res["rows"]} == {"Tr", "Dv", "Va", "ALL"}
@@ -84,3 +85,77 @@ def test_read_chip_refuses_test_labels():
 
     with pytest.raises(SealedTestError):
         run.read_chip("Spain_7370579")
+
+
+def test_chip_without_finite_s1_has_no_otsu_and_zero_counts():
+    s1 = np.full((2, 8, 8), np.nan, np.float32)
+    label = np.ones((8, 8), np.int16)  # labels exist under S1 NaN, still not valid
+    st = run.chip_stats("Va_9", "validation", s1, label)
+    assert st.otsu_t is None and not st.valid.any()
+    assert st.otsu_counts == {"tp": 0, "fp": 0, "fn": 0, "tn": 0}
+    assert st.n_water == 0 and st.n_dry == 0
+
+
+def test_otsu_summary_skips_chips_without_threshold():
+    parts, data = _fixture()
+    data["Va_9"] = (np.full((2, 32, 32), np.nan, np.float32), np.zeros((32, 32), np.int16))
+    parts["validation"] = parts["validation"] + ["Va_9"]
+    _, res = run.fit_and_evaluate(parts, data.__getitem__)
+    _, res0 = run.fit_and_evaluate(_fixture()[0], _fixture()[1].__getitem__)
+    assert res["otsu_t"]["validation"] == res0["otsu_t"]["validation"]
+    row = next(r for r in res["variants"]
+               if r["split"] == "validation" and r["event"] == "ALL"
+               and r["method"] == "otsu_VH_per_chip")
+    row0 = next(r for r in res0["variants"]
+                if r["split"] == "validation" and r["event"] == "ALL"
+                and r["method"] == "otsu_VH_per_chip")
+    assert {k: row[k] for k in ("tp", "fp", "fn", "tn")} == \
+        {k: row0[k] for k in ("tp", "fp", "fn", "tn")}
+    assert row["threshold"] == ""
+
+
+def test_run_writes_config_csvs_report_and_copies(tmp_path, monkeypatch):
+    import csv
+    import json
+
+    from floodvalue.data import split
+
+    parts, data = _fixture()
+    monkeypatch.setattr(split, "chip_ids", lambda part: parts[part])
+    monkeypatch.setattr(run, "read_chip", data.__getitem__)
+    monkeypatch.setattr(run, "_split_sha", lambda: "s" * 64)
+    monkeypatch.setattr(run, "CONFIG_PATH", tmp_path / "models" / "config.json")
+    monkeypatch.setattr(run, "VERIFY_DIR", tmp_path / "verification")
+
+    class Args:
+        out = str(tmp_path / "out")
+
+    assert run.run(Args()) == 0
+    cfg = json.loads((tmp_path / "models" / "config.json").read_text())
+    params, res = run.fit_and_evaluate(parts, data.__getitem__)
+    for k in ("channel", "threshold_db", "scale_db"):
+        assert cfg[k] == params[k]
+    assert cfg["threshold"] == 0.5 and cfg["fitted_on"] == "train"
+    assert cfg["split_sha256"] == "s" * 64 and cfg["commit"] and cfg["created_at"]
+    assert len(cfg["weights_sha256"]) == 64
+
+    def rows(p):
+        with open(p, newline="", encoding="utf-8") as fh:
+            return list(csv.DictReader(fh))
+
+    ver, out = tmp_path / "verification", tmp_path / "out"
+    m = rows(ver / "baseline-metrics.csv")
+    assert list(m[0]) == metrics.METRIC_COLUMNS
+    assert {r["split"] for r in m} == {"train", "dev", "validation"}  # never test
+    assert all(r["method"] == "baseline" for r in m)
+    assert all(r["threshold"] == str(params["threshold_db"]) for r in m)
+    va = next(r for r in m if r["split"] == "validation" and r["event"] == "ALL")
+    exp = next(r for r in res["rows"] if r["split"] == "validation" and r["event"] == "ALL")
+    assert int(va["tp"]) == exp["tp"] and float(va["iou"]) == exp["iou"]
+    for name, copy in (("baseline-metrics.csv", "metrics.csv"),
+                       ("baseline-variants.csv", "variants.csv"),
+                       ("baseline-threshold-curve.csv", "threshold_curve.csv")):
+        assert (ver / name).read_bytes() == (out / copy).read_bytes()
+    assert (ver / "baseline-threshold-curve.png").stat().st_size > 0
+    report = (ver / "baseline-val.md").read_text()
+    assert "Test не читался" in report and "floodvalue.data.io.valid_mask" in report
