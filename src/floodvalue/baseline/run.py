@@ -244,7 +244,8 @@ def read_chip(chip_id: str) -> tuple[np.ndarray, np.ndarray]:
     """S1 (2, H, W) dB and LabelHand via the sealed loader: test labels raise (D-010)."""
     from floodvalue.data.io import load_label, load_s1
 
-    return load_s1(chip_id)[0], load_label(chip_id)[0]
+    label = load_label(chip_id)[0]  # seal check first, before any file is opened
+    return load_s1(chip_id)[0], label
 
 
 def git_commit() -> str:
