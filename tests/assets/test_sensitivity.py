@@ -11,11 +11,15 @@ from rasterio.transform import from_origin
 from floodvalue.assets import run as assets_run
 from floodvalue.assets.portfolio import PROB_NODATA, Asset, assess_assets, expected_loss, extract_p
 from floodvalue.assets.sensitivity import (
+    REQUIRED_KEY,
     SENSITIVITY_FIELDS,
     SINGLE_ASSET_DOWN_FACTOR,
     SINGLE_ASSET_UP_FACTOR,
+    STRATEGY,
     el_sensitivity,
 )
+from floodvalue.contracts.files import SENSITIVITY_REQUIRED_KEYS
+from floodvalue.contracts.schemas import SensitivityRow
 
 # Fixture portfolio: 4 assessed assets with distinct, hand-picked p/V/q so ranks are known and
 # rank movement under a single-asset scenario is predictable, plus 1 no_data asset. A1 reuses the
@@ -50,7 +54,7 @@ def changed(row):
 def test_at_least_three_scenarios_per_parameter():
     rows = el_sensitivity(ASSETS, LOSS_ROWS)
     for parameter in ("p", "V", "q"):
-        n = sum(1 for r in rows if changed(r)["parameter"] == parameter)
+        n = sum(1 for r in rows if REQUIRED_KEY[parameter] in changed(r))
         assert n >= 3, f"{parameter}: only {n} scenarios"
 
 
@@ -59,7 +63,7 @@ def test_row_fields_match_sensitivity_csv_contract():
     assert rows, "no scenarios produced"
     for r in rows:
         assert list(r) == SENSITIVITY_FIELDS
-        assert r["strategy"] == ""  # not tied to any A/B/C basket (D-024)
+        assert r["strategy"] == STRATEGY == "A"  # closest fit: no paid data (D-024)
         assert r["decision_cost_rub"] is None  # plan is not recomputed here
         assert r["covered_expected_loss_rub"] is None  # not a zone-coverage number
         assert r["result_status"] in ("ok", "no_data")
@@ -71,6 +75,32 @@ def test_scenario_ids_are_unique():
     rows = el_sensitivity(ASSETS, LOSS_ROWS)
     ids = [r["scenario_id"] for r in rows]
     assert len(ids) == len(set(ids))
+
+
+def test_rows_validate_against_the_real_contract_schema():
+    # The binding contract (floodvalue.contracts.schemas.SensitivityRow, merged from #2 after
+    # this module's design was first drafted) is the actual gate `make validate` runs -- every
+    # row must parse under it, and REQUIRED_KEY's values must be the same five (minus the two
+    # procurement ones) that floodvalue.export.validate checks for coverage.
+    assert set(REQUIRED_KEY.values()) <= set(SENSITIVITY_REQUIRED_KEYS)
+    for r in el_sensitivity(ASSETS, LOSS_ROWS):
+        SensitivityRow.model_validate(r)
+
+
+def test_changed_inputs_json_touches_exactly_one_required_key_per_row():
+    # floodvalue.export.validate checks, for each of SENSITIVITY_REQUIRED_KEYS, that some row
+    # changes only that one; a row must never mix two of the five in the same changed_inputs_json.
+    # The expected keys are hardcoded here (not read from REQUIRED_KEY.values()) so a broken
+    # p/V/q -> contract-key mapping in sensitivity.py cannot hide from this test by miscounting
+    # itself as correct.
+    assets_keys = {"p_flood", "asset_value_rub", "vulnerability_coef"}
+    assert set(REQUIRED_KEY.values()) == assets_keys
+    rows = el_sensitivity(ASSETS, LOSS_ROWS)
+    for r in rows:
+        touched = set(changed(r)) & assets_keys
+        assert len(touched) == 1, r["scenario_id"]
+    for key in assets_keys:
+        assert any(set(changed(r)) & assets_keys == {key} for r in rows), key
 
 
 # --- control arithmetic: portfolio-wide scaling ---------------------------------------------
@@ -257,10 +287,11 @@ def test_run_writes_assets_sensitivity_csv(tmp_path, monkeypatch):
         rows = list(csv.DictReader(f))
     assert list(rows[0]) == SENSITIVITY_FIELDS
     for parameter in ("p", "V", "q"):
-        n = sum(1 for r in rows if json.loads(r["changed_inputs_json"])["parameter"] == parameter)
+        key = REQUIRED_KEY[parameter]
+        n = sum(1 for r in rows if key in json.loads(r["changed_inputs_json"]))
         assert n >= 3
     for r in rows:
-        assert r["strategy"] == ""
+        assert r["strategy"] == STRATEGY  # contract: Literal["A", "B", "C"]
         assert r["decision_cost_rub"] == ""
         assert r["covered_expected_loss_rub"] == ""
         json.loads(r["changed_inputs_json"])

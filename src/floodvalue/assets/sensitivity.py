@@ -2,9 +2,16 @@
 
 Pure function on an already computed portfolio: no raster I/O, no procurement/budget logic
 (that is issue P18b in `floodvalue.procurement`, writing `procurement_sensitivity.csv`; export
-merges both into `sensitivity.csv`, contract in docs/contracts.md). `el_sensitivity` takes the
-placed `assets` (for V, q, asset_class) and the baseline `loss_rows` produced by
-`assess_assets` (for p, status, rank) and returns rows in the `sensitivity.csv` field order.
+merges both into `sensitivity.csv`, contract in docs/contracts.md and
+`floodvalue.contracts.schemas.SensitivityRow`). `el_sensitivity` takes the placed `assets` (for
+V, q, asset_class) and the baseline `loss_rows` produced by `assess_assets` (for p, status, rank)
+and returns rows in the `sensitivity.csv` field order.
+
+`changed_inputs_json` uses the literal keys required by `floodvalue.contracts.files
+.SENSITIVITY_REQUIRED_KEYS` (`p_flood`, `asset_value_rub`, `vulnerability_coef` are this
+module's share; `budget_rub`, `base_rate_rub_km2` belong to procurement/P18b) so that
+`floodvalue.export.validate` finds, per required key, at least one row that changes only it
+(docs/contracts.md §7a, D-014, D-024).
 """
 
 import json
@@ -20,6 +27,14 @@ SENSITIVITY_FIELDS = [
     "result_status",
     "interpretation",
 ]
+
+# strategy is Literal["A", "B", "C"] in the contract (floodvalue.contracts.schemas.SensitivityRow);
+# these rows probe the loss model itself, not any procurement basket, so "A" (no paid data) is the
+# closest fit -- D-024.
+STRATEGY = "A"
+
+# The key each Python-side parameter maps to in changed_inputs_json (contract-mandated names).
+REQUIRED_KEY = {"p": "p_flood", "V": "asset_value_rub", "q": "vulnerability_coef"}
 
 # Factors applied to the whole portfolio at once (>= 3 required per parameter; task.md example).
 PORTFOLIO_FACTORS = (0.5, 0.8, 1.2, 1.5)
@@ -59,7 +74,7 @@ def _baseline(assets: list[Asset], loss_rows: list[dict]) -> dict[str, dict]:
 
 
 def _clip01(x: float) -> float:
-    return 0.0 if x < 0.0 else 1.0 if x > 1.0 else x
+    return max(0.0, min(x, 1.0))
 
 
 def _recompute(base: dict[str, dict], overrides: dict[str, dict]) -> dict[str, float | None]:
@@ -161,8 +176,11 @@ def _scenario_row(
     base_total = sum(v for v in base_els.values() if v is not None)
     new_total = sum(v for v in new_els.values() if v is not None)
 
-    changed = {"parameter": parameter, "scope": scope, "k": k,
-               "baseline_expected_loss_rub": base_total, "portfolio_expected_loss_rub": new_total}
+    # Exactly one of SENSITIVITY_REQUIRED_KEYS per row (docs/contracts.md §7a): the changed
+    # parameter is nested under its contract key; scope/asset_id/totals/clips are sibling keys,
+    # which the validator does not count against the "changed only one of the five" rule.
+    changed: dict = {REQUIRED_KEY[parameter]: {"factor": k}, "scope": scope,
+                     "baseline_expected_loss_rub": base_total, "portfolio_expected_loss_rub": new_total}
     if scope == "single_asset":
         changed["asset_id"] = target
     if clipped:
@@ -170,10 +188,7 @@ def _scenario_row(
 
     return {
         "scenario_id": scenario_id,
-        # Not tied to a procurement strategy: these rows probe the loss model itself, upstream
-        # of any A/B/C choice, and A implies a specific (zero-cost, no-purchase) basket that
-        # would contradict decision_cost_rub being empty here (reviewer skeptic, D-024).
-        "strategy": "",
+        "strategy": STRATEGY,
         "changed_inputs_json": json.dumps(changed, ensure_ascii=False, sort_keys=True),
         # The procurement plan is not recomputed by this function -- empty, not 0.
         "decision_cost_rub": None,
