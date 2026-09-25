@@ -91,7 +91,9 @@
     "result": null
   },
   "metrics": {
-    "files": []
+    "files": [
+      "metrics.csv"
+    ]
   },
   "reproduce": [
     "uv run --frozen python tests/contracts/build_fixture.py tests/fixtures/good"

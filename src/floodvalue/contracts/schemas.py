@@ -310,7 +310,7 @@ class ProxyCheckInfo(_Model):
 
 
 class MetricsInfo(_Model):
-    files: list[NonEmptyStr]
+    files: Annotated[list[NonEmptyStr], Field(min_length=1)]  # metrics.csv of both methods
 
 
 class RunMetadata(_Model):

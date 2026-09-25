@@ -262,9 +262,17 @@ def build(out: Path) -> None:
                         "method": "аналитически из p", "raster": None},
         "proxy_check": {"status": "not_done", "test_chip": None, "control_points": None, "fixed_v_q": None,
                         "n_points": None, "error_metric": None, "result": None},
-        "metrics": {"files": []},
+        "metrics": {"files": ["metrics.csv"]},
         "reproduce": ["uv run --frozen python tests/contracts/build_fixture.py tests/fixtures/good"],
     })
+    h = "0" * 64
+    write_csv(out / "metrics.csv", [
+        {"method": m, "split": "validation", "event": "ALL", "iou": iou, "f1": f1, "precision": pr,
+         "recall": rc, "tp": tp, "fp": fp, "fn": fn, "tn": tn, "n_pixels": 4060,
+         "threshold": thr, "valid_mask_sha256": h}
+        for m, iou, f1, pr, rc, tp, fp, fn, tn, thr in [
+            ("baseline", 0.5, 0.667, 0.6, 0.75, 600, 400, 200, 2860, -20.0),
+            ("main", 0.6, 0.75, 0.7, 0.8, 640, 274, 160, 2986, THRESHOLD)]])
     write_json(out / "source_manifest.json", {"sources": [{
         "id": f"{CHIP}_S1Hand", "file": f"{CHIP}_S1Hand.tif", "url": "https://github.com/cloudtostreet/Sen1Floods11",
         "version": "synthetic", "observation_date": "2017-05-30", "available_date": "2017-05-30",

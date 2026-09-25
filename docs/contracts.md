@@ -99,7 +99,8 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
   CSV — строго `true`/`false`. Даты — ISO 8601; время без пояса считается UTC.
 - `asset_loss.csv`: `p_flood` — значение `flood_probability.tif` в пикселе объекта
   (допуск 1e-6 к float32), без округления сверх кратчайшей записи; `expected_loss_rub` =
-  записанный `p_flood` × V × q с допуском 0,01 руб.; `status=ok` ⇔ пиксель валиден;
+  записанный `p_flood` × V × q с допуском 0,01 руб.; `ok` ⇒ пиксель валиден, `no_data` ⇒
+  пиксель nodata (`partial` — на усмотрение производителя, с причиной в метаданных);
   `partial`/`no_data` → пустые `p_flood`, `expected_loss_rub`, `rank`; `rank` 1…n только у
   `ok` по (−EL, `asset_id`). `uncertainty` может быть пустым; смысл — `run_metadata.uncertainty`.
 - `candidate_orders.geojson`: только `Polygon` (не MultiPolygon); `observation_at`,
@@ -118,11 +119,14 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
   обязана быть в бюджете; `covered_expected_loss_rub` (B, C) = Σ EL `ok`-объектов, которые
   `covers` хотя бы одна зона стратегии с `data_role=event_observation` и `available_at ≤
   decision_deadline` (допуск 0,01); `coverage_share` = covered / Σ EL `ok`-объектов (допуск
-  1e-4), пусто ⇔ Σ EL = 0; `residual_uncertainty` пусто ⇔ `not_estimated`; A — `baseline`.
+  1e-4), пусто ⇔ Σ EL = 0; `residual_uncertainty` пусто ⇔ `not_estimated`; A — `baseline`;
+  у A платных зон нет, поэтому её `covered_expected_loss_rub` = 0, иное — только с
+  объяснением в `run_metadata.strategies.coverage_A`.
 - `sensitivity.csv`: ключи `changed_inputs_json` для обязательных вариаций —
   `p_flood`, `asset_value_rub`, `vulnerability_coef`, `budget_rub`, `base_rate_rub_km2`;
   на каждый — хотя бы одна строка, где из этих пяти изменён только он (другие ключи,
-  например `asset_id`, допустимы).
+  например `asset_id`, допустимы). Ставка как «экономический параметр» и раздельные p, V, q —
+  решение команды (D-014): task.md требует бюджет и хотя бы один экономический параметр.
 
 ## 8. `run_metadata.json` (схема `RunMetadata`)
 
@@ -150,12 +154,15 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
  "uncertainty": {"meaning", "units", "method", "raster": null},
  "proxy_check": {"status": "done|planned|not_done", "test_chip", "control_points",
                  "fixed_v_q", "n_points", "error_metric", "result"},
- "metrics": {"files": ["metrics.csv", "…"]},
+ "metrics": {"files": ["metrics.csv", "…"]},   # ≥ 1 файл; путь от комплекта или репо
  "reproduce": ["make all CHIP=… BUDGET=…"]}
 ```
 
 `threshold` — порог основного метода (mask = 1 ⇔ p ≥ threshold, сравнение в float64
 значения float32), равен `methods.main.threshold`. `source.s1_files` содержит S1 чипа.
+Каждый файл `metrics.files` существует; `metrics.csv` (§7) содержит строки `baseline` и
+`main`, и в каждой паре (`split`, `event`) у них один `valid_mask_sha256` (критерий 12:
+«метрики двух методов»; ошибки приписываются `run_metadata.json`).
 `assets_metadata.json` модуля `assets` (D-018) экспорт переносит так: `seed`,
 `placement_rule` → `portfolio`; `el_model`, `p_extraction_rule`, `status_rule` →
 `expected_loss`; `uncertainty` → `uncertainty` (пока `binary_entropy_bits`, биты, временно).
@@ -191,7 +198,8 @@ def plan(run_dir: Path, budget_rub: float) -> dict:
 `python -m floodvalue validate --out <каталог>` = `make validate OUT=<каталог>`. Без
 `--out` — самый свежий комплект в `FLOODVALUE_OUTPUT_DIR` (подкаталог с
 `run_metadata.json`, по времени изменения этого файла), если его нет — эталон
-`tests/fixtures/good`; путь печатается первой строкой. Вывод — `OK`/`FAIL` по каждому из
+`tests/fixtures/good`; путь печатается первой строкой, эталон помечен «ЭТАЛОН …, не
+результат запуска». Реальный комплект проверяется явно: `make validate OUT=outputs/<run_id>`. Вывод — `OK`/`FAIL` по каждому из
 12 файлов с причинами и итог `N/12`; код возврата 0 только при 12/12. Каждая ошибка
 приписана одному файлу; перекрёстные проверки (маска ↔ порог, EL ↔ растр, план ↔
 сравнение) приписаны файлу, который им противоречит. Если найден S1 чипа в

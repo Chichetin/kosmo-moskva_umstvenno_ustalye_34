@@ -267,6 +267,38 @@ def covered_expected_loss(zones: list, points: dict[str, Point], el: dict[str, f
     return sum(v for aid, v in el.items() if any(z.covers(points[aid]) for z in zones))
 
 
+METRICS_FIELDS = ("method", "split", "event", "iou", "f1", "precision", "recall", "tp", "fp",
+                  "fn", "tn", "n_pixels", "threshold", "valid_mask_sha256")
+
+
+def _check_metrics(report: _Report, run_dir: Path, meta: RunMetadata) -> None:
+    """Criterion 12 'metrics of both methods': files listed in run_metadata.metrics exist;
+    metrics.csv has baseline and main on the same valid-pixel mask (docs/contracts.md §7)."""
+    name = F.RUN_METADATA
+    for rel in meta.metrics.files:
+        path = next((c for c in (run_dir / rel, REPO_ROOT / rel) if c.is_file()), None)
+        if path is None:
+            report.add(name, f"metrics.files: {rel} не найден")
+            continue
+        if path.name != "metrics.csv":
+            continue
+        header, rows, errors = read_csv(path)
+        for e in errors:
+            report.add(name, f"{rel}: {e}")
+        missing = [f for f in METRICS_FIELDS if f not in header]
+        if missing:
+            report.add(name, f"{rel}: нет столбцов {missing}")
+            continue
+        if {r["method"] for r in rows} < {"baseline", "main"}:
+            report.add(name, f"{rel}: нужны строки обоих методов baseline и main")
+        by_key: dict[tuple[str, str], set[str]] = defaultdict(set)
+        for r in rows:
+            by_key[(r["split"], r["event"])].add(r["valid_mask_sha256"])
+        for key, hashes in by_key.items():
+            if len(hashes) > 1:
+                report.add(name, f"{rel}: методы в {key} посчитаны на разных масках валидных пикселей")
+
+
 # --- main entry --------------------------------------------------------------------------------
 
 def validate_run(run_dir: Path, assets_config: Path | None = None,
@@ -308,6 +340,9 @@ def validate_run(run_dir: Path, assets_config: Path | None = None,
             report.add(n, "перекрёстная проверка невозможна: run_metadata.json невалиден")
     elif not any(meta.chip_id in s for s in meta.source.s1_files):
         report.add(F.RUN_METADATA, "source.s1_files не содержит S1 чипа chip_id")
+
+    if meta is not None:
+        _check_metrics(report, run_dir, meta)
 
     # rasters -----------------------------------------------------------------------------------
     raster = None
@@ -485,6 +520,10 @@ def validate_run(run_dir: Path, assets_config: Path | None = None,
                                  f"data_cost {'≤' if within else '>'} бюджета")
             if s == "C" and not within:
                 report.add(name, f"C: data_cost_rub={r.data_cost_rub} превышает бюджет {r.budget_rub}")
+            if s == "A" and r.covered_expected_loss_rub != 0 and meta and \
+                    not (meta.strategies.model_extra or {}).get("coverage_A"):
+                report.add(name, "A: covered_expected_loss_rub ≠ 0 без strategies.coverage_A "
+                                 "в run_metadata (у A нет платных зон)")
             if s in ("B", "C") and plans is not None and cands is not None and meta and losses:
                 deadline = _utc(meta.budget.decision_deadline)
                 used = [zones[i] for i in getattr(plans, s)
@@ -554,7 +593,9 @@ def default_run_dir() -> Path:
 
 def run(args) -> int:
     run_dir = Path(args.out) if getattr(args, "out", None) else default_run_dir()
-    print(f"Комплект: {run_dir}")
+    marker = "  [ЭТАЛОН tests/fixtures/good, не результат запуска]" \
+        if run_dir.resolve() == FIXTURE_RUN.resolve() else ""
+    print(f"Комплект: {run_dir}{marker}")
     if not run_dir.is_dir():
         print("каталог не найден")
         return 1

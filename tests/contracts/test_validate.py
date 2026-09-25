@@ -525,3 +525,30 @@ def test_coverage_counts_boundary_point_once():
     zones = [box(0, 0, 1, 1), box(1, 0, 2, 1)]  # a on the shared edge, b on a corner
     pts = {"a": Point(1, 0.5), "b": Point(0, 0), "c": Point(5, 5)}
     assert V.covered_expected_loss(zones, pts, {"a": 10.0, "b": 1.0, "c": 100.0}) == 11.0
+
+
+def test_metrics_of_both_methods_required(run_dir):
+    edit_csv(run_dir / "metrics.csv", lambda rows: [r for r in rows if r["method"] != "baseline"])
+    assert "baseline и main" in only(failing(run_dir), F.RUN_METADATA)
+
+
+def test_metrics_on_different_valid_masks_fails(run_dir):
+    edit_csv(run_dir / "metrics.csv", lambda rows: rows[0].update(valid_mask_sha256="1" * 64))
+    assert "разных масках" in only(failing(run_dir), F.RUN_METADATA)
+
+
+def test_metrics_file_missing_fails(run_dir):
+    (run_dir / "metrics.csv").unlink()
+    assert "не найден" in only(failing(run_dir), F.RUN_METADATA)
+
+
+def test_strategy_a_nonzero_coverage_without_declaration_fails(run_dir):
+    edit_csv(run_dir / F.STRATEGY_COMPARISON, lambda rows: row(rows, strategy="A").update(
+        covered_expected_loss_rub="100.00", coverage_share=""))
+    assert "coverage_A" in " ".join(failing(run_dir)[F.STRATEGY_COMPARISON])
+
+
+def test_cli_marks_fixture_fallback(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("FLOODVALUE_OUTPUT_DIR", str(tmp_path / "none"))
+    assert cli.main(["validate"]) == 0
+    assert "ЭТАЛОН" in capsys.readouterr().out
