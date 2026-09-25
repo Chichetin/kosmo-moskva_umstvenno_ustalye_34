@@ -1,0 +1,44 @@
+{
+  "method": "unet",
+  "measure": "entropy_p",
+  "units": "биты, 0…1",
+  "selection_rule": "max worst-event AUROC(u -> error) on validation (Sri-Lanka, Nigeria); a simpler measure (order entropy_p, threshold_margin, member_std, mutual_info) wins when the chip-bootstrap 95 % interval of the difference contains 0; error = (p >= threshold) != LabelHand",
+  "status": "связь с ошибками проверена на validation (часть подбора калибровки и порога) и на dev (USA: в выборе показателя и калибровке не участвовал, но на нём выбиралась эпоха модели, D-019); на test не проверено до eval-test",
+  "validation": {
+    "Nigeria": {
+      "auroc": 0.8931111210882091,
+      "mean_u_error": 0.5635308027267456,
+      "mean_u_correct": 0.16083794832229614
+    },
+    "Sri-Lanka": {
+      "auroc": 0.9065234609282962,
+      "mean_u_error": 0.7158520817756653,
+      "mean_u_correct": 0.19197039306163788
+    },
+    "ALL": {
+      "auroc": 0.90245561223045,
+      "mean_u_error": 0.6722052097320557,
+      "mean_u_correct": 0.1830175668001175
+    }
+  },
+  "dev": {
+    "USA": {
+      "auroc": 0.8635129963098386,
+      "mean_u_error": 0.7023857831954956,
+      "mean_u_correct": 0.19629614055156708
+    },
+    "ALL": {
+      "auroc": 0.8635129963098386,
+      "mean_u_error": 0.7023857831954956,
+      "mean_u_correct": 0.19629614055156708
+    }
+  },
+  "flag_cut_top10_validation": 0.5567176938056946,
+  "p_range": "p_low/p_high = min/max over members of calibrated member p (seed spread, not a confidence interval)",
+  "input_model_sha256": "504944cd880c0b2e94acf2481e6ddc4db985ddbd64d550a3591321e8b0cc1bb3",
+  "calibration_sha256": "3e5bad6c4c9da303aaece5cda47b468807dedceb92527b341b2e6b6a255ee60f",
+  "split_sha256": "0098346e0f87297501409a1a8522afab6209e35f56e8cf1b68996909c8b63c75",
+  "created_at": "2026-09-25T20:59:31+00:00",
+  "commit": "9d7201d5955c09ecf58993d866ac794181dde01a",
+  "report": "docs/verification/uncertainty-val.md"
+}
