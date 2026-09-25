@@ -137,11 +137,10 @@ make validate OUT=outputs/<chip_id>_<руб>_<commit>
 `dev`/`validation` (USA, Nigeria, Sri-Lanka, включая чип с 66,6 % nodata в S1) — метрики,
 причины ошибок и картинки в `docs/verification/transfer-val.md`; `12/12` на каждом.
 
-**Важно:** `decision_at`/`decision_deadline` (сроки для A/B/C) берутся из
-`configs/run.yaml` и не подстраиваются под `--chip` автоматически — для реалистичного
-сценария A/B/C на чипе другого события отредактируйте их в `configs/run.yaml` перед
-`make procure`/`make all` (подробности — `docs/verification/transfer-val.md` §7; привязка к дате S1 чипа — #84).
-`flood_probability.tif`/`flood_mask.tif`/`asset_loss.csv` от этого не зависят.
+`decision_at`/`decision_deadline` (сроки для A/B/C) берутся от даты S1 обрабатываемого
+чипа (D-043, #84): например, `USA_198411` → `2019-05-22T23:59:59+00:00` /
+`2019-05-23T11:59:59+00:00` — правка `configs/run.yaml` при смене чипа не нужна
+(`docs/verification/transfer-val.md` §7).
 
 ## Результаты
 
