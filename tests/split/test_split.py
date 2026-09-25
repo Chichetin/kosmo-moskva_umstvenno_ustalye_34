@@ -79,7 +79,7 @@ def test_loader_seals_test(frozen):
 def test_loader_rejects_tampered_file(tmp_path, frozen):
     bad = dict(frozen, train=frozen["train"] + [frozen["test"][0]])
     path = tmp_path / "split.json"
-    path.write_text(json.dumps(bad))
+    path.write_text(json.dumps(bad), encoding="utf-8")
     with pytest.raises(ValueError):
         S.chip_ids("train", path=path)
 
@@ -97,7 +97,7 @@ def test_unknown_event_is_an_error():
 @needs_raw
 def test_rebuild_is_deterministic_and_equals_frozen(frozen):
     a, b = S.build_split(seed=S.SEED), S.build_split(seed=S.SEED)
-    assert S.dumps(a) == S.dumps(b) == S.SPLIT_PATH.read_text()
+    assert S.dumps(a) == S.dumps(b) == S.SPLIT_PATH.read_text(encoding="utf-8")
     assert a["sha256"] == frozen["sha256"]
 
 

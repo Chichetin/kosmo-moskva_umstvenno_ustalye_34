@@ -131,7 +131,7 @@ def test_run_writes_config_csvs_report_and_copies(tmp_path, monkeypatch):
         out = str(tmp_path / "out")
 
     assert run.run(Args()) == 0
-    cfg = json.loads((tmp_path / "models" / "config.json").read_text())
+    cfg = json.loads((tmp_path / "models" / "config.json").read_text(encoding="utf-8"))
     params, res = run.fit_and_evaluate(parts, data.__getitem__)
     for k in ("channel", "threshold_db", "scale_db"):
         assert cfg[k] == params[k]
@@ -157,5 +157,5 @@ def test_run_writes_config_csvs_report_and_copies(tmp_path, monkeypatch):
                        ("baseline-threshold-curve.csv", "threshold_curve.csv")):
         assert (ver / name).read_bytes() == (out / copy).read_bytes()
     assert (ver / "baseline-threshold-curve.png").stat().st_size > 0
-    report = (ver / "baseline-val.md").read_text()
+    report = (ver / "baseline-val.md").read_text(encoding="utf-8")
     assert "Test не читался" in report and "floodvalue.data.io.valid_mask" in report

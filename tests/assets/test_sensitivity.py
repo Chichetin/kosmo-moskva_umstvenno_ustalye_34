@@ -17,6 +17,7 @@ from floodvalue.assets.sensitivity import (
     SINGLE_ASSET_UP_FACTOR,
     STRATEGY,
     el_sensitivity,
+    inspection_order_changes,
 )
 from floodvalue.contracts.files import SENSITIVITY_REQUIRED_KEYS
 from floodvalue.contracts.schemas import SensitivityRow
@@ -235,6 +236,59 @@ def test_p_scenario_never_touches_V_or_q():
     assert changed(row)["portfolio_expected_loss_rub"] != pytest.approx(BASE_TOTAL)
     single = expected_loss(0.4 * 0.5, A1.asset_value_rub, A1.vulnerability_coef)
     assert single == pytest.approx(500_000.0)
+
+
+# --- criterion 14: how p, V, q change the inspection order (D-035) ----------------------------
+
+
+def test_every_scenario_states_the_inspection_order_effect():
+    for r in el_sensitivity(ASSETS, LOSS_ROWS):
+        assert "очерёдность осмотра: " in r["interpretation"], r["scenario_id"]
+
+
+def test_uniform_scaling_keeps_the_inspection_order():
+    rows = rows_by_scenario(el_sensitivity(ASSETS, LOSS_ROWS))
+    for sid in ("V_portfolio_x0.5", "q_portfolio_x1.2", "p_portfolio_x0.8"):
+        assert "очерёдность осмотра: без изменений" in rows[sid]["interpretation"], sid
+
+
+def test_leader_scenario_moves_the_inspection_order():
+    # Base order: A02, A01, A05 (no_data clinic, social constraint -> place 3), A04, A03.
+    # p of A02 x0.2 -> EL 360,000: A01, A04, A05, A02, A03.
+    rows = rows_by_scenario(el_sensitivity(ASSETS, LOSS_ROWS))
+    row = rows[f"p_leader_x{SINGLE_ASSET_DOWN_FACTOR}"]
+    assert "очерёдность осмотра: A01 2→1, A04 4→2, A02 1→4" in row["interpretation"]
+
+
+def test_p_scenario_can_move_an_asset_out_of_likely_dry():
+    # A03 p=0.05 (likely dry, EL rank 4) is the challenger: p x3 -> 0.15 >= P_DRY -> at_risk.
+    # Its place (5, after the no_data clinic lifted to 3) stays, but the group change is named.
+    rows = [dict(r) for r in LOSS_ROWS]
+    rows[2].update(p_flood=0.05, expected_loss_rub=75_000.0, uncertainty=0.29)
+    changes = inspection_order_changes(ASSETS, rows)
+    assert changes["p_challenger_x3.0"] == ["A03 5→5 (likely_dry→at_risk)"]
+    assert changes["q_challenger_x3.0"] == []  # q never changes p, so no group change
+    row = rows_by_scenario(el_sensitivity(ASSETS, rows))["p_challenger_x3.0"]
+    assert "очерёдность осмотра: A03 5→5 (likely_dry→at_risk)" in row["interpretation"]
+
+
+def test_p_scenario_can_move_an_asset_down_into_likely_dry():
+    # Entropy is a function of p (D-018): for the inspection rule it is recomputed from p', so a
+    # lower p is not held in at_risk by the baseline uncertainty. A02 p=0.9 x0.2 -> 0.18 stays
+    # at risk; make the leader p=0.4 (A01 as the only large asset) to cross P_DRY.
+    rows = [dict(r) for r in LOSS_ROWS]
+    rows[0].update(expected_loss_rub=2_000_000.0, rank=1)   # A01: p=0.4, u=H(0.4)=0.97, leader
+    rows[1].update(rank=2)
+    assets = [Asset("A01", "warehouse", 20_000_000, 0.25, 0, 0, 0.0, 0.0), A2, A3, A4, A5]
+    moves = inspection_order_changes(assets, rows)["p_leader_x0.2"]  # p' = 0.08, EL 400,000
+    assert any(m.startswith("A01 ") and m.endswith("(at_risk→likely_dry)") for m in moves), moves
+
+
+def test_inspection_order_changes_cover_every_scenario():
+    rows = el_sensitivity(ASSETS, LOSS_ROWS)
+    changes = inspection_order_changes(ASSETS, LOSS_ROWS)
+    assert set(changes) == {r["scenario_id"] for r in rows}
+    assert changes["p_leader_x0.2"] == ["A01 2→1", "A04 4→2", "A02 1→4"]
 
 
 # --- criteria 14 / task.md: changing the binarization threshold does not change EL ------------

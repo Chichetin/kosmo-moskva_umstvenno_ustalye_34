@@ -8,6 +8,7 @@
 | Дата | Что | Кто нужен |
 |---|---|---|
 | 2026-09-25 | Приглашения в репозиторий не приняты: IR630, fafakaj | эти участники |
+| 2026-09-25 | GitVerse: код = `6fe66f0` (25.09 ~23:30, `--no-verify`), веса не залиты: LFS PUT → 403 на токен chichetin (push:true по API). Дальше — `bash scripts/sync-gitverse.sh --code-only` до получения прав (GIT.md «GitVerse») | токен с записью в LFS / проверка прав у admin hackrus.experts |
 
 ## Итоги вех
 
