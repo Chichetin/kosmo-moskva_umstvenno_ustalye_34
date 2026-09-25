@@ -6,9 +6,9 @@
 * ``Z-<asset_id>`` — квадрат ``BUFFER_SIDE_KM`` вокруг каждого объекта в EPSG:6933, новая
   гарантированная SAR-съёмка 1 м (наблюдение текущей воды, успевает к сроку);
 * ``W-CHIP`` — сплошное покрытие чипа той же съёмкой (широкая зона, правило B);
-* ``N-OPT-LATE`` — новая оптическая съёмка по охвату объектов; ближайший безоблачный
+* ``N-OPT-LATE`` — новая оптическая съёмка по охвату объектов (обрезан по чипу); ближайший безоблачный
   пролёт — после срока решения, поэтому в каталоге есть, но охвата не даёт;
-* ``K-ARCH`` / ``K-OPER`` — имеющиеся оптические снимки до паводка (``data_role=context``):
+* ``K-ARCH`` / ``K-OPER`` — гипотетические имеющиеся оптические снимки до паводка (``data_role=context``):
   состояние объектов до события, текущую воду не наблюдают.
 
 Все сроки и характеристики съёмки сценарные (``TIMING_STATUS``), не подтверждены поставщиком.
@@ -95,6 +95,8 @@ def build_catalog(assets: Iterable[Mapping[str, Any]], chip_bounds: tuple[float,
     lats = [float(a["latitude"]) for a in assets]
     pad = 0.005
     hull = box(min(lons) - pad, min(lats) - pad, max(lons) + pad, max(lats) + pad)
+    clipped = hull.intersection(chip)
+    hull = clipped if clipped.geom_type == "Polygon" and not clipped.is_empty else hull
     feats.append(_feature("N-OPT-LATE", hull, {
         **OPTICAL, "acquisition_type": "new", "guaranteed_purchase": True,
         "data_role": "event_observation", "zone_kind": "late_optical",
@@ -106,6 +108,8 @@ def build_catalog(assets: Iterable[Mapping[str, Any]], chip_bounds: tuple[float,
         feats.append(_feature(cid, chip, {
             **OPTICAL, "acquisition_type": acq, "guaranteed_purchase": False,
             "data_role": "context", "zone_kind": "context",
+            "source_note": ("гипотетический имеющийся снимок (сценарий), не из реального "
+                            "каталога поставщика; дата = decision_at − " f"{age} сут"),
             "observation_at": _iso(obs), "available_at": _iso(obs + timedelta(days=2))},
             pricing_cfg))
     return {"type": "FeatureCollection", "features": feats}

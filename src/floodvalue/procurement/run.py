@@ -64,6 +64,8 @@ def _chip_bounds(run_dir: Path, assets: list[dict[str, str]]) -> tuple[tuple, st
     if prob.exists():
         import rasterio
         with rasterio.open(prob) as src:
+            if src.crs is None or src.crs.to_epsg() != 4326:
+                raise ValueError(f"{prob}: ожидается EPSG:4326, получено {src.crs}")
             return tuple(src.bounds), "flood_probability.tif bounds"
     lons = [float(a["longitude"]) for a in assets]
     lats = [float(a["latitude"]) for a in assets]
@@ -78,15 +80,12 @@ def _context(run_dir: Path) -> dict[str, Any]:
     pricing_cfg = load_pricing()
     assets = _read_csv(run_dir / "assets.csv")
     loss = _read_csv(run_dir / "asset_loss.csv")
-    cat_path = run_dir / "candidate_orders.geojson"
     decision_at = zones.parse_dt(rc["decision_at"])
     deadline = zones.parse_dt(rc["decision_deadline"])
-    if cat_path.exists():
-        catalog = json.loads(cat_path.read_text(encoding="utf-8"))
-        bounds_src = "candidate_orders.geojson (готовый каталог)"
-    else:
-        bounds, bounds_src = _chip_bounds(run_dir, assets)
-        catalog = zones.build_catalog(assets, bounds, decision_at, pricing_cfg)
+    # The catalog is always rebuilt from current assets, chip bounds and decision_at
+    # (deterministic, cheap): a stale candidate_orders.geojson never drives coverage.
+    bounds, bounds_src = _chip_bounds(run_dir, assets)
+    catalog = zones.build_catalog(assets, bounds, decision_at, pricing_cfg)
     ok_ids = {r["asset_id"] for r in loss if r["status"] == "ok"}
     ok_assets = [a for a in assets if a["asset_id"] in ok_ids]
     cov = zones.coverage(catalog, ok_assets, deadline)
@@ -119,8 +118,8 @@ def _plan(ctx: dict[str, Any], budget_rub: float) -> dict[str, Any]:
 def plan(run_dir: Path, budget_rub: float) -> dict[str, Any]:
     """Пересчёт A/B/C для бюджета без записи файлов (для интерфейса, D-013).
 
-    Читает только assets.csv, asset_loss.csv, candidate_orders.geojson (или строит каталог),
-    конфиги; p-растр, маску, порог и портфель не меняет. Ключи: plans, plan_rows,
+    Читает assets.csv, asset_loss.csv, заголовок flood_probability.tif и конфиги; каталог зон
+    каждый раз строится заново из текущих входов (детерминированно, как в файле); p-растр, маску, порог и портфель не меняет. Ключи: plans, plan_rows,
     comparison, reasons.
     """
     return _plan(_context(Path(run_dir)), budget_rub)

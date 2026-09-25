@@ -68,7 +68,7 @@ def test_a_empty_baseline_uncertainty_bc_not_estimated():
     res = plan("5000")
     a = cmp_(res, "A")
     assert res["plans"]["A"] == [] and a["data_cost_rub"] == 0
-    assert a["uncertainty_status"] == "baseline" and a["residual_uncertainty"] == 0.5
+    assert a["uncertainty_status"] == "baseline" and a["residual_uncertainty"] == pytest.approx(5.0)
     assert a["covered_expected_loss_rub"] == 0
     for s in "BC":
         assert cmp_(res, s)["uncertainty_status"] == "not_estimated"

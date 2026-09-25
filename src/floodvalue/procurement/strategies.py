@@ -44,7 +44,7 @@ OTHER_COST = {
               "ошибки действий не оцениваются"),
 }
 
-UNCERTAINTY_A_BASIS = ("среднее поля uncertainty asset_loss.csv по объектам status=ok "
+UNCERTAINTY_A_BASIS = ("сумма поля uncertainty asset_loss.csv по объектам status=ok "
                        "(исходная неопределённость карты в точках объектов, без новых наблюдений)")
 UNCERTAINTY_BC_BASIS = ("новые наблюдения не получены и не обработаны: снижение "
                         "неопределённости от закупки не оценивается и не заявляется")
@@ -138,7 +138,7 @@ def comparison_row(strategy: str, ids: list[str], rows: list[Mapping[str, Any]],
     denom = sum(v["el"] for v in el.values())
     if strategy == "A":
         uncs = [v["unc"] for v in el.values()]
-        res_u = sum(uncs) / len(uncs) if uncs else None
+        res_u = sum(uncs) if uncs else None
         status, basis = "baseline", UNCERTAINTY_A_BASIS
     else:
         res_u, status, basis = None, "not_estimated", UNCERTAINTY_BC_BASIS
@@ -221,9 +221,11 @@ def sensitivity(catalog: Mapping[str, Any], cov: Mapping[str, list[str]], eligib
                    "base_rate_factor": float(f), "base_rate_status": "scenario"}
         row(f"rate_x{f}", "C", changed, res,
             lambda ids, c, f=f: (f"ставка Б × {f}: {diff(ids)}; данные {c['data_cost_rub']} руб. при "
-                            f"бюджете {budget}; охват EL {c['covered_expected_loss_rub']:.2f} руб."))
+                            f"бюджете {budget}; охват EL {c['covered_expected_loss_rub']:.2f} руб.; "
+                            f"неопределённость not_estimated (новых наблюдений нет)"))
         row(f"rate_x{f}", "B", changed, res,
             lambda ids, c, f=f: (f"ставка Б × {f}: B [{', '.join(ids) or 'пусто'}] стоит "
                             f"{c['data_cost_rub']} руб. при бюджете {budget} — "
-                            + ("в бюджете" if c["budget_feasible"] else "контрфактическая")))
+                            + ("в бюджете" if c["budget_feasible"] else "контрфактическая")
+                            + "; неопределённость not_estimated (новых наблюдений нет)"))
     return rows

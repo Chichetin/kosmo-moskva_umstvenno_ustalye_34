@@ -86,3 +86,30 @@ def test_cli_procure_writes_contract_files(tmp_path):
 
 def test_cli_missing_assets(tmp_path):
     assert main(["procure", "--budget", "5000", "--out", str(tmp_path)]) == 1
+
+
+def test_stale_catalog_file_is_not_used(tmp_path):
+    """Каталог строится из текущих assets: объекты переставлены в обратном порядке —
+    зона Z-A10 обязана лежать вокруг нового места A10 (старый файл каталога не читается)."""
+    _write_run_dir(tmp_path)
+    prun.write_outputs(tmp_path, 5000)
+    with open(tmp_path / "assets.csv") as f:
+        rows = list(csv.DictReader(f))
+    coords = [(r["longitude"], r["latitude"]) for r in rows][::-1]
+    with open(tmp_path / "assets.csv", "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w.writeheader()
+        for r, (lon, lat) in zip(rows, coords, strict=True):
+            w.writerow({**r, "longitude": lon, "latitude": lat})
+    res = procurement.plan(tmp_path, 2500)
+    assert res["plans"]["C"][0] in ("Z-A09", "Z-A10")  # зоны у A10 (max EL) и соседей
+    c = next(r for r in res["comparison"] if r["strategy"] == "C")
+    assert "A10" in c["covered_asset_ids"].split()
+
+
+def test_late_optical_zone_inside_chip(tmp_path):
+    _write_run_dir(tmp_path)
+    prun.write_outputs(tmp_path, 5000)
+    cat = json.loads((tmp_path / "candidate_orders.geojson").read_text())
+    area = {f["properties"]["candidate_id"]: f["properties"]["area_km2"] for f in cat["features"]}
+    assert area["N-OPT-LATE"] <= area["W-CHIP"]
