@@ -13,6 +13,8 @@ Sentinel-1 чипу Sen1Floods11 строит вероятностную кар�
   (v1.1, `gs://sen1floods11`), в репозиторий не кладётся. Подробно — `docs/data.md`.
 - Commit сдачи: `TBD` · версии зависимостей — `uv.lock` · Python 3.12.
 
+Новый участник команды — `docs/onboarding-prompt.md`.
+
 ## Установка
 
 ```bash
