@@ -667,3 +667,63 @@ def test_chip_extent_non_square_and_projected():
     utm = {"crs": CRS.from_epsg(32644), "transform": from_origin(500000.0, 862000.0, 10.0, 10.0)}
     west, south, east, north = V._chip_lonlat((p, p > 0, utm)).bounds
     assert 80.9 < west < east < 81.1 and 7.7 < south < north < 7.9  # degrees, not metres
+
+
+# --- acceptance #14: each broken fixture from the task gives its own, distinguishable error ----
+
+def _break_nan(run_dir):
+    with rasterio.open(run_dir / F.FLOOD_PROBABILITY, "r+") as dst:
+        p = dst.read(1)
+        p[40, 40] = np.nan
+        dst.write(p, 1)
+
+
+def _break_hole(run_dir):
+    x, y = TO_EA.transform(80.01, 7.78)
+    poly = square_ll(x, y, 1300, hole=100)
+    replace_zone(run_dir, poly, V.round_half_up(area_km2(poly), "0.001"))
+
+
+def _break_09996(run_dir):
+    x, y = TO_EA.transform(80.01, 7.78)
+    replace_zone(run_dir, square_ll(x, y, 0.9996 ** 0.5 * 1000), 1.0)
+
+
+def _break_dup_asset(run_dir):
+    edit_json(run_dir / F.ASSETS_GEOJSON,
+              lambda d: d["features"][1]["properties"].update(asset_id="a01"))
+
+
+def _break_mask(run_dir):
+    with rasterio.open(run_dir / F.FLOOD_MASK, "r+") as dst:
+        m = dst.read(1)
+        m[50, 50] = 1 - m[50, 50]
+        dst.write(m, 1)
+
+
+def _break_b_unmarked(run_dir):
+    edit_csv(run_dir / F.STRATEGY_COMPARISON,
+             lambda rows: row(rows, strategy="B").update(budget_feasible="true"))
+
+
+BROKEN = {
+    "nan": (_break_nan, F.FLOOD_PROBABILITY, "NaN/Inf в 1 пикселях"),
+    "hole": (_break_hole, F.CANDIDATE_ORDERS, "Z3: есть внутренние вырезы (holes)"),
+    "area_09996": (_break_09996, F.CANDIDATE_ORDERS, "< 1 км² (до округления)"),
+    "dup_asset_id": (_break_dup_asset, F.ASSETS_GEOJSON, "asset_id a01 повторяется 2 раз"),
+    "mask_threshold": (_break_mask, F.FLOOD_MASK, "mask ≠ (p ≥ threshold=0.5) в 1 пикселях"),
+    "b_over_budget": (_break_b_unmarked, F.STRATEGY_COMPARISON,
+                      "B: budget_feasible=true, а data_cost > бюджета"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(BROKEN))
+def test_broken_fixture_gives_its_own_error(run_dir, case):
+    breaker, name, signature = BROKEN[case]
+    breaker(run_dir)
+    errors = failing(run_dir)
+    assert signature in " ".join(errors.get(name, [])), errors
+    everything = " ".join(" ".join(v) for v in errors.values())
+    for other, (_, _, other_sig) in BROKEN.items():
+        if other != case:
+            assert other_sig not in everything, (case, other)
