@@ -1,0 +1,60 @@
+{
+  "method": "unet",
+  "calibrator": {
+    "kind": "platt",
+    "a": 1.464687933558017,
+    "b": 1.521007405474974
+  },
+  "threshold": 0.37,
+  "threshold_units": "p",
+  "threshold_rule": "max pooled IoU of calibrated p on validation (Sri-Lanka + Nigeria), grid 0.01..0.99; ties -> lowest threshold",
+  "threshold_status": "calibrated (platt) and chosen on validation, D-029",
+  "kind_rule": "min mean out-of-event log-loss (fit Nigeria -> Sri-Lanka and back)",
+  "fitted_on": {
+    "part": "validation",
+    "events": [
+      "Nigeria",
+      "Sri-Lanka"
+    ],
+    "n_chips": 60,
+    "n_pixels": 13983779,
+    "water_share": 0.15180073998595087,
+    "split_file": "splits/split_v1.json",
+    "split_sha256": "0098346e0f87297501409a1a8522afab6209e35f56e8cf1b68996909c8b63c75"
+  },
+  "input_model_sha256": "504944cd880c0b2e94acf2481e6ddc4db985ddbd64d550a3591321e8b0cc1bb3",
+  "raw_threshold_equivalent": 0.19753000140190125,
+  "metrics_validation": {
+    "raw_0.5": {
+      "iou": 0.6004932470923006,
+      "f1": 0.75038523053221,
+      "precision": 0.9579299652233338,
+      "recall": 0.6167585601305478,
+      "ece": 0.039814891300255104,
+      "brier": 0.04769532882033832,
+      "log_loss": 0.1692955182935244
+    },
+    "calibrated": {
+      "iou": 0.6845653287639452,
+      "f1": 0.8127501107555704,
+      "precision": 0.8109644076755638,
+      "recall": 0.814543695247858,
+      "ece": 0.009981629421700583,
+      "brier": 0.04057379535175402,
+      "log_loss": 0.14617757298891831
+    }
+  },
+  "delta_iou_paired_bootstrap": {
+    "delta_iou": 0.0840720816716446,
+    "ci_lo": 0.020610644824136833,
+    "ci_hi": 0.15480395345697656,
+    "n_boot": 2000,
+    "n_chips": 60,
+    "seed": 20260925
+  },
+  "post_processing": "none (3x3 mean of p checked on validation, see report)",
+  "nodata": "NaN in raw p (S1 not finite) stays NaN -> -9999 / 255 in rasters; label -1 excluded from fit and metrics",
+  "created_at": "2026-09-25T16:45:00+00:00",
+  "commit": "496d22e0ffb82d573a4afbe0bcde400e4a4e2c14",
+  "report": "docs/verification/calibration-val.md"
+}
