@@ -35,8 +35,12 @@ def test_best_threshold_maximises_iou():
     t, iou = core.best_threshold(edges, w, d, 10, 8)
     assert t == -2.0 and iou == pytest.approx(1.0)
     # lower threshold misses water, higher adds dry
-    t, _ = core.best_threshold(edges, w, core.counts_le(np.array([-2.2] * 30), edges), 10, 30)
-    assert t == -3.0 or t == -2.0
+    # dry at -2.2: IoU 0 at -3.0, 10/40 at -2.0, -1.0 and 0.0 -> the lowest tied edge wins
+    t, iou = core.best_threshold(edges, w, core.counts_le(np.array([-2.2] * 30), edges), 10, 30)
+    assert t == -2.0 and iou == pytest.approx(0.25)
+    # dry darker than water: every edge with water also takes all dry -> still -2.0, IoU 10/40
+    t, iou = core.best_threshold(edges, w, core.counts_le(np.array([-2.8] * 30), edges), 10, 30)
+    assert t == -2.0 and iou == pytest.approx(0.25)
 
 
 def test_sigmoid_proba_direction_center_and_nan():
