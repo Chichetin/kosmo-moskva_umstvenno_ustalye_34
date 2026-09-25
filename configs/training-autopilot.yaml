@@ -1,0 +1,54 @@
+# Автопилот обучения FloodValue (docs/automation/training-autopilot.md).
+# Критерии выбора зафиксированы ДО новых экспериментов 26.09; менять задним числом нельзя —
+# только новой версией протокола (protocol.version + 1) с пересчётом сравнений.
+# Потребители: только автопилот и его документы; код конвейера этот файл не читает.
+
+protocol:
+  version: 1
+  fixed_at: "2026-09-26T02:25+03:00"
+  split: "splits/split_v1.json (D-016), sha256 0098346e…"
+  selection:
+    # Отбор рецептов — LOEO по 6 событиям train+dev (validation и test не читаются):
+    tool: "python -m floodvalue.model.unet.loeo"
+    primary_metric: "mean6 AP (без порога) на эпохе 60, модель unet_e60"
+    why_not_iou_at_0_5: "рабочий конвейер заново калибрует p (Platt) и выбирает порог на validation (D-029)"
+    reference: "docs/verification/loeo-sweep/r0_ref и r1_seed1 (рецепт D-019, seed 20260925 и 1)"
+    seed_noise_ap: 0.013          # |mean6 AP(r1) − mean6 AP(r0)|
+    promote_if:
+      - "mean6 AP кандидата выше max(r0, r1) не меньше чем на 0.02 на ДВУХ seed"
+      - "ни одно событие не хуже ref больше чем на 0.08 AP на обоих seed"
+      - "mean6 IoU@0.5 не хуже ref больше чем на 0.03 (иначе — только с проверкой калибровки)"
+  confirmation:
+    # Подтверждение финалиста — ансамбль 5 seed + калибровка на validation, как D-019/D-029:
+    part: validation
+    command: "python -m floodvalue eval-test --part validation"
+    must: "IoU после калибровки не ниже принятой модели (0,685, calibration-val.md) и ECE ≤ 0,02"
+  test:
+    sealed: true
+    rule: "test не читается автопилотом никогда; eval-test --part test — отдельное действие команды (#32) для замороженной конфигурации"
+  correctness_checks:
+    - "p конечна и в [0, 1] на валидных пикселях, nodata −9999; маска ⇔ p ≥ threshold (make validate)"
+    - "сетка растров = сетка S1 (CRS, transform, shape); GeoJSON [lon, lat]"
+    - "метка −1 и NaN S1 исключены из обучения и метрик (data.io.valid_mask)"
+    - "смена бюджета не меняет p, маску, порог, портфель (тест procurement)"
+
+budget:
+  heavy_gpu_processes: 1          # один обучающий процесс одновременно
+  ram_weak_runs: 1                # прогон со слабыми данными держит ~7 ГБ ОЗУ
+  new_attempts_per_tick: 1
+  tick_minutes: 20                # сторож afk-watch считает обрывом тишину > 30 мин
+  initial_candidates: 10          # поднято с 6 (РЕШЕНИЕ AFK 26.09 02:28, человек: «не бойся тратить»); до автопилота израсходовано 5 + 1 сбой
+  initial_gpu_hours: 12           # поднято с 8 тем же решением; до автопилота израсходовано ≈ 3,5
+  max_retries_same_failure: 2
+  stop_weekly_cap_percent: 80
+  deadline_promotion: "2026-09-26T16:00+03:00"   # позже — не успеть PR + ревью до eval-test 20:00 (D-033)
+
+paths:
+  controller_state: "/home/m1hairu/Documents/final_cosmohack/autopilot/"   # state.json, HANDOFF.md, experiments.jsonl, lock
+  experiments: "/home/m1hairu/Documents/final_cosmohack/loeo_results/sweep/<run_id>/"
+  gpu_python: "~/.cache/floodvalue-gpu/bin/python (scripts/setup_gpu_env.sh, D-024)"
+  code: "каждый прогон — из своего worktree на зафиксированном commit (FLOODVALUE_COMMIT)"
+
+control:
+  pause_file: "autopilot/PAUSE"     # есть файл — новые попытки не запускаются
+  stop_file: "autopilot/STOP"       # есть файл — довести текущий шаг, сохранить состояние, не запускать новое
