@@ -327,7 +327,7 @@ def _check_metrics(report: _Report, run_dir: Path, meta: RunMetadata) -> None:
             where = f"{rel}: main {r['split']}/{r['event']}"
             try:
                 t = float(r["threshold"])
-            except ValueError:
+            except (TypeError, ValueError):  # None: the row is shorter than the header
                 report.add(name, f"{where}: threshold пуст или не число — нельзя сверить с "
                                  f"threshold комплекта {meta.threshold}")
                 continue

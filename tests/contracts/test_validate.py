@@ -569,6 +569,15 @@ def test_metrics_main_threshold_empty_fails(run_dir):
     assert "main validation/ALL: threshold пуст" in only(failing(run_dir), F.RUN_METADATA)
 
 
+def test_metrics_main_row_short_reports_not_crashes(run_dir):
+    # a truncated main row (csv gives None for missing cells) is an error, not a traceback
+    path = run_dir / "metrics.csv"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    lines = [",".join(ln.split(",")[:12]) if ln.startswith("main,") else ln for ln in lines]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    assert "main validation/ALL: threshold пуст" in " ".join(failing(run_dir)[F.RUN_METADATA])
+
+
 def test_metrics_baseline_threshold_in_db_not_compared(run_dir):
     # baseline threshold is dB of its channel (-20.0 in the fixture), never compared with p
     edit_csv(run_dir / "metrics.csv", lambda rows: row(rows, method="baseline").update(
