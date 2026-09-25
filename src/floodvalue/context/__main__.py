@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from floodvalue.context.s2 import build
+from floodvalue.data.split import SealedTestError
 from floodvalue.paths import output_dir
 
 
@@ -17,7 +18,11 @@ def main(argv: list[str] | None = None) -> int:
                    help="test-чип: только после eval-test (метки набора размечены по этой оптике)")
     a = p.parse_args(argv)
     out = Path(a.out) if a.out else output_dir() / a.chip
-    meta = build(a.chip, out, download=not a.no_download, allow_test=a.allow_test)
+    try:
+        meta = build(a.chip, out, download=not a.no_download, allow_test=a.allow_test)
+    except SealedTestError as e:
+        print(f"context: {e}. Для test-чипа после eval-test: --allow-test", file=sys.stderr)
+        return 3
     o = meta["offline"]
     print(f"context: {out / o['file']} — {o['caption']}; облака (грубо): {o['cloud_fraction_rough']}; "
           f"доступен к сроку решения: {o['available_at_decision']}")

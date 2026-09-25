@@ -12,7 +12,8 @@ from pathlib import Path
 SRC = Path(__file__).resolve().parents[2] / "src" / "floodvalue"
 GUARDED = ["data", "model", "baseline", "calibration", "assets", "procurement"]
 FORBIDDEN_TEXT = re.compile(
-    r"S2Hand|S2_LAYER|load_s2|context_s2|s2cloudless|World_Imagery|tile\.openstreetmap")
+    r"floodvalue\.context|S2Hand|S2_LAYER|load_s2|context_s2|s2cloudless|World_Imagery|"
+    r"tile\.openstreetmap")
 
 
 def _imports_context(tree: ast.AST, package: str) -> list[int]:
