@@ -103,6 +103,7 @@ def test_api_down_falls_back_to_symref(bare_repo: Path, tmp_path: Path) -> None:
     subprocess.run(["git", "-C", str(bare_repo), "push", "-q", str(remote), "HEAD:trunk"], check=True)
     res = _run_api_down(bare_repo, str(remote))
     assert "беру HEAD через ls-remote --symref" in res.stderr
+    assert "ветка по умолчанию (ls-remote): trunk\n" in res.stderr
     assert "ветка по умолчанию GitVerse не получена" not in res.stderr
     assert "Traceback" not in res.stderr and "JSONDecodeError" not in res.stderr
     # goes on past branch detection (then stops: the fixture repo has no origin)

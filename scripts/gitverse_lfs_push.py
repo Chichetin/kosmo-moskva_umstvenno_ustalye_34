@@ -193,7 +193,10 @@ class Client:
                               "objects": [{"oid": o.oid, "size": o.size} for o in objs]}).encode()
         headers = {"Accept": LFS_JSON, "Content-Type": LFS_JSON, "Authorization": self.auth}
         raw = self._send("POST", self.lfs_url + "/objects/batch", headers, lambda: payload)
-        return {o["oid"]: o for o in json.loads(raw).get("objects", [])}
+        try:
+            return {o["oid"]: o for o in json.loads(raw).get("objects", [])}
+        except (ValueError, AttributeError, KeyError, TypeError):
+            raise HttpFail(200, b"batch: not LFS JSON: " + raw[:170]) from None
 
     def put(self, obj: Obj, action: dict) -> None:
         headers = {k: v for k, v in action.get("header", {}).items()
@@ -205,7 +208,8 @@ class Client:
         self._send("PUT", action["href"], headers, lambda: obj.source.open("rb"))
 
     def verify(self, obj: Obj, action: dict) -> None:
-        headers = dict(action.get("header", {}))
+        headers = {k: v for k, v in action.get("header", {}).items()
+                   if k.lower() not in ("transfer-encoding", "content-length")}
         if not any(k.lower() == "authorization" for k in headers) and self._auth_for(action["href"]):
             headers["Authorization"] = self.auth
         headers["Accept"] = LFS_JSON

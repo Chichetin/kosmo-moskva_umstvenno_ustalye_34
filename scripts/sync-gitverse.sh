@@ -66,6 +66,7 @@ if [ -z "$default_branch" ]; then
   echo "[sync] WARN: API GitVerse не отдал default_branch — беру HEAD через ls-remote --symref" >&2
   default_branch="$(gv ls-remote --symref gitverse HEAD 2>/dev/null |
     sed -n 's|^ref: refs/heads/\([^[:space:]]*\)[[:space:]]*HEAD$|\1|p' || true)"
+  [ -n "$default_branch" ] && echo "[sync] ветка по умолчанию (ls-remote): $default_branch" >&2
 fi
 [ -n "$default_branch" ] || {
   echo "[sync] FAIL: ветка по умолчанию GitVerse не получена ни из API, ни из ls-remote (сеть/доступ) — повторите позже" >&2

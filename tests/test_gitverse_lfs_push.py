@@ -30,7 +30,8 @@ class FakeLfs:
         self.chunked_puts = 0
         self.ok_puts = 0
         self.verifies = 0
-        self.upload_host = ""  # "" = same host as the batch endpoint
+        self.upload_host = ""
+        self.batch_html = False  # "" = same host as the batch endpoint
 
 
 def make_handler(state: FakeLfs):
@@ -72,6 +73,8 @@ def make_handler(state: FakeLfs):
             base = f"http://{self.headers['Host']}"
             up_base = f"http://{state.upload_host}:{self.server.server_address[1]}" if state.upload_host else base
             if self.path.endswith("/info/lfs/objects/batch"):
+                if state.batch_html:
+                    return self._reply(200, b"<html>login</html>", "text/html")
                 if state.batch_status != 200:
                     return self._reply(state.batch_status, b'{"message":"batch refused"}')
                 req = json.loads(body)
@@ -82,11 +85,14 @@ def make_handler(state: FakeLfs):
                         entry["actions"] = {
                             "upload": {"href": f"{up_base}/lfs/upload/{o['oid']}",
                                        "header": {"Transfer-Encoding": "chunked"}},
-                            "verify": {"href": f"{base}/lfs/verify"},
+                            "verify": {"href": f"{base}/lfs/verify",
+                                       "header": {"Transfer-Encoding": "chunked"}},
                         }
                     out.append(entry)
                 return self._reply(200, json.dumps({"transfer": "basic", "objects": out}).encode())
             if self.path == "/lfs/verify":
+                if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
+                    return self._reply(403, b"Forbidden", "text/plain")
                 state.verifies += 1
                 oid = json.loads(body)["oid"]
                 return self._reply(200 if oid in state.stored else 404, b"{}")
@@ -281,4 +287,13 @@ def test_credentials_not_sent_to_foreign_upload_host(server: FakeLfs, blobs: lis
     puts = [h for m, _, h in server.log if m == "PUT"]
     assert puts and all("Authorization" not in h for h in puts)
     assert res.returncode != 0  # the fake demands auth on PUT
+    no_secret(res)
+
+
+def test_batch_not_json_fails_cleanly(server: FakeLfs, blobs: list[Path]) -> None:
+    server.batch_html = True
+    res = run(server, str(blobs[0]))
+    assert res.returncode == 1
+    assert "not LFS JSON" in res.stderr
+    assert "Traceback" not in res.stderr
     no_secret(res)
