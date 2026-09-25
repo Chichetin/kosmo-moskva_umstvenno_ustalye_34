@@ -77,3 +77,4 @@ docs/contracts.md и docs/project-structure.md. Условия лежат в tas
 | Полный прогон перед push | `make check` |
 | Проверка хуков | `bash .claude/hooks/test-hooks.sh` |
 | Зеркало в GitVerse (один человек) | `bash scripts/sync-gitverse.sh` (нужны `GITVERSE_TOKEN`, `GITVERSE_USER` в `.env`) |
+| Сверка перед сдачей | `FLOODVALUE_REQUIRE_WEIGHTS=1 bash scripts/sync-gitverse.sh --verify` |
