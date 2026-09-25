@@ -86,6 +86,19 @@ for c in Spain_7370579 Mekong_922373 Sri-Lanka_713926 Bolivia_129334; do
 
 > В репозитории **нет `.gitignore`**, и `data/` сейчас отображается в `git status` как untracked. Перед коммитом нужно добавить `data/` в `.gitignore`.
 
+### 3а. Полная загрузка (без WeaklyLabeled): 13 537 файлов, 3,8 ГБ
+
+Скрипт `scripts/download_sen1floods11.py` качает по HTTPS без gsutil, проверяет md5 каждого объекта и раскладывает в ту же структуру `data/raw/`. В неё входят HandLabeled (все 5 слоёв), perm_water, splits, catalog, checkpoints и метаданные. Повторный запуск ничего не качает заново, а только сверяет md5.
+
+```bash
+python3 scripts/download_sen1floods11.py            # в $FLOODVALUE_DATA_DIR/raw, по умолчанию data/raw
+python3 scripts/download_sen1floods11.py --no-s2    # без S2Hand (-1 ГБ)
+python3 scripts/download_sen1floods11.py --with-weak  # + WeaklyLabeled (~33 ГБ), кейсу не нужен
+# 25.09: 13537 файлов, done {'ok': 13537, 'skip': 0, 'fail': 0}; повтор — {'skip': 13537}
+```
+
+Манифест бакета (имя, размер, md5, crc32c, generation) пишется в `data/raw/bucket_manifest.json`, копия на 25.09 лежит в `docs/sen1floods11/bucket_manifest_v1.1.json`. Там же лежат авторские сплиты, `Sen1Floods11_Metadata.geojson` и README авторов. Оригиналы условий кейса лежат в `docs/task/`: PDF, их текст и выжимка `ЗАДАНИЕ.md`.
+
 Окружение для проверки: `python3.12 -m venv /tmp/claude-1000/sfvenv && /tmp/claude-1000/sfvenv/bin/pip install rasterio numpy`. Результат: rasterio 1.5.1, GDAL 3.12.4, numpy 2.5.3.
 
 ## 4. Формат чипов (проверено rasterio на 4 скачанных чипах)
