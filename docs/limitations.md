@@ -2,9 +2,9 @@
 
 Критерий 20 (`criteria.md`). Краткая версия — README «Ограничения и развитие»; здесь —
 разбор с командами и ссылками. Каждое утверждение ниже подтверждено файлом/решением
-или результатом команды, выполненной в этом PR (worktree `30-readme-limits`, commit
-`56288a4` на момент первой проверки; при вливании числа метрик пересверены с текущими
-`docs/verification/` — после калибровки D-029). Числа метрик — только из
+или результатом команды с указанным commit (первая проверка — PR #30, commit `56288a4`;
+пересверка с командами — #108, commit `89c8e4f`, 26.09; числа метрик — из текущих
+`docs/verification/`, после калибровки D-029). Числа метрик — только из
 `docs/verification/` со ссылкой; ничего из этого документа не является официальной
 оценкой ущерба.
 
@@ -13,7 +13,7 @@
 Split заморожен по событиям, не по чипам (`splits/split_v1.json`, D-006/D-012/D-016;
 хеш `0098346e0f87297501409a1a8522afab6209e35f56e8cf1b68996909c8b63c75`, подтверждён
 командой `make split` — «OK: rebuilt split == splits/split_v1.json ==
-docs/decisions.md», выполнено в этом PR).
+docs/decisions.md», повторено на commit `89c8e4f`, 26.09).
 
 - **Train** — Ghana, India, Pakistan, Paraguay, Somalia (237 чипов, 8,9 % воды среди
   валидных пикселей). **Dev** — единственное событие **USA** (69 чипов, 4,6 % воды):
@@ -56,9 +56,9 @@ docs/decisions.md», выполнено в этом PR).
 2026-09-26 20:00 МСК; заморозка функций — 26.09 22:00, D-033, отменяет сроки D-022)
 собираются на **одном** S1-чипе за раз:
 
-- **До заморозки** — чип validation `Sri-Lanka_713926` (D-010). Все команды в README и
-  в этом PR (`predict`, `assets`, `procure`, `export`, `validate`, `make all`)
-  выполнены на нём.
+- **До заморозки** — чип validation `Sri-Lanka_713926` (D-010). Все команды в README
+  (`predict`, `assets`, `procure`, `export`, `validate`, `make all`) выполнены на нём
+  (`make all CHIP=Sri-Lanka_713926 BUDGET=5000`, commit `89c8e4f`, 26.09 → validate 12/12).
 - **После `eval-test`** — демонстрационным становится чип test `Spain_7370579` (D-010, D-033),
   метки которого до этого момента не открывались ни разу. Каждый такой запуск
   обязан оставить строку в `docs/verification/test-log.md` (commit + sha256
@@ -110,7 +110,7 @@ EL = p · V · q, посчитанный `src/floodvalue/assets/portfolio.py`, �
   её автоматически: `threshold_status: "calibrated (platt) and chosen on validation,
   D-029"`; `metrics.csv` собранного комплекта тоже берёт калиброванные строки main
   (D-027/#62) — экспортированный `run_metadata.json` реального прогона (`make all
-  CHIP=Sri-Lanka_713926 BUDGET=5000`, перепроверено в этом PR после слияния #70)
+  CHIP=Sri-Lanka_713926 BUDGET=5000`, commit `89c8e4f`, 26.09 → validate 12/12)
   несёт пустой список `warnings` на чистом дереве.
 
 ## 5. Прокси-проверка ≠ фактические потери
@@ -134,7 +134,7 @@ EL = p · V · q, посчитанный `src/floodvalue/assets/portfolio.py`, �
 q и не наблюдает ущерб самого объекта.
 
 В `run_metadata.json` собранного демонстрационного комплекта (`make all
-CHIP=Sri-Lanka_713926 BUDGET=5000`, выполнено в этом PR) поле `proxy_check` пока несёт
+CHIP=Sri-Lanka_713926 BUDGET=5000`, commit `89c8e4f`, 26.09) поле `proxy_check` пока несёт
 `"status": "planned"` — сам комплект собирался до подключения протокола прокси-проверки
 к `export`/`run_metadata` (задача — сшить их, не написать протокол заново: код и числа
 выше уже есть). Даже когда это будет сделано, результат на **test** останется сверкой с
@@ -193,14 +193,16 @@ D-038 п. 5, заменил D-023) A получает статус `baseline` (�
 Перенос проверен пока только на **train → dev → validation** протоколом D-012/D-016
 (`docs/verification/unet-metrics.md`, `docs/verification/eval-validation.md`).
 Инструмент независимой оценки (`make eval-test --part test`) уже реализован и
-корректно запечатан — проверено в этом PR: без `FLOODVALUE_EVAL_TEST_CONFIRM` команда
-реально отказывает («test is sealed», D-010), а `--part validation` реально считает
-все 60 чипов. Перенос на **test** (новые события Spain, Mekong, Bolivia) сам по себе
+корректно запечатан: `make eval-test` без `FLOODVALUE_EVAL_TEST_CONFIRM` (commit `89c8e4f`, 26.09)
+отказывает («отказ — test is sealed (D-010)», код 2), а `--part validation` считает
+все 60 чипов (`docs/verification/eval-validation.md`, commit `af52cc72a2d6`). Перенос на **test** (новые события Spain, Mekong, Bolivia) сам по себе
 ещё не выполнен — `docs/verification/test-log.md` пуст, потому что `eval-test`
 замороженной конфигурации по плану — не позже 26.09 20:00 МСК (D-033), а не потому, что
 код отсутствует. Перенос рецепта U-Net между событиями train+dev (LOEO, 6 фолдов, D-036)
-— код и ноутбук `notebooks/loeo_colab.ipynb` влиты, прогон в Colab ожидается
-(`docs/verification/transfer-loeo.md`).
+прогнан (`MODE=full`, commit `1eaf2cc9e572`, локально на GPU вместо Colab): IoU U-Net на
+невиданном событии от 0,206 (Somalia) до 0,532 (USA*), ΔIoU к порогу VH того же фолда
+значимо > 0 в 4 из 6 фолдов, в Ghana и Paraguay — не значимо
+(`docs/verification/transfer-loeo.md`; таблица из отчёта прогона, файлы фолдов не приложены).
 
 На доступных данных перенос неоднородный. Выдаваемая модель — U-Net-ансамбль **с
 калибровкой Platt и порогом 0,37**, подобранными на validation (D-029); числа
@@ -262,7 +264,7 @@ validation поэтому оптимистичны (validation — настро�
 - **Городская застройка и яркие рассеиватели.** VV встречается до +25,65 dB у
   `Spain_7370579` («яркие рассеиватели, городская застройка», `docs/data.md` §8 п. 1);
   по всему набору диапазон VV доходит до +36,8 dB, VH — до −103,9 dB (`docs/data.md`
-  §11, воспроизведено командой `make data` в этом PR: `QC формата 446/446`).
+  §11, `make data` → `QC формата 446/446`, `docs/verification/data-qc.md`).
   Экстремальные значения требуют клиппинга и искажают порог по яркости.
 - **Растительность.** Ручная метка сделана по оптике (S2), и вода, невидимая в SAR —
   под пологом леса или при ветровой ряби на поверхности — может засчитываться моделью
@@ -282,8 +284,8 @@ validation поэтому оптимистичны (validation — настро�
 Работа без Sentinel-2 и без прочих вспомогательных данных — не ограничение, а
 **обязательный режим**: основной метод (U-Net) читает только `S1Hand`
 (`floodvalue.data.io.load_s1`); каналы S2, DEM, JRC нигде не подаются
-(`docs/verification/unet-metrics.md`, «Только S1»). Проверено в этом PR — см. README,
-раздел «S1-only и выбор метода».
+(`docs/verification/unet-metrics.md`, «Только S1»). Проверено `predict` на `Sri-Lanka_713926` и `Nigeria_1095404` (commit `89c8e4f`, 26.09) — см.
+README, раздел «S1-only и выбор метода».
 
 ## 9. Доступность дополнительных данных
 
@@ -311,7 +313,7 @@ validation поэтому оптимистичны (validation — настро�
 Основной метод обязан работать «только по Sentinel-1» (CLAUDE.md, «Неподвижные
 ограничения»); это не альтернативный режим, а единственный путь модели: вход U-Net —
 VV, VH, VV−VH и канал валидности, все производные от одного `S1Hand` (`docs/verification/unet-metrics.md`).
-Проверено явным запуском в этом PR (см. README):
+Проверено явным запуском (README; повторено через `make predict` на commit `89c8e4f`, 26.09):
 
 ```
 uv run --frozen python -m floodvalue predict --chip Sri-Lanka_713926
@@ -363,7 +365,7 @@ S2/DEM/JRC.
 ## 12. План развития
 
 1. **Проверка на других событиях.** Инструмент готов и корректно запечатан
-   (`make eval-test --part test`, проверено в этом PR — отказ без confirm-хеша);
+   (`make eval-test --part test`; отказ без confirm-хеша — commit `89c8e4f`, 26.09);
    ближайший шаг — сам запуск замороженной конфигурации (Spain, Mekong, Bolivia,
    D-010/D-016, не позже 26.09 20:00 — D-033) с записью в
    `docs/verification/test-log.md` (критерии 4, 7, 9). На validation и dev протокол уже
