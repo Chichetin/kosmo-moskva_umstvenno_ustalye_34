@@ -47,7 +47,7 @@ def run_config() -> dict[str, Any]:
     rc = load_run_config()
     extra = rc.model_extra or {}
     if "other_cost" not in extra:
-        raise ValueError("configs/run.yaml: нет блока other_cost (прочие затраты решения, D-032)")
+        raise ValueError("configs/run.yaml: нет блока other_cost (прочие затраты решения, D-033)")
     return {"chip_id": rc.chip_id, "budget_rub": rc.budget_rub,
             "decision_at": rc.decision_at.isoformat(),
             "decision_deadline": rc.decision_deadline.isoformat(),
@@ -253,7 +253,7 @@ def write_outputs(run_dir: Path, budget_rub: float) -> dict[str, Any]:
         "pricing_as_of_rule": "дата расчёта цены = календарная дата decision_at (UTC), D-023",
         "zones": {
             "construction": ZONES_CONSTRUCTION,
-            "decision": "D-032 (каталог), D-023 (v0, правила A/B/C)",
+            "decision": "D-033 (каталог), D-023 (v0, правила A/B/C)",
             "n_candidates": len(ctx["catalog"]["features"]),
             "n_by_zone_kind": kinds,
             "build": ctx["catalog"]["build"],
