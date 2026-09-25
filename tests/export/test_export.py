@@ -20,7 +20,7 @@ from floodvalue.contracts import files as F
 from floodvalue.export import assemble
 from floodvalue.export import run as export_run
 from floodvalue.export.validate import validate_run
-from floodvalue.paths import SPLITS_DIR
+from floodvalue.paths import MODELS_DIR, SPLITS_DIR
 from floodvalue.procurement import run as procure_run
 
 CHIP = "Fixture_000001"
@@ -91,6 +91,42 @@ def test_metrics_rows_named_by_method_become_main():
     assert [(r["split"], r["iou"], r["method_name"]) for r in mains] == \
         [("validation", "0.6", "unet")]
     assert not [r for r in rows if r["method"] == "unet"]
+
+
+def test_metrics_prefers_calibrated_file_and_matches_mask_threshold(tmp_path):
+    # #62: with a calibrator applied, main rows must come from the calibrated metrics
+    # (same threshold as the mask, contracts §7), not the raw docs/verification/unet-metrics.csv.
+    prediction = {"method": "unet", "threshold": 0.37,
+                 "calibration": {"file": "models/unet/calibration.json",
+                                 "sha256": "deadbeef", "kind": "platt"}}
+    warnings = []
+    files = export_run._metrics(prediction, tmp_path, warnings)
+    assert "docs/verification/calibration/unet-metrics.csv" in files
+    assert "docs/verification/unet-metrics.csv" not in files
+    with open(tmp_path / "metrics.csv", encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+    main_val_all = next(r for r in rows if r["method"] == "main" and r["split"] == "validation"
+                        and r["event"] == "ALL")
+    assert float(main_val_all["threshold"]) == pytest.approx(0.37)
+    assert float(main_val_all["threshold"]) == prediction["threshold"]  # = mask threshold
+    assert not [w for w in warnings if "порог" in w]  # no stale-threshold warning
+
+
+def test_metrics_without_calibration_uses_raw_file_and_warns_if_calibrated_missing(tmp_path):
+    warnings = []
+    files = export_run._metrics({"method": "unet", "threshold": 0.5, "calibration": None},
+                                tmp_path, warnings)
+    assert "docs/verification/unet-metrics.csv" in files
+    assert "docs/verification/calibration/unet-metrics.csv" not in files
+    assert not warnings  # no calibrator applied: unchanged behaviour, no extra warning
+
+    warnings2 = []
+    files2 = export_run._metrics(
+        {"method": "no-such-method", "threshold": 0.4,
+         "calibration": {"file": "models/no-such-method/calibration.json", "kind": "platt"}},
+        tmp_path, warnings2)
+    assert "docs/verification/calibration/no-such-method-metrics.csv" not in files2
+    assert any("калибратор применён" in w for w in warnings2)  # calibrator flagged but file missing
 
 
 def _sens(scenario, changed):
@@ -240,6 +276,39 @@ def test_all_stages_to_valid_result_set(env):
     with open(dest / "metrics.csv", encoding="utf-8") as f:
         metrics = list(csv.DictReader(f))
     assert {r["method"] for r in metrics} == {"baseline", "main"}
+
+
+def test_export_carries_calibrator_into_run_metadata_and_drops_uncalibrated_warning(env):
+    # #62: once predict applies models/unet/calibration.json, methods.main must expose the
+    # calibrator (kind, a, b, threshold, sha256, fit_on) and the metrics.csv threshold must
+    # match the mask threshold; the "не калиброваны" warning must not fire.
+    work, args = _stages(env)
+    cal_path = MODELS_DIR / "unet" / "calibration.json"
+    cal = json.loads(cal_path.read_text(encoding="utf-8"))
+    pred = json.loads((work / "prediction.json").read_text(encoding="utf-8"))
+    pred.update(method="unet", threshold=cal["threshold"], threshold_status=cal["threshold_status"],
+               calibration={"file": "models/unet/calibration.json",
+                            "sha256": export_run._sha256(cal_path), "kind": "platt"})
+    (work / "prediction.json").write_text(json.dumps(pred, ensure_ascii=False), encoding="utf-8")
+    assert export_run.run(args) == 0
+    _, short, _ = export_run.git_commit()
+    dest = env / f"{CHIP}_5000_{short}"
+    meta = json.loads((dest / F.RUN_METADATA).read_text(encoding="utf-8"))
+    main = meta["methods"]["main"]
+    assert main["threshold"] == meta["threshold"] == pytest.approx(0.37)
+    calibration = main["calibration"]
+    assert calibration["kind"] == "platt"
+    assert calibration["a"] == pytest.approx(cal["calibrator"]["a"])
+    assert calibration["b"] == pytest.approx(cal["calibrator"]["b"])
+    assert calibration["threshold"] == pytest.approx(0.37)
+    assert calibration["sha256"] == export_run._sha256(cal_path)
+    assert calibration["fit_on"] == "validation"
+    assert not [w for w in meta["warnings"] if "не калиброваны" in w]
+    with open(dest / "metrics.csv", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    main_val_all = next(r for r in rows if r["method"] == "main" and r["split"] == "validation"
+                        and r["event"] == "ALL")
+    assert float(main_val_all["threshold"]) == meta["threshold"]  # metrics threshold = mask
 
 
 def test_without_assets_sensitivity_only_sensitivity_fails(env, capsys):
