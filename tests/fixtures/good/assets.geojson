@@ -1,0 +1,175 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          80.00125,
+          7.79875
+        ]
+      },
+      "properties": {
+        "asset_id": "a01",
+        "chip_id": "Synthetic_000001",
+        "asset_class": "warehouse",
+        "asset_value_rub": 10000000,
+        "vulnerability_coef": 0.25
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          80.02525,
+          7.79475
+        ]
+      },
+      "properties": {
+        "asset_id": "a02",
+        "chip_id": "Synthetic_000001",
+        "asset_class": "substation",
+        "asset_value_rub": 20000000,
+        "vulnerability_coef": 0.4
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          80.02025,
+          7.78975
+        ]
+      },
+      "properties": {
+        "asset_id": "a03",
+        "chip_id": "Synthetic_000001",
+        "asset_class": "road_unit",
+        "asset_value_rub": 5000000,
+        "vulnerability_coef": 0.3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          80.00525,
+          7.78475
+        ]
+      },
+      "properties": {
+        "asset_id": "a04",
+        "chip_id": "Synthetic_000001",
+        "asset_class": "facility",
+        "asset_value_rub": 8000000,
+        "vulnerability_coef": 0.2
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          80.03025,
+          7.77975
+        ]
+      },
+      "properties": {
+        "asset_id": "a05",
+        "chip_id": "Synthetic_000001",
+        "asset_class": "pumping_station",
+        "asset_value_rub": 12000000,
+        "vulnerability_coef": 0.35
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          80.01025,
+          7.77475
+        ]
+      },
+      "properties": {
+        "asset_id": "a06",
+        "chip_id": "Synthetic_000001",
+        "asset_class": "clinic",
+        "asset_value_rub": 30000000,
+        "vulnerability_coef": 0.15
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          80.03125,
+          7.76975
+        ]
+      },
+      "properties": {
+        "asset_id": "a07",
+        "chip_id": "Synthetic_000001",
+        "asset_class": "school",
+        "asset_value_rub": 18000000,
+        "vulnerability_coef": 0.2
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          80.00775,
+          7.79225
+        ]
+      },
+      "properties": {
+        "asset_id": "a08",
+        "chip_id": "Synthetic_000001",
+        "asset_class": "workshop",
+        "asset_value_rub": 6000000,
+        "vulnerability_coef": 0.45
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          80.01675,
+          7.78325
+        ]
+      },
+      "properties": {
+        "asset_id": "a09",
+        "chip_id": "Synthetic_000001",
+        "asset_class": "telecom_node",
+        "asset_value_rub": 4000000,
+        "vulnerability_coef": 0.5
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          80.02275,
+          7.77225
+        ]
+      },
+      "properties": {
+        "asset_id": "a10",
+        "chip_id": "Synthetic_000001",
+        "asset_class": "water_intake",
+        "asset_value_rub": 16000000,
+        "vulnerability_coef": 0.3
+      }
+    }
+  ]
+}

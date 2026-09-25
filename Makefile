@@ -1,9 +1,10 @@
-# Одна команда на этап и одна на всё. Параметры: CHIP=<chip_id> BUDGET=<руб>.
+# Одна команда на этап и одна на всё. Параметры: CHIP=<chip_id> BUDGET=<руб> OUT=<каталог комплекта>.
 PY ?= uv run --frozen python -m floodvalue
 CHIP ?=
 BUDGET ?=
+OUT ?=
 GPU ?=
-STAGE_ARGS = $(if $(CHIP),--chip $(CHIP)) $(if $(BUDGET),--budget $(BUDGET))
+STAGE_ARGS = $(if $(CHIP),--chip $(CHIP)) $(if $(BUDGET),--budget $(BUDGET)) $(if $(OUT),--out $(OUT))
 
 # GPU-окружение для обучения (scripts/setup_gpu_env.sh, D-023): отдельный venv вне
 # репозитория, вне uv.lock (тот фиксирует CPU-torch для инференса у жюри, D-003).
@@ -29,11 +30,7 @@ test:
 hooks-test:
 	bash .claude/hooks/test-hooks.sh
 
-# validate — критерий 12 (issue area:contracts/export, ещё не влит). Пока
-# floodvalue.export.validate не реализован, check не роняет остальные зелёные
-# проверки — печатает явную причину; настоящий отказ validate всё равно роняет check.
-check: test hooks-test   ## полный прогон перед push
-	@out="$$($(PY) validate $(STAGE_ARGS) 2>&1)"; code=$$?; echo "$$out"; if [ $$code -ne 0 ]; then if echo "$$out" | grep -q "^stage 'validate' not implemented yet"; then echo "check: validate пропущен — floodvalue.export.validate ещё не реализован (issue area:contracts/export, критерий 12); test и hooks-test зелёные"; else exit $$code; fi; fi
+check: test hooks-test validate   ## полный прогон перед push
 
 data split baseline calibrate predict assets procure export validate app eval-test:
 	$(PY) $@ $(STAGE_ARGS)

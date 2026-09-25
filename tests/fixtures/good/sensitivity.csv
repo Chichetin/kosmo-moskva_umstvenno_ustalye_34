@@ -1,0 +1,6 @@
+scenario_id,strategy,changed_inputs_json,decision_cost_rub,covered_expected_loss_rub,result_status,interpretation
+S1,C,"{""p_flood"": {""delta"": 0.1}}",4431.06,4857142.92,recomputed,синтетический эталон: состав C не меняется
+S2,C,"{""asset_value_rub"": {""factor"": 1.2}}",4431.06,4857142.92,recomputed,синтетический эталон: состав C не меняется
+S3,C,"{""vulnerability_coef"": {""factor"": 0.8}}",4431.06,4857142.92,recomputed,синтетический эталон: состав C не меняется
+S4,C,"{""budget_rub"": 10000}",4431.06,4857142.92,recomputed,синтетический эталон: состав C не меняется
+S5,C,"{""base_rate_rub_km2"": 1000.0}",4431.06,4857142.92,recomputed,синтетический эталон: состав C не меняется
