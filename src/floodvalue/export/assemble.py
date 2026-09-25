@@ -179,10 +179,37 @@ def missing_sensitivity_keys(rows: list[dict]) -> list[str]:
     return sorted(required - seen)
 
 
+S1_MANIFEST_TOP = ("citation", "license", "license_note", "events_source", "events")
+_NOT_INPUT = "во входы predict, assets, procure не подаётся — метод работает только по S1"
+_QC_OPEN = "QC этапа data читает её формат и значения (D-031)"
+LABEL_READ_NOTES = {
+    "test": ("метка чипа test запечатана (D-010, D-016): QC этапа data читает только заголовок "
+             "и хеш файла (D-031), пиксели метки не читает ни один этап до заморозки; в "
+             "обучение, калибровку и выбор порога не входит; пиксели метки — только make "
+             "eval-test для замороженной конфигурации (docs/verification/test-log.md); "
+             "оговорка: сводные доли меток всех 446 чипов смотрели на разведке до разбиения "
+             "(docs/data.md §5, D-016); " + _NOT_INPUT),
+    "validation": (f"{_QC_OPEN}; метки validation — калибровка вероятностей и выбор порога "
+                   "основного метода (D-029) и метрики в docs/verification; " + _NOT_INPUT),
+    "dev": (f"{_QC_OPEN}; метки dev — выбор канала baseline (D-021), отбор моделей основного "
+            "метода и метрики в docs/verification; " + _NOT_INPUT),
+    "train": (f"{_QC_OPEN}; метки train — обучение основного метода и порог baseline (D-021); "
+              + _NOT_INPUT),
+    "none": (f"чип вне train/dev/validation/test: метка не входит ни в обучение, ни в "
+             f"калибровку и выбор порога; {_QC_OPEN}, если чип в excluded split; " + _NOT_INPUT),
+}
+
+
+def missing_s1_manifest_keys(s1_manifest: dict) -> list[str]:
+    """Top-level keys of interim/source_manifest_s1.json (D-031) absent in an older file."""
+    return sorted(k for k in S1_MANIFEST_TOP if k not in s1_manifest)
+
+
 def source_manifest(s1_manifest: dict, chip_id: str, label_read: bool,
-                    extra_sources: list[dict]) -> dict:
+                    extra_sources: list[dict], *, chip_part: str) -> dict:
     """source_manifest.json (contracts §9): the S1 entry of this chip as written by `data`
-    (D-015), marked whether its label was read by this run, plus the other inputs used."""
+    (D-015), marked how its label was read given the chip's split part (D-031), the
+    citation / licence / events of the data stage (Q-01), plus the other inputs used."""
     s1 = [e for e in s1_manifest.get("sources", []) if e.get("chip_id") == chip_id
           or f"{chip_id}_S1Hand" in str(e.get("source_id", "")) + str(e.get("file", ""))]
     if not s1:
@@ -194,16 +221,14 @@ def source_manifest(s1_manifest: dict, chip_id: str, label_read: bool,
         e.setdefault("applies_to", chip_id)
         if "label" in e:
             e["label"] = {**e["label"], "used_by_method": label_read,
-                          "read_note": ("метку читает только QC этапа data (формат и значения) "
-                                        "и расчёт метрик по split в docs/verification; в predict, "
-                                        "assets, procure и в выбор порога она не входит — метод "
-                                        "работает только по S1")
+                          "read_note": LABEL_READ_NOTES[chip_part]
                           if not label_read else "метка использована методом в этом запуске"}
         if e.get("published_after_event") and not e.get("after_event_note"):
             e["after_event_note"] = e.get("limitations", "")
         entries.append(e)
     return {"dataset": s1_manifest.get("dataset", DATASET),
             "repository": s1_manifest.get("repository", DATASET_URL),
+            **{k: s1_manifest[k] for k in S1_MANIFEST_TOP if k in s1_manifest},
             "sources": entries + list(extra_sources)}
 
 
@@ -325,7 +350,8 @@ def run_metadata(*, run_id: str, chip_id: str, event_id: str, event_date: str, c
                           "el_model": assets_meta.get("el_model"),
                           "p_source": assets_meta["p_extraction_rule"],
                           "status_rules": assets_meta["status_rule"],
-                          "unassessed_asset_ids": assets_meta.get("unassessed_asset_ids", [])},
+                          "unassessed_asset_ids": assets_meta.get("unassessed_asset_ids", []),
+                          "inspection_priority": assets_meta.get("inspection_priority")},
         "budget": {"budget_rub": float(procurement_meta["budget_rub"]),
                    "decision_at": procurement_meta["decision_at"],
                    "decision_deadline": procurement_meta["decision_deadline"],

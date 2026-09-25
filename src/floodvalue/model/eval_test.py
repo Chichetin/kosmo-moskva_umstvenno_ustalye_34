@@ -66,12 +66,12 @@ def config_files(method: str, root: Path = REPO_ROOT) -> list[str]:
     and `models/baseline/` (config, weights, `calibration.json` of #20 and anything added
     later), `models/calibration/` if it appears, and the split file."""
     root = Path(root)
-    files = [str(SPLIT_PATH.relative_to(REPO_ROOT)), f"models/{method}/config.json",
+    files = [SPLIT_PATH.relative_to(REPO_ROOT).as_posix(), f"models/{method}/config.json",
              "models/baseline/config.json"]
     for d in {f"models/{method}", "models/baseline", "models/calibration"}:
         folder = root / d
         if folder.is_dir():
-            files += [str(q.relative_to(root)) for q in sorted(folder.rglob("*")) if q.is_file()]
+            files += [q.relative_to(root).as_posix() for q in sorted(folder.rglob("*")) if q.is_file()]
     return sorted(set(files))
 
 

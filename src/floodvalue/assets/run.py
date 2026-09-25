@@ -2,7 +2,7 @@
 
 Reads the S1 chip (only for its validity mask and grid) and flood_probability.tif from the
 results directory, plus — if `predict` wrote them — uncertainty.tif, flood_probability_range.tif
-and prediction.json (measure, threshold; D-033); writes assets.geojson, assets.csv, asset_loss.csv, assets_sensitivity.csv
+and prediction.json (measure, threshold; D-038); writes assets.geojson, assets.csv, asset_loss.csv, assets_sensitivity.csv
 (p/V/q scenarios, P18a/D-028; export merges it with procurement_sensitivity.csv into
 sensitivity.csv) and assets_metadata.json (seed and rules for run_metadata.json).
 """
@@ -20,11 +20,20 @@ from floodvalue.assets.portfolio import (
     PLACEMENT_RULE,
     STATUS_RULE,
     UNCERTAINTY_FALLBACK_RULE,
+    UNCERTAINTY_NAME,
     UNCERTAINTY_RULE,
     assess_assets,
     load_asset_types,
     mask_unstable,
     place_assets,
+)
+from floodvalue.assets.priority import (
+    P_DRY,
+    RULE,
+    SOCIAL_CLASSES,
+    SOCIAL_MAX_POSITION,
+    UNCERTAINTY_HIGH,
+    inspection_order,
 )
 from floodvalue.assets.sensitivity import (
     P_RULE,
@@ -32,6 +41,7 @@ from floodvalue.assets.sensitivity import (
     SENSITIVITY_FIELDS,
     V_RULE,
     el_sensitivity,
+    inspection_order_changes,
 )
 from floodvalue.paths import data_dir, output_dir
 
@@ -119,15 +129,23 @@ def run(args) -> int:
     if (out / "flood_probability_range.tif").exists():
         lo, hi = _read_on_grid(out / "flood_probability_range.tif", shape, transform)[:2]
         p_range = (lo, hi)
-    pred_path = out / "prediction.json"
-    prediction = json.loads(pred_path.read_text(encoding="utf-8")) if pred_path.exists() else {}
-    threshold = prediction.get("threshold")
+    # flood_mask.tif threshold and the uncertainty measure of predict; a prediction.json of
+    # another chip is ignored (same chip_id rule as export).
+    prediction_path = out / "prediction.json"
+    prediction = (json.loads(prediction_path.read_text(encoding="utf-8"))
+                  if prediction_path.is_file() else {})
+    if prediction.get("chip_id") not in (None, chip_id):
+        prediction = {}
+    mask_threshold = prediction.get("threshold")
+    unc_meta = uncertainty_meta(unc_raster is not None, p_range is not None,
+                                prediction.get("uncertainty") or {})
 
     s1_valid = np.isfinite(s1).all(axis=0)
     assets = place_assets(s1_valid, transform, PORTFOLIO_SEED, load_asset_types())
     loss_rows = assess_assets(assets, prob, unc_raster, p_range)
     for r in loss_rows:
-        r["mask_unstable"] = mask_unstable(r, float(threshold) if threshold is not None else None)
+        r["mask_unstable"] = mask_unstable(
+            r, float(mask_threshold) if mask_threshold is not None else None)
 
     out.mkdir(parents=True, exist_ok=True)
     asset_rows = [
@@ -151,6 +169,11 @@ def run(args) -> int:
     _write_csv(out / "asset_loss.csv", LOSS_FIELDS, [{**r, "chip_id": chip_id} for r in loss_rows])
 
     sensitivity_rows = el_sensitivity(assets, loss_rows)
+    # UNCERTAINTY_HIGH = H(0.10) in bits (D-035) holds only for an entropy of p in bits
+    entropy_bits = unc_meta["name"] in (UNCERTAINTY_NAME, "entropy_p")
+    uncertainty_high = UNCERTAINTY_HIGH if entropy_bits else None
+    order = inspection_order(loss_rows, {a.asset_id: a.asset_class for a in assets},
+                             uncertainty_high=uncertainty_high, mask_threshold=mask_threshold)
     _write_csv(out / "assets_sensitivity.csv", SENSITIVITY_FIELDS, sensitivity_rows)
 
     meta = {
@@ -162,13 +185,23 @@ def run(args) -> int:
         "p_extraction_rule": P_EXTRACTION_RULE,
         "el_model": "EL = p_flood * asset_value_rub * vulnerability_coef",
         "status_rule": STATUS_RULE,
-        "uncertainty": uncertainty_meta(unc_raster is not None, p_range is not None,
-                                        prediction.get("uncertainty") or {}),
+        "uncertainty": unc_meta,
         "unassessed_asset_ids": [r["asset_id"] for r in loss_rows if r["status"] != "ok"],
         "sensitivity": {"p_rule": P_RULE, "v_rule": V_RULE, "q_rule": Q_RULE,
                         "n_scenarios": len(sensitivity_rows),
                         "note": "assets_sensitivity.csv only; budget/rate scenarios are "
                                 "procurement_sensitivity.csv (P18b)"},
+        "inspection_priority": {
+            "decision": "D-035", "rule": RULE, "p_dry": P_DRY,
+            "uncertainty_measure": unc_meta["name"], "uncertainty_high": uncertainty_high,
+            "social_classes": list(SOCIAL_CLASSES), "social_max_position": SOCIAL_MAX_POSITION,
+            "mask_threshold": mask_threshold,
+            "n_not_assessed": sum(o["group"] == "not_assessed" for o in order),
+            "order": order,
+            "scenario_changes": inspection_order_changes(assets, loss_rows),
+            "scenario_note": "очерёдность пересчитана тем же правилом в каждом сценарии p/V/q "
+                             "assets_sensitivity.csv; пустой список — без изменений",
+        },
     }
     (out / "assets_metadata.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1),
                                               encoding="utf-8")

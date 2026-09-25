@@ -1,4 +1,4 @@
-"""Per-pixel uncertainty on top of any `predict_proba` (issue #21, criterion 10, D-033).
+"""Per-pixel uncertainty on top of any `predict_proba` (issue #21, criterion 10, D-038).
 
 Pure functions, no raster I/O. Input: raw p of the K members of the method, float32
 (K, H, W) with NaN where S1 has no data (a single-model method is K = 1), the calibrator
@@ -14,7 +14,7 @@ q_k = calibrate(p_k) and the delivered p = calibrate(mean_k p_k):
                     an approximation
 
 The first two only restate the model's own p (model confidence); the last two need >= 2
-members. Which one is delivered is chosen on validation (D-033) and verified against errors;
+members. Which one is delivered is chosen on validation (D-038) and verified against errors;
 none of them is a verified uncertainty by construction.
 
 `p_range` gives [min_k q_k, max_k q_k]; the calibrator is monotone, so the delivered p lies
@@ -28,7 +28,7 @@ import numpy as np
 
 from floodvalue.calibration import calibrator as C
 
-# order = simplicity, used to break near-ties in the selection rule (D-033)
+# order = simplicity, used to break near-ties in the selection rule (D-038)
 MEASURES = ("entropy_p", "threshold_margin", "member_std", "mutual_info")
 ENSEMBLE_MEASURES = ("member_std", "mutual_info")
 UNITS = {"entropy_p": "биты, 0…1", "threshold_margin": "безразмерная, 0…1 (1 — p на пороге)",
@@ -98,7 +98,7 @@ def resolve(measure: str, n_members: int) -> str:
     return FALLBACK if measure in ENSEMBLE_MEASURES and n_members < 2 else measure
 
 
-# --- selection on validation (D-033) --------------------------------------------------------
+# --- selection on validation (D-038) --------------------------------------------------------
 
 def auroc_hist(h_pos: np.ndarray, h_neg: np.ndarray) -> np.ndarray:
     """AUROC from histograms on the same ascending bins (last axis), ties inside a bin = 1/2:
@@ -117,7 +117,7 @@ def worst_event_auroc(hists: dict[str, tuple[np.ndarray, np.ndarray]]) -> float:
 
 def select(per_chip: dict[str, list[tuple[str, np.ndarray, np.ndarray]]], n_boot: int = 1000,
            seed: int = 20260925) -> dict:
-    """Selection rule of D-033 on per-chip histograms.
+    """Selection rule of D-038 on per-chip histograms.
 
     per_chip: measure -> [(event, errors histogram, correct histogram) per chip], same chip
     order for every measure. Score S = worst per-event AUROC (pooled over the chips of the

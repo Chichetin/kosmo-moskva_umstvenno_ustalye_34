@@ -108,7 +108,7 @@ def markdown(res: dict, info: dict, cal: dict, assets: dict | None) -> str:
          + (f" --assets-run {assets['run']}" if assets else "") + f"` (commit "
          f"`{info['commit'][:12]}`, {info['created_at'][:10]}). Числа — из результата прогона, "
          "`uncertainty/uncertainty-scopes.csv`, `uncertainty/uncertainty-deciles.csv`; решение — "
-         "D-033. Test не читался (D-010).", "",
+         "D-038. Test не читался (D-010).", "",
          f"- Метод: `{res['method']}`, членов ансамбля: {res['n_members']}; калибратор и порог — "
          f"`models/{res['method']}/calibration.json` (D-029), порог маски p ≥ {f(t, 2)}.",
          f"- Чипов: validation {res['n_chips']['validation']}, dev {res['n_chips']['dev']}. "

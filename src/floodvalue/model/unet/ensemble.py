@@ -94,7 +94,7 @@ def main(argv: list[str] | None = None) -> dict:
     })
     (out / CONFIG_FILE).write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n",
                                    encoding="utf-8")
-    with open(out / "metrics.csv", "w", newline="") as f:
+    with open(out / "metrics.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=M.METRIC_COLUMNS)
         w.writeheader()
         for r in rows:

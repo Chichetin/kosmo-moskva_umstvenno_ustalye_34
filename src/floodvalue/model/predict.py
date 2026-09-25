@@ -6,7 +6,7 @@ and writes on the S1 grid (§2):
   flood_mask.tif         UInt8, 1 <=> p >= threshold, nodata 255
   prediction.json        method, weights sha256, threshold and its status, timing
   uncertainty.tif        Float32, per-pixel uncertainty, nodata -9999 (measure: prediction.json
-                         "uncertainty"; chosen by `models/<method>/uncertainty.json`, D-033,
+                         "uncertainty"; chosen by `models/<method>/uncertainty.json`, D-038,
                          else entropy of p, unverified)
   flood_probability_range.tif  Float32 x 2 (p_low, p_high): min/max of the calibrated member p
                          (ensemble methods; a single model gives p_low = p_high = p)
@@ -72,7 +72,7 @@ def write_uncertainty(u: np.ndarray, lo: np.ndarray, hi: np.ndarray, profile: di
 def uncertainty_rasters(module, s1: np.ndarray, p_raw: np.ndarray, p: np.ndarray,
                         cal: dict | None, threshold: float, method: str,
                         weights_sha256: str) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
-    """Measure chosen in models/<method>/uncertainty.json (D-033) on the method's members."""
+    """Measure chosen in models/<method>/uncertainty.json (D-038) on the method's members."""
     from floodvalue.calibration import uncertainty as U  # contracts §2 uncertainty.tif
     members = module.predict_members(s1) if hasattr(module, "predict_members") else p_raw[None]
     info_path = MODELS_DIR / method / "uncertainty.json"
