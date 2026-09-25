@@ -54,10 +54,7 @@ class Chip:
     p_raw: np.ndarray   # (H, W) float32, NaN where S1 has no data
     label: np.ndarray   # (H, W) int16, -1 / 0 / 1
     jrc: np.ndarray | None  # (H, W) bool, JRC water (diagnostic only, never a model input)
-
-    @property
-    def valid(self) -> np.ndarray:
-        return np.isfinite(self.p_raw) & (self.label != -1)
+    valid: np.ndarray   # (H, W), shared S1 and label validity mask
 
 
 def load_chips(method: str, part: str = "validation") -> list[Chip]:
@@ -74,7 +71,11 @@ def load_chips(method: str, part: str = "validation") -> list[Chip]:
             import rasterio
             with rasterio.open(jrc_path) as src:
                 jrc = src.read(1) == 1
-        chips.append(Chip(cid, io.parse_chip_id(cid)[0], predict_proba(s1), label, jrc))
+        p_raw = predict_proba(s1)
+        valid = io.valid_mask(s1, label)
+        if not np.isfinite(p_raw[valid]).all():
+            raise ValueError(f"{cid}: method returned non-finite p on valid pixels (contracts §3)")
+        chips.append(Chip(cid, io.parse_chip_id(cid)[0], p_raw, label, jrc, valid))
     return chips
 
 
