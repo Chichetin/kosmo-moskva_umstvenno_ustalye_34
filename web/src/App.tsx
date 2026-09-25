@@ -10,7 +10,7 @@ import {
   X,
 } from "lucide-react";
 import MapPanel from "./MapPanel";
-import { mapProviders } from "./mapProviders";
+import { AmbientShapes } from "./AmbientShapes";
 import type { Feature, Plan, SceneSummary, Session } from "./types";
 
 const money = (value: unknown) =>
@@ -345,6 +345,7 @@ export default function App() {
             }}
             onIssue={setMapIssue}
           />
+          {!scene && <AmbientShapes />}
           <div className="map-top-left">
             <button className="earth-button" onClick={overview}>
               <Globe2 size={17} /> Вся Земля
@@ -442,11 +443,7 @@ export default function App() {
                 Спутник
               </button>
             </div>
-            <span>
-              {baseMap === "map"
-                ? mapProviders.map.label
-                : mapProviders.optical.label}
-            </span>
+            {baseMap === "optical" && <span>Оптическая мозаика · 2019</span>}
           </div>
           {scene && panelOpen && (
             <aside className="context-panel">
@@ -691,6 +688,7 @@ export default function App() {
         </div>
         {!mapActive && (
           <div className="analysis-screen">
+            <AmbientShapes analysis />
             <div className="analysis-head">
               <button
                 onClick={() =>

@@ -52,8 +52,8 @@ input:focus-visible,
   align-items: center;
   gap: 20px;
   padding: 0 22px;
-  background: #171719;
-  border-bottom: 1px solid #303034;
+  background: linear-gradient(115deg, #1c1d21, #151519 55%, #1b1d22);
+  border-bottom: 1px solid #ffffff1d;
   z-index: 5;
 }
 .brand {
@@ -172,17 +172,44 @@ input:focus-visible,
 }
 .map-screen:not(.scene-mode)::before {
   background:
-    radial-gradient(ellipse 35% 44% at 13% 27%, #a3a5ad5c, transparent 80%),
-    radial-gradient(ellipse 22% 28% at 76% 6%, #b4b5ba36, transparent 82%);
-  animation: ambient-float-one 18s ease-in-out infinite alternate;
+    radial-gradient(ellipse 39% 49% at 12% 28%, #8798ac7a, transparent 80%),
+    radial-gradient(ellipse 26% 32% at 75% 6%, #a9afba47, transparent 82%);
+  animation: ambient-float-one 14s ease-in-out infinite alternate;
 }
 .map-screen:not(.scene-mode)::after {
   background: radial-gradient(
-    ellipse 38% 48% at 92% 77%,
-    #9799a158,
+    ellipse 43% 51% at 92% 75%,
+    #7188a16e,
     transparent 80%
   );
-  animation: ambient-float-two 23s ease-in-out infinite alternate;
+  animation: ambient-float-two 18s ease-in-out infinite alternate;
+}
+.ambient-shapes {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  -webkit-mask-image: radial-gradient(
+    ellipse 43% 57% at 50% 50%,
+    transparent 64%,
+    #000 96%
+  );
+  mask-image: radial-gradient(
+    ellipse 43% 57% at 50% 50%,
+    transparent 64%,
+    #000 96%
+  );
+}
+.ambient-shape-field {
+  will-change: transform;
+}
+.ambient-shape-field-a {
+  animation: ambient-shapes-a 16s ease-in-out infinite alternate;
+}
+.ambient-shape-field-b {
+  animation: ambient-shapes-b 21s ease-in-out infinite alternate;
 }
 .map-screen.map-hidden {
   visibility: hidden;
@@ -421,6 +448,77 @@ input:focus-visible,
     11px ui-monospace,
     Consolas,
     monospace;
+}
+.top-nav button.active,
+.top-export,
+.earth-button,
+.reopen-panel,
+.basemap-switch,
+.map-top-center > span {
+  border: 1px solid #ffffff20;
+  background: linear-gradient(
+      155deg,
+      #ffffff18,
+      #ffffff07 32%,
+      #ffffff02 70%
+    ),
+    #292d36b8;
+  box-shadow:
+    inset 0 1px 0 #ffffff20,
+    inset 0 -1px 0 #0000001f,
+    0 6px 18px #0006;
+  -webkit-backdrop-filter: blur(20px) saturate(1.08);
+  backdrop-filter: blur(20px) saturate(1.08);
+}
+.maplibregl-ctrl-group {
+  border: 1px solid #ffffff20 !important;
+  background: #292d36c9 !important;
+  box-shadow: inset 0 1px 0 #ffffff1b, 0 6px 18px #0006 !important;
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+}
+.top-nav button.active,
+.earth-button,
+.reopen-panel,
+.basemap-switch,
+.map-top-center > span {
+  border-radius: 12px;
+}
+.top-export,
+.maplibregl-ctrl-group {
+  border-radius: 10px;
+}
+.top-nav button.active,
+.top-export,
+.earth-button,
+.reopen-panel,
+.basemap-switch button,
+.maplibregl-ctrl-group button {
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+.top-nav button.active:hover,
+.top-export:hover,
+.earth-button:hover,
+.reopen-panel:hover {
+  border-color: #ffffff3a;
+  background: linear-gradient(155deg, #ffffff20, #ffffff08 60%), #323743d4;
+  box-shadow:
+    inset 0 1px 0 #ffffff29,
+    0 8px 20px #0007;
+}
+.basemap-switch button.active {
+  background: #ffffff1a;
+  color: #f5f5f7;
+  box-shadow: inset 0 1px 0 #ffffff26, 0 1px 4px #0004;
+  border-radius: 8px;
+}
+.basemap-switch button:not(.active):hover {
+  color: #f5f5f7;
+  background: #ffffff14;
 }
 .context-panel {
   position: absolute;
@@ -692,19 +790,28 @@ input:focus-visible,
 }
 .analysis-screen::before {
   background: radial-gradient(
-    ellipse 40% 38% at 12% 25%,
-    #85868d2e,
+    ellipse 43% 41% at 12% 25%,
+    #73899f49,
     transparent 83%
   );
-  animation: ambient-float-one 22s ease-in-out infinite alternate;
+  animation: ambient-float-one 17s ease-in-out infinite alternate;
 }
 .analysis-screen::after {
   background: radial-gradient(
-    ellipse 42% 46% at 88% 77%,
-    #a6a7ad2b,
+    ellipse 44% 48% at 88% 77%,
+    #8b9db047,
     transparent 82%
   );
-  animation: ambient-float-two 27s ease-in-out infinite alternate;
+  animation: ambient-float-two 21s ease-in-out infinite alternate;
+}
+.ambient-shapes-analysis {
+  position: fixed;
+  top: 62px;
+  z-index: 0;
+  height: calc(100% - 62px);
+  opacity: 0.24;
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 .analysis-head,
 .analysis-body {
@@ -1011,6 +1118,9 @@ tbody tr.selected {
   }
 }
 @media (max-width: 700px) {
+  .ambient-shapes {
+    display: none;
+  }
   .topbar {
     height: 55px;
     padding: 0 12px;
@@ -1132,6 +1242,26 @@ tbody tr.selected {
     transform: translate3d(-5%, 4%, 0) scale(0.95);
   }
 }
+@keyframes ambient-shapes-a {
+  from {
+    transform: translate3d(-2%, 1%, 0) scale(1);
+    opacity: 0.58;
+  }
+  to {
+    transform: translate3d(2%, -2%, 0) scale(1.035);
+    opacity: 0.92;
+  }
+}
+@keyframes ambient-shapes-b {
+  from {
+    transform: translate3d(2%, -1.5%, 0) scale(1.025);
+    opacity: 0.8;
+  }
+  to {
+    transform: translate3d(-2.5%, 2%, 0) scale(0.98);
+    opacity: 0.55;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -1144,6 +1274,10 @@ tbody tr.selected {
   .map-screen:not(.scene-mode)::after,
   .analysis-screen::before,
   .analysis-screen::after {
+    animation: none;
+    transform: none;
+  }
+  .ambient-shape-field {
     animation: none;
     transform: none;
   }
