@@ -1,8 +1,9 @@
 """`python -m floodvalue assets --chip <id> [--out <dir>]`: 10 assets, p, EL, rank.
 
 Reads the S1 chip (only for its validity mask and grid) and flood_probability.tif from the
-results directory; writes assets.geojson, assets.csv, asset_loss.csv and
-assets_metadata.json (seed and rules for run_metadata.json).
+results directory; writes assets.geojson, assets.csv, asset_loss.csv, assets_sensitivity.csv
+(p/V/q scenarios, P18a/D-028; export merges it with procurement_sensitivity.csv into
+sensitivity.csv) and assets_metadata.json (seed and rules for run_metadata.json).
 """
 
 import csv
@@ -20,6 +21,13 @@ from floodvalue.assets.portfolio import (
     assess_assets,
     load_asset_types,
     place_assets,
+)
+from floodvalue.assets.sensitivity import (
+    P_RULE,
+    Q_RULE,
+    SENSITIVITY_FIELDS,
+    V_RULE,
+    el_sensitivity,
 )
 from floodvalue.paths import data_dir, output_dir
 
@@ -96,6 +104,9 @@ def run(args) -> int:
     _write_csv(out / "assets.csv", ASSETS_FIELDS, asset_rows)
     _write_csv(out / "asset_loss.csv", LOSS_FIELDS, [{**r, "chip_id": chip_id} for r in loss_rows])
 
+    sensitivity_rows = el_sensitivity(assets, loss_rows)
+    _write_csv(out / "assets_sensitivity.csv", SENSITIVITY_FIELDS, sensitivity_rows)
+
     meta = {
         "chip_id": chip_id,
         "s1_file": s1_path(chip_id).name,
@@ -108,6 +119,10 @@ def run(args) -> int:
         "uncertainty": {"name": "binary_entropy_bits", "status": "temporary_unverified",
                         "rule": UNCERTAINTY_RULE},
         "unassessed_asset_ids": [r["asset_id"] for r in loss_rows if r["status"] != "ok"],
+        "sensitivity": {"p_rule": P_RULE, "v_rule": V_RULE, "q_rule": Q_RULE,
+                        "n_scenarios": len(sensitivity_rows),
+                        "note": "assets_sensitivity.csv only; budget/rate scenarios are "
+                                "procurement_sensitivity.csv (P18b)"},
     }
     (out / "assets_metadata.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1),
                                               encoding="utf-8")
