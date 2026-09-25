@@ -16,6 +16,11 @@ CHANNELS = {"VV": 0, "VH": 1}
 EDGES = np.round(np.arange(-60.0, 30.0 + 1e-9, 0.1), 1)
 
 
+def valid_mask(s1_db: np.ndarray, label: np.ndarray) -> np.ndarray:
+    """Pixels that count in metrics: VV and VH finite AND label != -1 (label 0/1)."""
+    return np.isfinite(s1_db).all(axis=0) & (label != -1)
+
+
 def counts_le(values: np.ndarray, edges: np.ndarray = EDGES) -> np.ndarray:
     """int64 array: number of finite values <= each edge."""
     v = np.sort(values[np.isfinite(values)], kind="stable")

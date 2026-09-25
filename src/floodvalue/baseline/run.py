@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import csv
 import datetime as dt
+import hashlib
 import json
 import subprocess
 from collections.abc import Callable, Iterable
@@ -49,7 +50,7 @@ class ChipStats:
 
 
 def chip_stats(chip_id: str, part: str, s1_db: np.ndarray, label: np.ndarray) -> ChipStats:
-    valid = metrics.valid_mask(s1_db, label)
+    valid = core.valid_mask(s1_db, label)
     water = valid & (label == 1)
     dry = valid & (label != 1)
     wl = {c: core.counts_le(s1_db[i][water]) for c, i in core.CHANNELS.items()}
@@ -80,7 +81,7 @@ def counts_at(chips: list[ChipStats], ch: str, t: float) -> dict[str, int]:
 def otsu_counts(chips: list[ChipStats]) -> dict[str, int]:
     out = None
     for c in chips:
-        out = metrics.add_counts(c.otsu_counts, out)
+        out = dict(c.otsu_counts) if out is None else metrics.add(out, c.otsu_counts)
     return out
 
 
@@ -92,20 +93,51 @@ def groups(chips: list[ChipStats], part: str) -> list[tuple[str, list[ChipStats]
 
 
 def mask_hash(chips: Iterable[ChipStats]) -> str:
-    return metrics.valid_mask_sha256((c.chip_id, c.valid) for c in chips)
+    """Shared algorithm (model.metrics.mask_sha256): packed masks in chip_id order."""
+    return metrics.mask_sha256([c.valid for c in sorted(chips, key=lambda c: c.chip_id)])
 
 
-def bootstrap_iou(chips: list[ChipStats], ch: str, t: float, n: int = N_BOOT,
-                  seed: int = SEED) -> tuple[float, float]:
-    """95 % percentile interval of pooled IoU, resampling chips with replacement."""
-    per = np.array([[v for v in counts_at([c], ch, t).values()] for c in chips], np.int64)
-    rng = np.random.default_rng(seed)
-    idx = rng.integers(0, len(chips), (n, len(chips)))
+def metrics_row(method: str, split: str, event: str, counts: dict[str, int],
+                threshold: float | None, valid_mask_sha256: str) -> dict:
+    """One row of metrics.csv (contracts §7); undefined ratios are empty strings."""
+    s = metrics.scores(counts)
+    row = {"method": method, "split": split, "event": event}
+    for k in ("iou", "f1", "precision", "recall"):
+        row[k] = "" if np.isnan(s[k]) else round(s[k], 6)
+    row.update({k: counts[k] for k in ("tp", "fp", "fn", "tn")})
+    row["n_pixels"] = s["n_pixels"]
+    row["threshold"] = "" if threshold is None else threshold
+    row["valid_mask_sha256"] = valid_mask_sha256
+    return {c: row[c] for c in metrics.METRIC_COLUMNS}
+
+
+def _boot_idx(n_chips: int, n: int = N_BOOT, seed: int = SEED) -> np.ndarray:
+    return np.random.default_rng(seed).integers(0, n_chips, (n, n_chips))
+
+
+def _boot_ious(chips: list[ChipStats], ch: str, t: float, idx: np.ndarray) -> np.ndarray:
+    """Pooled IoU for each resample of chips (rows of idx)."""
+    per = np.array([[counts_at([c], ch, t)[k] for k in ("tp", "fp", "fn")] for c in chips],
+                   np.int64)
     tp, fp, fn = (per[idx, j].sum(axis=1) for j in range(3))
     den = tp + fp + fn
-    iou = np.divide(tp, den, out=np.zeros(n), where=den > 0)
+    return np.divide(tp, den, out=np.zeros(len(idx)), where=den > 0)
+
+
+def bootstrap_iou(chips: list[ChipStats], ch: str, t: float) -> tuple[float, float]:
+    """95 % percentile interval of pooled IoU, resampling chips with replacement."""
+    iou = _boot_ious(chips, ch, t, _boot_idx(len(chips)))
     lo, hi = np.percentile(iou, [2.5, 97.5])
     return float(lo), float(hi)
+
+
+def paired_delta(chips: list[ChipStats], a: tuple[str, float], b: tuple[str, float]) -> dict:
+    """Paired chip bootstrap of IoU(a) - IoU(b): same resamples for both variants."""
+    idx = _boot_idx(len(chips))
+    d = _boot_ious(chips, *a, idx) - _boot_ious(chips, *b, idx)
+    lo, hi = np.percentile(d, [2.5, 97.5])
+    return {"mean": float(d.mean()), "lo": float(lo), "hi": float(hi),
+            "share_positive": float((d > 0).mean())}
 
 
 def fit(chips: list[ChipStats]) -> dict:
@@ -122,8 +154,8 @@ def fit(chips: list[ChipStats]) -> dict:
         t, iou = core.best_threshold(core.EDGES, w, d, nw, nd)
         per_channel[ch] = {"threshold_db": t, "train_iou": round(iou, 6)}
         if dev:
-            s = metrics.scores(**counts_at(dev, ch, t))
-            per_channel[ch]["dev_iou"] = round(s["iou"] or 0.0, 6)
+            s = metrics.scores(counts_at(dev, ch, t))
+            per_channel[ch]["dev_iou"] = round(0.0 if np.isnan(s["iou"]) else s["iou"], 6)
     key = "dev_iou" if dev else "train_iou"
     channel = max(per_channel, key=lambda ch: per_channel[ch][key])
     t = per_channel[channel]["threshold_db"]
@@ -144,13 +176,13 @@ def evaluate(chips: list[ChipStats], params: dict) -> dict:
             if not grp:
                 continue
             h = mask_hash(grp)
-            rows.append(metrics.metrics_row(METHOD, part, event, counts_at(grp, ch, t), t, h))
+            rows.append(metrics_row(METHOD, part, event, counts_at(grp, ch, t), t, h))
             for name, cnt, thr in (
                 *[(f"threshold_{c}", counts_at(grp, c, params["per_channel"][c]["threshold_db"]),
                    params["per_channel"][c]["threshold_db"]) for c in core.CHANNELS],
                 ("otsu_VH_per_chip", otsu_counts(grp), None),
             ):
-                r = metrics.metrics_row(name, part, event, cnt, thr, h)
+                r = metrics_row(name, part, event, cnt, thr, h)
                 variants.append(r)
             w, d, nw, nd = _sum_le(grp, ch)
             best_t, best_iou = core.best_threshold(core.EDGES, w, d, nw, nd)
@@ -164,10 +196,10 @@ def evaluate(chips: list[ChipStats], params: dict) -> dict:
             cc = core.curve_counts(w, d, nw, nd)
             for k in np.flatnonzero(keep):
                 cnt = {key: int(cc[key][k]) for key in ("tp", "fp", "fn", "tn")}
-                s = metrics.scores(**cnt)
+                s = metrics.scores(cnt)
                 curve.append({"split": part, "channel": c_name,
                               "threshold_db": float(core.EDGES[k]),
-                              **{m: ("" if s[m] is None else round(s[m], 6))
+                              **{m: ("" if np.isnan(s[m]) else round(s[m], 6))
                                  for m in ("iou", "f1", "precision", "recall")},
                               **cnt, "n_pixels": s["n_pixels"]})
     boot = {}
@@ -175,15 +207,25 @@ def evaluate(chips: list[ChipStats], params: dict) -> dict:
         grp = [c for c in chips if c.part == part]
         if grp:
             boot[part] = bootstrap_iou(grp, ch, t)
+    dev = [c for c in chips if c.part == "dev"]
+    other = [c for c in core.CHANNELS if c != ch]
+    delta = (paired_delta(dev, (ch, t), (other[0], params["per_channel"][other[0]]["threshold_db"]))
+             if dev and other else None)
     otsu_t = {c.part: [] for c in chips}
     for c in chips:
         if c.otsu_t is not None:
             otsu_t[c.part].append(c.otsu_t)
     return {"rows": rows, "variants": variants, "curve": curve, "oracle": oracle,
-            "bootstrap": boot,
+            "bootstrap": boot, "delta_dev": delta,
+            "water_share": {p: _water_share([c for c in chips if c.part == p]) for p in PARTS},
             "otsu_t": {p: (float(np.median(v)), float(np.min(v)), float(np.max(v)))
                        for p, v in otsu_t.items() if v},
             "n_chips": {p: sum(c.part == p for c in chips) for p in PARTS}}
+
+
+def _water_share(chips: list[ChipStats]) -> float | None:
+    nw, nd = sum(c.n_water for c in chips), sum(c.n_dry for c in chips)
+    return nw / (nw + nd) if nw + nd else None
 
 
 def fit_and_evaluate(parts: dict[str, list[str]],
@@ -211,8 +253,12 @@ def read_chip(chip_id: str) -> tuple[np.ndarray, np.ndarray]:
 
 def git_commit() -> str:
     try:
-        return subprocess.run(["git", "rev-parse", "--short=12", "HEAD"], cwd=REPO_ROOT,
+        head = subprocess.run(["git", "rev-parse", "--short=12", "HEAD"], cwd=REPO_ROOT,
                               capture_output=True, text=True, check=True).stdout.strip()
+        dirty = subprocess.run(["git", "status", "--porcelain", "--", "src/floodvalue/baseline",
+                                "src/floodvalue/model/metrics.py"], cwd=REPO_ROOT,
+                               capture_output=True, text=True, check=True).stdout.strip()
+        return head + ("-dirty" if dirty else "")
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
 
@@ -254,8 +300,10 @@ def render_report(params: dict, result: dict, config: dict) -> str:
             for c, v in params["per_channel"].items()) + ".",
         (f"- Вероятность (временный основной метод, D-009): p = sigmoid(({t:.1f} − {ch}) / s), "
          f"**s = {s:.3f} dB** — минимум log-loss на train при фиксированном пороге. "
-         "p ≥ 0,5 ⇔ маска baseline. Сигмоида не калибрована на validation: доля воды "
-         "в train 8,9 %, в validation 15,2 %."),
+         "p ≥ 0,5 ⇔ маска baseline. Порог 0,5 и сигмоида не выбраны на validation "
+         "(калибровка — отдельный этап): доля воды среди валидных пикселей "
+         + ", ".join(f"{p} {v * 100:.1f} %" for p, v in result["water_share"].items()
+                     if v is not None) + "."),
         ("- Валидный пиксель: VV и VH конечны **и** LabelHand ≠ −1 (`floodvalue.model.metrics`). "
          "`valid_mask_sha256` — отпечаток этой маски; основной метод обязан получить тот же хеш."),
         (f"- Чипов: train {result['n_chips']['train']}, dev {result['n_chips']['dev']}, "
@@ -274,6 +322,12 @@ def render_report(params: dict, result: dict, config: dict) -> str:
     out += ["", "95 % бутстрэп-интервал IoU (ALL, чипы с возвращением, "
             f"{N_BOOT} повторов, seed {SEED}): " + "; ".join(
                 f"{p} [{lo:.3f}; {hi:.3f}]" for p, (lo, hi) in result["bootstrap"].items()) + ".",
+            *([] if not result["delta_dev"] else [
+                "", ("Выбор канала на dev, парный бутстрэп по чипам (те же выборки для обоих "
+                     f"каналов): ΔIoU({ch} − другой канал) = {result['delta_dev']['mean']:+.3f}, "
+                     f"95 % [{result['delta_dev']['lo']:+.3f}; {result['delta_dev']['hi']:+.3f}], "
+                     f"доля выборок с Δ > 0 — {result['delta_dev']['share_positive']:.3f}. "
+                     "Dev — одно событие (USA), поэтому выбор канала опирается и на D-009.")]),
             "", "## Варианты (ALL): VV, VH, Otsu по чипу", "",
             ("Пороги VV и VH — каждый свой, выбран на train. Otsu считается по VH каждого чипа "
              "отдельно, без обучения (порог чипа — по всем конечным пикселям S1)."), "",
@@ -341,9 +395,15 @@ def run(args) -> int:
         "method": "threshold_baseline",
         "rule": f"water <=> {params['channel']} <= threshold_db (dB)",
         "proba": "p = sigmoid((threshold_db - x) / scale_db), x = channel in dB; "
-                 "p >= prob_threshold <=> x <= threshold_db",
+                 "p >= threshold <=> x <= threshold_db",
         **params,
-        "prob_threshold": 0.5,
+        "threshold": 0.5,
+        "threshold_status": "fixed 0.5 (= baseline rule), not chosen on validation; "
+                            "temporary main method D-009, calibration replaces it",
+        "weights_sha256": hashlib.sha256(json.dumps(
+            {k: params[k] for k in ("channel", "threshold_db", "scale_db")},
+            sort_keys=True).encode()).hexdigest(),
+        "weights_note": "no weight file: sha256 of canonical JSON {channel, threshold_db, scale_db}",
         "fitted_on": "train",
         "split_sha256": _split_sha(),
         "created_at": dt.datetime.now(dt.UTC).date().isoformat(),
