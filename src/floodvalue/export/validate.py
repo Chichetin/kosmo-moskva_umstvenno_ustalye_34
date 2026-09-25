@@ -15,8 +15,10 @@ import numpy as np
 import rasterio
 import yaml
 from pydantic import BaseModel, ValidationError
+from rasterio.transform import array_bounds
 from rasterio.warp import transform as warp_transform
-from shapely.geometry import Point, shape
+from rasterio.warp import transform_bounds
+from shapely.geometry import Point, box, shape
 
 from floodvalue.contracts import files as F
 from floodvalue.contracts.geo import MIN_AREA_KM2, area_km2, product_half_up, round_half_up
@@ -88,6 +90,12 @@ def _load_features(report: _Report, run_dir: Path, name: str, geom_type: str,
         if geom.get("type") != geom_type:
             report.add(name, f"объект {i}: геометрия {geom.get('type')!r}, ожидается {geom_type}")
             continue
+        if geom_type == "Polygon":
+            open_rings = _open_rings(geom.get("coordinates"))
+            if open_rings:
+                report.add(name, "; ".join(f"объект {i}: кольцо {k} не замкнуто или короче 4 точек "
+                                           f"(RFC 7946 §3.1.6)" for k in open_rings))
+                continue
         try:
             props = model.model_validate(feat.get("properties") or {})
             out.append((props, shape(geom)))
@@ -95,6 +103,21 @@ def _load_features(report: _Report, run_dir: Path, name: str, geom_type: str,
             msg = _fmt(exc) if isinstance(exc, ValidationError) else str(exc)
             report.add(name, f"объект {i}: {msg}")
     return out if len(out) == len(doc.get("features") or []) else None
+
+
+def _open_rings(rings) -> list[int]:
+    """Indices of Polygon rings whose first and last positions differ (shapely closes them silently)."""
+    return [k for k, ring in enumerate(rings or [])
+            if not isinstance(ring, list) or len(ring) < 4 or ring[0] != ring[-1]]
+
+
+def _chip_lonlat(raster):
+    """Chip extent as a WGS 84 [lon, lat] box, from the probability raster grid."""
+    p, _, prof = raster
+    bounds = array_bounds(p.shape[0], p.shape[1], prof["transform"])  # (west, south, east, north)
+    if prof["crs"] and prof["crs"].to_epsg() != 4326:
+        bounds = transform_bounds(prof["crs"], "EPSG:4326", *bounds)
+    return box(*bounds)
 
 
 def _lonlat_ok(geom) -> bool:
@@ -339,6 +362,14 @@ def validate_run(run_dir: Path, assets_config: Path | None = None,
             report.add(n, "перекрёстная проверка невозможна: run_metadata.json невалиден")
     elif not any(meta.chip_id in s for s in meta.source.s1_files):
         report.add(F.RUN_METADATA, "source.s1_files не содержит S1 чипа chip_id")
+    base_rate = pricing["base_rate"]
+    if meta is not None:
+        for field, value in (("legal_edition", pricing["legal_edition"]),
+                             ("base_rate_rub_km2", float(base_rate["rub_per_km2"])),
+                             ("base_rate_status", base_rate["status"])):
+            if getattr(meta.pricing, field) != value:
+                report.add(F.RUN_METADATA, f"pricing.{field}={getattr(meta.pricing, field)!r} ≠ "
+                                           f"configs/pricing.yaml {value!r}")
 
     if meta is not None:
         _check_metrics(report, run_dir, meta)
@@ -447,13 +478,21 @@ def validate_run(run_dir: Path, assets_config: Path | None = None,
         for cid, n in ids.items():
             if n > 1:
                 report.add(name, f"candidate_id {cid} повторяется {n} раз")
+        chip = _chip_lonlat(raster) if raster is not None else None
         for c, geom in cands:
             cid = c.candidate_id
             catalog.setdefault(cid, c)
             zones.setdefault(cid, geom)
+            for field, value in (("base_rate_rub_km2", float(base_rate["rub_per_km2"])),
+                                 ("base_rate_status", base_rate["status"])):
+                if getattr(c, field) != value:
+                    report.add(name, f"{cid}: {field}={getattr(c, field)!r} ≠ configs/pricing.yaml "
+                                     f"{value!r}")
             if not _lonlat_ok(geom):
                 report.add(name, f"{cid}: координаты вне диапазона [lon, lat]")
                 continue
+            if chip is not None and not geom.intersects(chip):
+                report.add(name, f"{cid}: зона не пересекает чип (порядок [долгота, широта]?)")
             if not geom.is_valid:
                 report.add(name, f"{cid}: невалидный Polygon")
             if len(geom.interiors) > 0:

@@ -15,7 +15,7 @@ GPU_VENV := $(HOME)/.cache/floodvalue-gpu
 endif
 GPU_PY := $(GPU_VENV)/bin/python -m floodvalue
 
-.PHONY: setup test hooks-test check data split baseline train calibrate predict assets procure export validate app eval-test all gpu-env
+.PHONY: setup test hooks-test check data data-qc split baseline train calibrate predict assets procure export validate app eval-test all gpu-env
 
 setup:            ## окружение строго по lockfile + git-хук стража данных
 	uv sync --frozen
@@ -35,6 +35,9 @@ check: test hooks-test validate   ## полный прогон перед push
 data split baseline calibrate predict assets procure export validate app eval-test:
 	$(PY) $@ $(STAGE_ARGS)
 
+data-qc:            ## docs/verification/data-qc.md из interim/qc.csv (после make data); test — без пикселей
+	uv run --frozen python -m floodvalue.data.qc_report
+
 train:              ## GPU=1 — обучение через python из GPU-venv (make gpu-env), иначе CPU по uv.lock
 ifeq ($(filter 1,$(GPU)),1)
 	@[ -x "$(GPU_VENV)/bin/python" ] || { echo "train: нет GPU-venv в $(GPU_VENV) — сначала make gpu-env"; exit 1; }
@@ -44,4 +47,19 @@ else
 endif
 
 # Сквозной путь без обучения: веса и порог уже в репо (models/), бюджет меняется без переобучения.
-all: data predict assets procure export validate
+# CHIP по умолчанию — configs/run.yaml; комплект -> $$FLOODVALUE_OUTPUT_DIR/<chip>_<budget>_<commit>
+# (или OUT), validate проверяет именно его (самый свежий run_metadata.json, contracts §11).
+ALL_CHIP = $(or $(CHIP),$(shell sed -n 's/^chip_id: *//p' configs/run.yaml))
+ALL_ARGS = --chip $(ALL_CHIP) $(if $(BUDGET),--budget $(BUDGET)) $(if $(OUT),--out $(OUT))
+HAS_MODEL_PREDICT = uv run --frozen python -c "import importlib.util as u, sys; sys.exit(u.find_spec('floodvalue.model.predict') is None)"
+
+all:
+	$(PY) data
+	@# TODO(#16/#17): убрать запасной путь, когда floodvalue.model.predict будет в main.
+	@if $(HAS_MODEL_PREDICT); then $(PY) predict $(ALL_ARGS); else \
+	  echo "predict: floodvalue.model.predict ещё нет — временный основной метод baseline (D-009)"; \
+	  uv run --frozen python -m floodvalue.baseline.predict --chip $(ALL_CHIP) $(if $(OUT),--out $(OUT)); fi
+	$(PY) assets $(ALL_ARGS)
+	$(PY) procure $(ALL_ARGS)
+	$(PY) export $(ALL_ARGS)
+	$(PY) validate $(if $(OUT),--out $(OUT))
