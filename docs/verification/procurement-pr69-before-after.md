@@ -82,7 +82,8 @@ worktree — `sha256sum models/unet/*.pt models/baseline/*.json` совпада�
 Бюджет ограничивает только стоимость данных (`data_cost_rub`, docs/contracts.md);
 `other_cost_rub` (сценарные C_compute + C_review, configs/run.yaml) в бюджет не входит,
 поэтому `decision_cost_rub` у C может превышать бюджет при `budget_feasible=true`
-(«стало»: 2500 → 3 952,98; 5000 → 6 905,96; 20000 → 19 939,51 руб.). При 20000 у C
+(«стало»: превышает при 2500 → 3 952,98 и 5000 → 6 905,96 руб.; при 20000 →
+19 939,51 руб. — в пределах). При 20000 у C
 `other_cost_rub` 5 000 → 4 000 и `decision_cost_rub` 24 272,96 → 19 939,51 (−4 333,45)
 за счёт меньшего числа позиций.
 
