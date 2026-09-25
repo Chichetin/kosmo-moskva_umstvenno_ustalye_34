@@ -109,16 +109,22 @@ gh issue list --assignee @me          # мои задачи
 
 ## GitVerse (сдача)
 
-Заводится, когда будет репозиторий и токен (у человека). Схема (а): GitHub рабочий,
-GitVerse — зеркало `main` и тегов, веса — в LFS GitVerse, не ссылкой.
+Репозиторий: https://gitverse.ru/hackrus.experts/kosmo-moskva_umstvenno_ustalye_34
+(приватный, у нас push без admin). GitHub — рабочий, GitVerse — зеркало `origin/main`.
 
 ```bash
-git remote add gitverse https://gitverse.ru/<owner>/<repo>.git   # один раз
-bash scripts/sync-gitverse.sh    # (issue infra) push main + теги + git lfs push --all; сверка commit и LFS-объектов
+# в .env: GITVERSE_TOKEN=<токен>, GITVERSE_USER=<логин GitVerse>
+bash scripts/sync-gitverse.sh            # push origin/main → main и master, LFS-объекты, теги + сверка
+bash scripts/sync-gitverse.sh --verify   # только сверка: commit совпадает, LFS в клоне — не указатели
 ```
 
+Скрипт пушит только `origin/main` (не локальную ветку), токен в URL и config не пишет,
+remote `gitverse` добавляет сам. `master` — ветка по умолчанию GitVerse, держится равной
+`main`. Пробный LFS-объект (2 МБ) 25.09 прошёл туда и обратно с тем же sha256.
+
 Синхронизация — после каждой вехи и не реже раза в 3 часа с 26.09; последняя — до
-27.09 00:00, контрольный прогон из чистого клона GitVerse. **После 01:00 27.09 push нет.**
+27.09 00:00, затем `--verify` и контрольный прогон из чистого клона GitVerse.
+**После 01:00 27.09 push нет.**
 
 ## Сдача и теги
 
