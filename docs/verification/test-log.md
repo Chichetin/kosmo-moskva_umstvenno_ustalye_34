@@ -12,11 +12,11 @@ make eval-test        # без подтверждения — отказ; печ
 FLOODVALUE_EVAL_TEST_CONFIRM=<sha256 из отказа или из eval-validation.md> make eval-test
 ```
 
-sha256 конфигурации — от имени основного метода и байтов `models/<метод>/config.json`
-(в нём sha256 весов), `models/baseline/config.json`, `splits/split_v1.json` и файлов
-`models/calibration/` (`floodvalue.model.eval_test.frozen_config_hash`). Команда
+sha256 конфигурации — от имени основного метода и байтов всех файлов `models/<метод>/`
+(config, веса, `calibration.json`), `models/baseline/`, `models/calibration/` (если есть) и
+`splits/split_v1.json` (`floodvalue.model.eval_test.frozen_config_hash`). Команда
 отказывает, если в `src/`, `models/`, `configs/`, `splits/`, `pyproject.toml`, `uv.lock`
-есть незакоммиченные изменения. Строку ниже пишет сама команда: «начат» — до чтения
+есть изменённые или неотслеживаемые файлы, файл конфигурации не в git или git недоступен. Строку ниже пишет сама команда: «начат» — до чтения
 первого test-чипа; по завершении заменяется результатом, при сбое — «прерван: <ошибка>».
 Отчёт — `docs/verification/test-eval.md` и `test-eval*.csv/json/png`.
 

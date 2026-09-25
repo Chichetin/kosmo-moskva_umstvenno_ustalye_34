@@ -1,7 +1,7 @@
 {
  "part": "validation",
- "commit": "4b7c28e09553cc55dca1a3404029f7e82b83b27f",
- "config_sha256": "3b2a20fb3f0f9cfbd46379b7611087150a23c5af5d0d3ae73e5e9b71ddb2274a",
+ "commit": "dac3066eef51c975bac9dabe1af55a0e4b010ced",
+ "config_sha256": "b14eb94b23b86cc7da241c63b7e6c9c44d7541207b7c253568aceb362fa61f1b",
  "main_method": "unet",
  "threshold": 0.5,
  "threshold_status": "uncalibrated: raw p >= 0.5; calibration and final threshold are chosen on validation by calibration (#20, D-012)",

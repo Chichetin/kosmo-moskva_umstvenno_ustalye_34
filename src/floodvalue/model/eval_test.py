@@ -62,14 +62,17 @@ def main_method() -> str:
 
 
 def config_files(method: str, root: Path = REPO_ROOT) -> list[str]:
-    """Files whose bytes define the evaluated configuration (weights are pinned by sha256
-    inside the method config; calibration files are included as soon as they exist)."""
-    files = [f"models/{method}/config.json", "models/baseline/config.json",
-             str(SPLIT_PATH.relative_to(REPO_ROOT))]
-    calib = Path(root) / "models" / "calibration"
-    if calib.is_dir():
-        files += [str(p.relative_to(root)) for p in sorted(calib.rglob("*")) if p.is_file()]
-    return files
+    """Files whose bytes define the evaluated configuration: every file of `models/<method>/`
+    and `models/baseline/` (config, weights, `calibration.json` of #20 and anything added
+    later), `models/calibration/` if it appears, and the split file."""
+    root = Path(root)
+    files = [str(SPLIT_PATH.relative_to(REPO_ROOT)), f"models/{method}/config.json",
+             "models/baseline/config.json"]
+    for d in {f"models/{method}", "models/baseline", "models/calibration"}:
+        folder = root / d
+        if folder.is_dir():
+            files += [str(q.relative_to(root)) for q in sorted(folder.rglob("*")) if q.is_file()]
+    return sorted(set(files))
 
 
 def frozen_config_hash(root: Path = REPO_ROOT, method: str | None = None) -> str:
@@ -77,29 +80,52 @@ def frozen_config_hash(root: Path = REPO_ROOT, method: str | None = None) -> str
     return C.config_sha256(root, config_files(method, root), method)
 
 
-def git(*args: str) -> str:
-    return subprocess.run(["git", "-C", str(REPO_ROOT), *args], capture_output=True, text=True,
-                          check=False).stdout.strip()
+def git(*args: str, root: Path = REPO_ROOT) -> tuple[int, str]:
+    try:
+        r = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True,
+                           check=False)
+    except OSError as exc:
+        return 1, str(exc)
+    return r.returncode, (r.stdout.strip() if r.returncode == 0 else r.stderr.strip())
 
 
-def uncommitted_frozen_paths() -> str:
-    return git("status", "--porcelain", "--untracked-files=no", "--", *FROZEN_PATHS)
+def uncommitted_frozen_paths(root: Path = REPO_ROOT, method: str | None = None) -> str:
+    """Why the configuration is not reproducible from the commit ("" = it is): changed or
+    untracked (not ignored) files under FROZEN_PATHS, configuration files git does not track,
+    or git itself failing — the gate refuses rather than passes on a failure."""
+    rc, status = git("status", "--porcelain", "--", *FROZEN_PATHS, root=root)
+    if rc:
+        return f"git status failed: {status}"
+    if status:
+        return status
+    problems = []
+    for rel in config_files(method or main_method(), root):
+        if not (Path(root) / rel).is_file():
+            continue
+        rc, _ = git("ls-files", "--error-unmatch", "--", rel, root=root)
+        if rc:
+            problems.append(f"?? {rel} (not tracked by git)")
+    return "\n".join(problems)
 
 
 def who() -> str:
-    return os.environ.get("FLOODVALUE_EVAL_WHO") or git("config", "user.name") or \
+    rc, name = git("config", "user.name")
+    return os.environ.get("FLOODVALUE_EVAL_WHO") or (name if not rc else "") or \
         os.environ.get("USER", "unknown")
 
 
-def open_test_gate() -> str:
-    """Raise EvalGateError unless test may be read now; returns the configuration hash."""
+def open_test_gate() -> tuple[str, str]:
+    """Raise EvalGateError unless test may be read now; returns (config hash, commit)."""
     expected = frozen_config_hash()
     C.check_test_confirmation(os.environ.get(CONFIRM_ENV), expected)
     dirty = uncommitted_frozen_paths()
     if dirty:
         raise C.EvalGateError("test needs a committed configuration; uncommitted changes:\n"
                               + dirty)
-    return expected
+    rc, commit = git("rev-parse", "HEAD")
+    if rc or not commit:
+        raise C.EvalGateError(f"no git commit to record in test-log: {commit}")
+    return expected, commit
 
 
 def append_test_log(row: str, path: Path | None = None) -> None:
@@ -336,7 +362,9 @@ def write_csv(path: Path, fields: list[str], rows: list[dict]) -> None:
 
 
 def f3(v: float) -> str:
-    return "—" if v is None or not np.isfinite(v) else f"{v:.3f}".replace(".", ",")
+    if v is None or not np.isfinite(v):
+        return "—"
+    return f"{v:.3f}".replace(".", ",").replace("-", "−")
 
 
 def rub(v: float) -> str:
@@ -512,10 +540,12 @@ def render_md(res, rows, s, groups, jrc_counts, calibrated, paths) -> str:
     L += ["", f"Парный бутстрэп по чипам ({BOOTSTRAP_N} повторов, seed {BOOTSTRAP_SEED}; "
           "одни и те же выборки чипов для обоих методов), ΔIoU = основной − baseline:", "",
           "| событие | ΔIoU | 95 % CI | доля Δ > 0 |", "|---|---|---|---|"]
+    note_boot = ("Интервал считается здесь заново (свои выборки чипов), поэтому может отличаться "
+                 "в третьем знаке от других отчётов; для этой части основным считается этот.")
     for scope, b in s["bootstrap_delta_iou"].items():
         L.append(f"| {scope} | {f3(b['delta'])} | [{f3(b['ci95'][0])}; {f3(b['ci95'][1])}] | "
                  f"{f3(b['share_gt_0'])} |")
-    L += ["", "## 2. Ложные срабатывания и пропуски по событиям", "",
+    L += ["", note_boot, "", "## 2. Ложные срабатывания и пропуски по событиям", "",
           "| событие | метод | FP | FN | FP / (TP+FP) | FN / (TP+FN) |", "|---|---|---|---|---|---|"]
     for scope in [*res["events"], "ALL"]:
         for m in ("baseline", "main"):
@@ -535,7 +565,9 @@ def render_md(res, rows, s, groups, jrc_counts, calibrated, paths) -> str:
         L.append(f"| {scope} | {f3(c['ece'])} | {f3(c['brier'])} |")
     L += ["", "| корзина p | пикселей | среднее p | доля воды |", "|---|---|---|---|"]
     for r in C.reliability_table(res["reliability"]["ALL"]):
-        L.append(f"| [{r['lo']:.1f}; {r['hi']:.1f}) | {r['n']} | {f3(r['mean_p'])} | "
+        close = "]" if r["hi"] >= 1 else ")"
+        lo, hi = (f"{x:.1f}".replace(".", ",") for x in (r["lo"], r["hi"]))
+        L.append(f"| [{lo}; {hi}{close} | {r['n']} | {f3(r['mean_p'])} | "
                  f"{f3(r['observed'])} |")
     L += ["", "## 4. Неопределённость на ошибках (критерий 10)", "",
           "Показатель (временный, до #21) — бинарная энтропия p основного метода в битах: "
@@ -558,15 +590,17 @@ def render_md(res, rows, s, groups, jrc_counts, calibrated, paths) -> str:
           "читаются). EL = p·V·q из `asset_loss.csv`; EL_ref = y·V·q, y — ручная метка "
           "воды в пикселе точки при тех же учебных V и q. Оцениваются только точки со "
           "статусом ok и меткой 0/1.", "",
-          "| выборка | точек поставлено | оценено | исключено (метка −1) | MAE, руб. | "
-          "Σ \\|EL − EL_ref\\|, руб. | Σ EL, руб. | Σ EL_ref, руб. |",
-          "|---|---|---|---|---|---|---|---|",
+          "| выборка | точек поставлено | оценено | исключено: метка −1 | исключено: нет p | "
+          "MAE, руб. | Σ \\|EL − EL_ref\\|, руб. | Σ EL, руб. | Σ EL_ref, руб. |",
+          "|---|---|---|---|---|---|---|---|---|",
           f"| демо-чип `{res['proxy_chip']}` | {demo['n_placed']} | {demo['n_points']} | "
-          f"{demo['n_excluded_label_invalid']} | {rub(demo['mae_rub'])} | "
+          f"{demo['n_excluded_label_invalid']} | {demo['n_excluded_no_data']} | "
+          f"{rub(demo['mae_rub'])} | "
           f"{rub(demo['sum_abs_error_rub'])} | {rub(demo['sum_el_rub'])} | "
           f"{rub(demo['sum_el_ref_rub'])} |",
           f"| все чипы части, по 10 точек | {allp['n_placed']} | {allp['n_points']} | "
-          f"{allp['n_excluded_label_invalid']} | {rub(allp['mae_rub'])} | "
+          f"{allp['n_excluded_label_invalid']} | {allp['n_excluded_no_data']} | "
+          f"{rub(allp['mae_rub'])} | "
           f"{rub(allp['sum_abs_error_rub'])} | {rub(allp['sum_el_rub'])} | "
           f"{rub(allp['sum_el_ref_rub'])} |", "",
           f"Ошибка — {PROXY_NOTE}: EL_ref сам зависит от учебных V, q и не наблюдает ущерб. "
@@ -604,11 +638,12 @@ def run(args) -> int:
         print(f"eval-test: unknown part {part!r}; expected one of {PARTS}")
         return 2
     out_dir = Path(args.out) if getattr(args, "out", None) else VERIFICATION
-    commit = git("rev-parse", "HEAD") or "unknown"
+    rc, commit = git("rev-parse", "HEAD")
+    commit = commit if not rc and commit else "unknown"
     log_row = None
     if part == "test":
         try:
-            config_hash = open_test_gate()
+            config_hash, commit = open_test_gate()
         except C.EvalGateError as exc:
             print(f"eval-test: отказ — {exc}")
             return 3

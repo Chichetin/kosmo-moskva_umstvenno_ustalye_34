@@ -59,6 +59,7 @@ def data_root(tmp_path, monkeypatch):
 @pytest.fixture(autouse=True)
 def test_log(tmp_path, monkeypatch):
     """Every test writes to a temporary log, never to docs/verification/test-log.md."""
+    monkeypatch.delenv(E.CONFIRM_ENV, raising=False)
     log = tmp_path / "test-log.md"
     log.write_text("# Журнал\n\n| Дата | Commit | sha256 | Метод(ы) | Кто | Результат |\n"
                    "|---|---|---|---|---|---|\n", encoding="utf-8")
@@ -200,3 +201,44 @@ def test_failed_test_run_is_logged_as_interrupted(data_root, tmp_path, monkeypat
         E.run(Namespace(part="test", out=str(tmp_path)))
     text = test_log.read_text(encoding="utf-8")
     assert "прерван: RuntimeError" in text and "| начат |" not in text
+
+
+def git_repo(tmp_path):
+    import subprocess
+
+    root = tmp_path / "repo"
+    (root / "models" / "unet").mkdir(parents=True)
+    (root / "models" / "baseline").mkdir(parents=True)
+    (root / "splits").mkdir()
+    (root / "models" / "unet" / "config.json").write_text("{}")
+    (root / "models" / "baseline" / "config.json").write_text("{}")
+    (root / "splits" / "split_v1.json").write_text("{}")
+    for cmd in (["init", "-q"], ["add", "."],
+                ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "x"]):
+        subprocess.run(["git", "-C", str(root), *cmd], check=True, capture_output=True)
+    return root
+
+
+def test_calibrator_next_to_method_changes_the_config_hash(tmp_path):
+    root = git_repo(tmp_path)
+    before = E.frozen_config_hash(root, "unet")
+    (root / "models" / "unet" / "calibration.json").write_text('{"a": 1}')   # where #20 puts it
+    assert "models/unet/calibration.json" in E.config_files("unet", root)
+    after = E.frozen_config_hash(root, "unet")
+    assert after != before
+    (root / "models" / "unet" / "calibration.json").write_text('{"a": 2}')
+    assert E.frozen_config_hash(root, "unet") != after
+
+
+def test_gate_sees_untracked_calibrator_and_modified_config(tmp_path):
+    root = git_repo(tmp_path)
+    assert E.uncommitted_frozen_paths(root, "unet") == ""
+    (root / "models" / "unet" / "calibration.json").write_text("{}")         # make calibrate
+    assert "calibration.json" in E.uncommitted_frozen_paths(root, "unet")
+    (root / "models" / "unet" / "calibration.json").unlink()
+    (root / "models" / "baseline" / "config.json").write_text('{"t": -22}')
+    assert "config.json" in E.uncommitted_frozen_paths(root, "unet")
+
+
+def test_gate_refuses_when_git_fails(tmp_path):
+    assert E.uncommitted_frozen_paths(tmp_path, "unet").startswith("git status failed")
