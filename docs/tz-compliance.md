@@ -7,7 +7,7 @@
 
 | № | Критерий | Артефакт | Проверка (команда) | Статус |
 |---|---|---|---|---|
-| 1 | Подготовка исходных геоданных | `src/floodvalue/data/`, `docs/data.md`, `source_manifest.json` | `make data` → QC-отчёт: VV/VH, CRS, nodata, совпадение сетки с меткой | 🟡 разведка в `docs/data.md` |
+| 1 | Подготовка исходных геоданных | `src/floodvalue/data/`, `docs/data.md` §11, `interim/qc.csv`, `interim/source_manifest_s1.json` → `source_manifest.json` | `make data` → 446/446 QC формата (md5, VV/VH float32, int16, EPSG:4326, сетка S1 = метка через allclose, dB, метка ⊂ {−1,0,1}), 6 чипов без валидных пикселей; `uv run --frozen pytest tests/data` | ✅ QC и манифест S1; 🟡 перенос в `source_manifest.json` — `export` |
 | 2 | Пороговый baseline | `src/floodvalue/baseline/`, порог в `models/baseline/` | `make baseline` → порог выбран на train/val; метрики IoU/F1/P/R | ⬜ |
 | 3 | Основной метод | `src/floodvalue/model/`, `models/<main>/`, `notebooks/` | `make train`, `make predict CHIP=…`; описание в README | ⬜ |
 | 4 | Сравнение методов | `docs/verification/test-comparison.md` | `make eval-test` → оба метода, идентичные валидные пиксели, по событиям, FP/FN | ⬜ |
