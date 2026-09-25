@@ -2,7 +2,7 @@
 interim/source_manifest_s1.json (both written by `make data`) and splits/split_v1.json.
 
 Pixel statistics (label shares -1/0/1, S1 NaN, VV > 0 dB) are aggregated only over
-train/dev/validation/excluded. Test chips are sealed (D-010, D-029): `make data` never reads
+train/dev/validation/excluded. Test chips are sealed (D-010, D-031): `make data` never reads
 their pixels, and the summary refuses a qc.csv where a test chip has pixel statistics.
 All chips are 512x512, so the mean of chip shares equals the pixel share of the group.
 """
@@ -20,7 +20,8 @@ from floodvalue.paths import REPO_ROOT, data_dir
 REPORT_PATH = REPO_ROOT / "docs" / "verification" / "data-qc.md"
 OPEN_ORDER = ("train", "dev", "validation", "excluded")
 PIXEL_KEYS = ("label_invalid_frac", "label_dry_frac", "label_water_frac", "vv_nan_frac",
-              "vv_pos_frac", "valid_frac")
+              "vh_nan_frac", "vv_pos_frac", "vh_pos_frac", "vv_max", "valid_frac",
+              "s1_nan_label_dry_frac", "s1_nan_label_water_frac")
 
 
 def chip_parts(split: dict) -> dict[str, str]:
@@ -54,6 +55,10 @@ def _group(name: str, rows: list[dict]) -> dict:
             "water": mean("label_water_frac"),
             "water_of_labelled": water / (dry + water) if dry + water > 0 else None,
             "nan": mean("vv_nan_frac"), "vv_pos": mean("vv_pos_frac"),
+            "nan_dry": mean("s1_nan_label_dry_frac"),
+            "nan_water": mean("s1_nan_label_water_frac"),
+            "chips_nan_labelled": sum(_f(r, "s1_nan_label_dry_frac")
+                                      + _f(r, "s1_nan_label_water_frac") > 0 for r in rows),
             "chips_with_nan": sum(_f(r, "vv_nan_frac") > 0 for r in rows),
             "chips_nan_gt_half": sum(_f(r, "vv_nan_frac") > 0.5 for r in rows),
             "chips_vv_pos": sum(_f(r, "vv_pos_frac") > 0 for r in rows),
@@ -100,14 +105,16 @@ def _pct(x: float | None) -> str:
 def _row(g: dict, first: str) -> str:
     return (f"| {first} | {g['n_chips']} | {_pct(g['invalid'])} | {_pct(g['dry'])} | "
             f"{_pct(g['water'])} | {_pct(g['water_of_labelled'])} | {_pct(g['nan'])} | "
-            f"{_pct(g['vv_pos'])} | {g['chips_with_nan']} | {g['chips_nan_gt_half']} | "
+            f"{_pct(g['vv_pos'])} | {_pct(g['nan_dry'])} | {_pct(g['nan_water'])} | "
+            f"{g['chips_nan_labelled']} | {g['chips_with_nan']} | {g['chips_nan_gt_half']} | "
             f"{g['chips_vv_pos']} | {g['chips_no_water']} | {g['chips_invalid_gt_half']} | "
             f"{g['unusable']} |")
 
 
 HEAD = ("| {0} | чипов | −1, % | 0, % | 1, % | вода среди размеченных, % | NaN S1, % | "
-        "VV > 0 dB, % | чипов с NaN | NaN > 50 % | чипов с VV > 0 | без воды | −1 > 50 % | "
-        "без валидных |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+        "VV > 0 dB, % | NaN S1 под 0, % | NaN S1 под 1, % | чипов с NaN под 0/1 | "
+        "чипов с NaN | NaN > 50 % | чипов с VV > 0 | без воды | −1 > 50 % | "
+        "без валидных |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
 
 
 def render(summary: dict, events: list[dict], header: dict) -> str:
@@ -136,8 +143,11 @@ def render(summary: dict, events: list[dict], header: dict) -> str:
         f"Test — {tt['n_chips']} чипов событий {', '.join(tt['events'])} "
         "(`splits/split_v1.json`, D-016). У них `make data` проверяет только заголовки "
         "(каналы, dtype, nodata, имена, CRS, сетка) и md5/sha256 S1 и метки; **пиксели ни S1, "
-        "ни метки не читаются** (D-010, D-029), поэтому ниже для test нет ни одной "
-        "пиксельной величины. "
+        "ни метки не читаются** (D-010, D-031), поэтому ниже для test нет ни одной "
+        "пиксельной величины. Оговорка: до разбиения, на разведке набора, сводные доли меток "
+        "всех 446 чипов, включая будущий test, один раз смотрели (`docs/data.md` §5, D-016); "
+        "разбиение построено правилом по событиям, а не по этим долям. Пиксельный QC test "
+        "(NaN, −1, VV > 0 dB, NaN × метка) — задача `eval-test` после заморозки. "
         f"Формат пройден: {tt['qc_pass']}/{tt['n_chips']}, md5: {tt['md5_ok']}/{tt['n_chips']}, "
         f"сетка: {tt['grid_match']}/{tt['n_chips']}. Сводная этого отчёта отказывает, если у "
         "test-чипа в `qc.csv` появилась пиксельная статистика.",
@@ -147,7 +157,10 @@ def render(summary: dict, events: list[dict], header: dict) -> str:
         "Доли −1/0/1, NaN и VV > 0 dB — от всех 512×512 пикселей чипа, среднее по чипам "
         "(= доля пикселей части). NaN — по VV (NaN в VV и VH совпадают, `docs/data.md` §11). "
         "«Вода среди размеченных» = Σ(1) / Σ(0 + 1). «Без валидных» — нет ни одного пикселя с "
-        "конечным S1 и меткой ≠ −1. `excluded` — 5 чипов Ghana, целиком −1 (D-016).",
+        "конечным S1 и меткой ≠ −1. «NaN S1 под 0/1» — S1 не конечен хотя бы в одном канале, "
+        "а метка 0 или 1 (ловушка набора: маска валидности = S1 конечен **и** метка ≠ −1). "
+        "VV > 0 dB — доля от всех пикселей (NaN не > 0). "
+        "`excluded` — 5 чипов Ghana, целиком −1 (D-016).",
         "",
         HEAD.format("Часть"),
         *(_row(g, g["group"]) for g in summary["parts"]),

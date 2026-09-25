@@ -75,6 +75,7 @@ QC_FIELDS = [
     "vv_nan_frac", "vh_nan_frac", "vv_min", "vv_median", "vv_max", "vh_min", "vh_median",
     "vh_max", "vv_pos_frac", "vh_pos_frac", "db_scale_ok", "s1_checked", "label_values",
     "label_values_ok", "label_invalid_frac", "label_dry_frac", "label_water_frac",
+    "s1_nan_label_dry_frac", "s1_nan_label_water_frac",
     "valid_frac", "qc_pass", "usable", "issues",
 ]
 
@@ -269,7 +270,7 @@ def db_scale_ok(vv: np.ndarray, vh: np.ndarray) -> bool | None:
 
 
 def qc_chip(chip_id: str, raw: Path, bucket: dict, read_pixels: bool = True) -> dict:
-    """QC one chip. With read_pixels=False (sealed test chip, D-010/D-029) the S1 and label
+    """QC one chip. With read_pixels=False (sealed test chip, D-010/D-031) the S1 and label
     files are hashed and their headers (dtype, bands, nodata, names, CRS, grid) checked, but
     no pixel of either is read: no statistics of test chips exist anywhere."""
     event_id, _ = parse_chip_id(chip_id)
@@ -353,6 +354,9 @@ def qc_chip(chip_id: str, raw: Path, bucket: dict, read_pixels: bool = True) -> 
         row["label_dry_frac"] = _num(float((label == 0).mean()))
         row["label_water_frac"] = _num(float((label == 1).mean()))
         if valid.shape == label.shape:
+            # dataset trap: label 0/1 under NaN S1 -> validity needs both conditions
+            row["s1_nan_label_dry_frac"] = _num(float((~valid & (label == 0)).mean()))
+            row["s1_nan_label_water_frac"] = _num(float((~valid & (label == 1)).mean()))
             valid = valid & (label != -1)
         if (label == -1).all():
             notes.append("label all -1")

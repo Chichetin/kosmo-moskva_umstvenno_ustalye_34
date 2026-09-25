@@ -7,7 +7,8 @@ import pytest
 
 from floodvalue.data import fetch, io
 
-from .conftest import CHIPS, STEP_LABEL, s1_array, write_bucket_manifest, write_chip
+from .conftest import (CHIPS, STEP_LABEL, label_array, s1_array, write_bucket_manifest,
+                       write_chip)
 
 
 def read_qc(root):
@@ -306,3 +307,31 @@ def test_run_fails_when_manifest_breaks_contract(raw, offline):
         m.pop("updated")
     (raw / "bucket_manifest.json").write_text(json.dumps(manifest))
     assert fetch.run(None) == 1
+
+
+def test_no_pixel_read_call_touches_a_test_chip(raw, offline, monkeypatch):
+    # Spy on every raster pixel read during `make data`: test chips (Mekong here) are opened
+    # for headers only; train/validation chips are read.
+    import rasterio.io
+
+    seen = []
+    orig = rasterio.io.DatasetReader.read
+
+    def spy(self, *a, **kw):
+        seen.append(self.name)
+        return orig(self, *a, **kw)
+
+    monkeypatch.setattr(rasterio.io.DatasetReader, "read", spy)
+    assert fetch.run(None) == 0
+    assert any("Sri-Lanka_713926" in n for n in seen)
+    assert not [n for n in seen if "Mekong_922373" in n]
+
+
+def test_nan_under_label_is_counted(raw):
+    # Dataset trap: under NaN S1 the label is often 0/1, not -1 (docs/data.md §8).
+    s1, lab = s1_array(), label_array()     # S1 NaN at (0,0); label there is 1
+    s1[1, 5, 5] = np.nan                    # VH-only NaN over a dry pixel
+    s1[:, 0, 1] = np.nan                    # NaN over the -1 pixel: not counted
+    r = _qc_one(raw, s1=s1, label=lab)
+    assert float(r["s1_nan_label_water_frac"]) == pytest.approx(1 / 64)
+    assert float(r["s1_nan_label_dry_frac"]) == pytest.approx(1 / 64)
