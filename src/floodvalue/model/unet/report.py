@@ -61,13 +61,13 @@ def variants_table(runs: Path, path: Path) -> None:
     cols = ["run", "channels", "base", "dice_weight", "db_jitter", "seed", "best_epoch",
             "dev_iou", "dev_iou_ci_lo", "dev_iou_ci_hi", "validation_iou", "nigeria_iou",
             "sri_lanka_iou", "validation_precision", "validation_recall", "train_seconds"]
-    with open(path, "w", newline="") as f:
+    with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(cols)
         for d in sorted(p for p in runs.iterdir() if (p / "summary.json").exists()):
-            c = json.loads((d / "config.json").read_text())
-            s = json.loads((d / "summary.json").read_text())
-            with open(d / "metrics.csv", newline="") as fm:
+            c = json.loads((d / "config.json").read_text(encoding="utf-8"))
+            s = json.loads((d / "summary.json").read_text(encoding="utf-8"))
+            with open(d / "metrics.csv", newline="", encoding="utf-8") as fm:
                 rows = {(r["split"], r["event"]): r for r in csv.DictReader(fm)}
             t = c["train"]
 
@@ -91,7 +91,7 @@ def learning_curves(model_dir: Path, path: Path, baseline_dev_iou: float = 0.390
 
     fig, ax = plt.subplots(1, 2, figsize=(11, 3.8))
     for f in sorted(model_dir.glob("history_member_*.csv")):
-        with open(f, newline="") as fh:
+        with open(f, newline="", encoding="utf-8") as fh:
             rows = list(csv.DictReader(fh))
         e = [int(r["epoch"]) for r in rows]
         ax[0].plot(e, [float(r["train_loss"]) for r in rows], lw=1, label=f.stem[8:])

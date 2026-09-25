@@ -72,7 +72,7 @@ def author_chips(raw: Path) -> list[str]:
     chips: set[str] = set()
     folder = raw / "splits" / "flood_handlabeled"
     for name in AUTHOR_LISTS:
-        with open(folder / f"flood_{name}_data.csv", newline="") as fh:
+        with open(folder / f"flood_{name}_data.csv", newline="", encoding="utf-8") as fh:
             for row in csv.reader(fh):
                 if row:
                     chips.add(row[0].removesuffix("_S1Hand.tif"))
@@ -113,7 +113,7 @@ def check_events_disjoint(raw: Path) -> None:
     """Event footprints (metadata polygons) of different parts must not touch."""
     from shapely.geometry import shape
 
-    meta = json.loads((raw / "Sen1Floods11_Metadata.geojson").read_text())
+    meta = json.loads((raw / "Sen1Floods11_Metadata.geojson").read_text(encoding="utf-8"))
     geom = {f["properties"]["location"]: shape(f["geometry"]) for f in meta["features"]}
     for i, a in enumerate(PARTS):
         for b in PARTS[i + 1:]:
@@ -167,7 +167,7 @@ def dumps(split: dict) -> str:
 
 
 def load_split(path: Path | None = None) -> dict:
-    split = json.loads((path or SPLIT_PATH).read_text())
+    split = json.loads((path or SPLIT_PATH).read_text(encoding="utf-8"))
     if canonical_hash(split) != split["sha256"]:
         raise ValueError("split file lists do not match its sha256")
     return split
@@ -184,7 +184,7 @@ def chip_ids(part: str, *, allow_test: bool = False, path: Path | None = None) -
 
 def decisions_hash(path: Path = DECISIONS_PATH) -> str | None:
     """sha256 recorded in the D-016 row of the decisions log (the split freeze)."""
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         if line.startswith("| D-016 |") and "split_v1.json" in line:
             m = re.search(r"sha256[^0-9a-f]*([0-9a-f]{64})", line)
             if m:
@@ -199,11 +199,11 @@ def run(args) -> int:
     print(f"sha256 {built['sha256']}")
     if not SPLIT_PATH.exists():
         SPLIT_PATH.parent.mkdir(parents=True, exist_ok=True)
-        SPLIT_PATH.write_text(dumps(built))
+        SPLIT_PATH.write_text(dumps(built), encoding="utf-8")
         print(f"written {SPLIT_PATH}; record the sha256 in docs/decisions.md")
         return 0
     ok = True
-    if SPLIT_PATH.read_text() != dumps(built):
+    if SPLIT_PATH.read_text(encoding="utf-8") != dumps(built):
         print(f"MISMATCH: rebuilt split differs from {SPLIT_PATH}")
         ok = False
     recorded = decisions_hash()

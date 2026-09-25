@@ -5,9 +5,11 @@
 
 ## Блокеры (ждут человека)
 
-Нет открытых блокеров на 2026-09-25 19:50: приглашения IR630 и fafakaj приняты —
-оба в `gh api repos/Chichetin/kosmo-moskva_umstvenno_ustalye_34/collaborators` рядом с
-Chichetin, Ivana-banana, M1hairu (проверено в этом PR).
+| Дата | Что | Кто нужен |
+|---|---|---|
+| 2026-09-25 | GitVerse: код = `6fe66f0` (25.09 ~23:30, `--no-verify`), веса не залиты: LFS PUT → 403 на токен chichetin (push:true по API). Дальше — `bash scripts/sync-gitverse.sh --code-only` до получения прав (GIT.md «GitVerse») | токен с записью в LFS / проверка прав у admin hackrus.experts |
+
+Снят: приглашения IR630 и fafakaj приняты — оба в `gh api repos/Chichetin/kosmo-moskva_umstvenno_ustalye_34/collaborators` рядом с Chichetin, Ivana-banana, M1hairu, открытых приглашений нет (`gh api …/invitations` пуст; проверено при вливании PR #60).
 
 ## Итоги вех
 

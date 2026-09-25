@@ -31,7 +31,7 @@ def fake_method(tmp_path, monkeypatch):
     models = tmp_path / "models"
     (models / "fake").mkdir(parents=True)
     (models / "fake" / "config.json").write_text(json.dumps(
-        {"threshold": 0.5, "threshold_status": "raw", "weights_sha256": "w1"}))
+        {"threshold": 0.5, "threshold_status": "raw", "weights_sha256": "w1"}), encoding="utf-8")
     monkeypatch.setattr(P, "MODELS_DIR", models)
     monkeypatch.setenv("FLOODVALUE_METHOD", "fake")
     # S1 chip on disk
@@ -52,7 +52,7 @@ def run_predict(tmp_path):
     out = tmp_path / "out"
     assert P.run(types.SimpleNamespace(chip="X_1", out=str(out))) == 0
     with rasterio.open(out / "flood_probability.tif") as a, rasterio.open(out / "flood_mask.tif") as b:
-        return a.read(1), a.nodata, b.read(1), b.nodata, json.loads((out / "prediction.json").read_text())
+        return a.read(1), a.nodata, b.read(1), b.nodata, json.loads((out / "prediction.json").read_text(encoding="utf-8"))
 
 
 def test_predict_without_calibration_is_raw(fake_method, tmp_path):
@@ -69,7 +69,7 @@ def test_predict_applies_calibrator_and_its_threshold(fake_method, tmp_path):
     cal = {"kind": "platt", "a": 1.5, "b": 1.2}
     (model_dir / "calibration.json").write_text(json.dumps(
         {"calibrator": cal, "threshold": 0.37, "input_model_sha256": "w1",
-         "threshold_status": "calibrated"}))
+         "threshold_status": "calibrated"}), encoding="utf-8")
     p, p_nd, m, m_nd, meta = run_predict(tmp_path)
     ok = np.isfinite(s1).all(0)
     assert np.allclose(p[ok], C.apply(cal, fake_proba(s1))[ok], atol=1e-6)
@@ -83,7 +83,7 @@ def test_predict_applies_calibrator_and_its_threshold(fake_method, tmp_path):
 def test_predict_refuses_calibrator_of_other_weights(fake_method, tmp_path):
     model_dir, _ = fake_method
     (model_dir / "calibration.json").write_text(json.dumps(
-        {"calibrator": {"kind": "identity"}, "threshold": 0.4, "input_model_sha256": "old"}))
+        {"calibrator": {"kind": "identity"}, "threshold": 0.4, "input_model_sha256": "old"}), encoding="utf-8")
     with pytest.raises(RuntimeError, match="make calibrate"):
         run_predict(tmp_path)
 
@@ -158,7 +158,7 @@ def test_shipped_calibration_matches_shipped_model():
     path = R.MODELS_DIR / "unet" / "calibration.json"
     if not path.exists():
         pytest.skip("no calibration shipped")
-    config = json.loads((R.MODELS_DIR / "unet" / "config.json").read_text())
+    config = json.loads((R.MODELS_DIR / "unet" / "config.json").read_text(encoding="utf-8"))
     cal = C.load(path, config["weights_sha256"])
     assert cal["fitted_on"]["part"] == "validation"
     assert set(cal["fitted_on"]["events"]) == {"Sri-Lanka", "Nigeria"}
@@ -191,10 +191,10 @@ def test_shipped_calibrated_metrics_share_valid_pixels_with_baseline():
     base = R.REPO_ROOT / "docs" / "verification" / "baseline-metrics.csv"
     if not path.exists() or not base.exists():
         pytest.skip("no shipped metrics")
-    cal = json.loads((R.MODELS_DIR / "unet" / "calibration.json").read_text())
+    cal = json.loads((R.MODELS_DIR / "unet" / "calibration.json").read_text(encoding="utf-8"))
     b = {(r["split"], r["event"]): r["valid_mask_sha256"]
-         for r in csv.DictReader(base.read_text().splitlines())}
-    rows = list(csv.DictReader(path.read_text().splitlines()))
+         for r in csv.DictReader(base.read_text(encoding="utf-8").splitlines())}
+    rows = list(csv.DictReader(path.read_text(encoding="utf-8").splitlines()))
     assert rows and {r["split"] for r in rows} == {"dev", "validation"}
     for r in rows:
         assert r["valid_mask_sha256"] == b[(r["split"], r["event"])]
