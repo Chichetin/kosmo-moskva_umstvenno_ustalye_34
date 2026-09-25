@@ -31,6 +31,12 @@
   и сторонние библиотеки. Соседний модуль — только через файл по контракту.
 - Исключения, записанные в контракте: `app` вызывает `procurement.plan(...)` как
   чистую функцию пересчёта бюджета; `export` вызывает валидаторы из `contracts`.
+- Записанные в `decisions.md` узкие исключения: чтение чипа `floodvalue.data.io`
+  (`load_s1`, `load_label`, `valid_mask`; D-015) и загрузчик split
+  `floodvalue.data.split.chip_ids` (§4 контрактов) — любым этапам; общий алгоритм метрик §7
+  `floodvalue.model.metrics` — этапам, считающим метрики (baseline, calibration, model,
+  eval; D-032), и только он из `model`. Проверка для baseline —
+  `tests/baseline/test_baseline_imports.py`.
 - `cli.py` импортирует модули этапов лениво (по имени этапа).
 
 ## Дерево

@@ -23,7 +23,8 @@ from pathlib import Path
 import numpy as np
 
 from floodvalue.baseline import core
-from floodvalue.model import metrics
+from floodvalue.data.io import valid_mask
+from floodvalue.model import metrics  # shared §7 metrics, exception D-032
 from floodvalue.paths import MODELS_DIR, REPO_ROOT, output_dir
 
 PARTS = ("train", "dev", "validation")
@@ -50,7 +51,7 @@ class ChipStats:
 
 
 def chip_stats(chip_id: str, part: str, s1_db: np.ndarray, label: np.ndarray) -> ChipStats:
-    valid = core.valid_mask(s1_db, label)
+    valid = valid_mask(s1_db, label)
     water = valid & (label == 1)
     dry = valid & (label != 1)
     wl = {c: core.counts_le(s1_db[i][water]) for c, i in core.CHANNELS.items()}
@@ -301,8 +302,10 @@ def render_report(params: dict, result: dict, config: dict) -> str:
          "(калибровка — отдельный этап): доля воды среди валидных пикселей "
          + ", ".join(f"{p} {v * 100:.1f} %" for p, v in result["water_share"].items()
                      if v is not None) + "."),
-        ("- Валидный пиксель: VV и VH конечны **и** LabelHand ≠ −1 (`floodvalue.model.metrics`). "
-         "`valid_mask_sha256` — отпечаток этой маски; основной метод обязан получить тот же хеш."),
+        ("- Валидный пиксель: VV и VH конечны **и** LabelHand ≠ −1 "
+         "(`floodvalue.data.io.valid_mask`, D-015). `valid_mask_sha256` — отпечаток этой маски "
+         "(`floodvalue.model.metrics.mask_sha256`, D-032); основной метод обязан получить тот "
+         "же хеш."),
         (f"- Чипов: train {result['n_chips']['train']}, dev {result['n_chips']['dev']}, "
          f"validation {result['n_chips']['validation']}."),
         "",
@@ -422,8 +425,12 @@ def run(args) -> int:
             print(f"{r['split']:<10} IoU {_fmt(r['iou'])} F1 {_fmt(r['f1'])} "
                   f"P {_fmt(r['precision'])} R {_fmt(r['recall'])} n {r['n_pixels']}")
     print(f"baseline: {params['channel']} <= {params['threshold_db']} dB, "
-          f"s = {params['scale_db']} -> {CONFIG_PATH.relative_to(REPO_ROOT)}")
+          f"s = {params['scale_db']} -> {_rel(CONFIG_PATH)}")
     return 0
+
+
+def _rel(path: Path) -> Path:
+    return path.relative_to(REPO_ROOT) if path.is_relative_to(REPO_ROOT) else path
 
 
 def _split_sha() -> str:

@@ -1,10 +1,10 @@
 {
  "part": "validation",
- "commit": "dac3066eef51c975bac9dabe1af55a0e4b010ced",
- "config_sha256": "b14eb94b23b86cc7da241c63b7e6c9c44d7541207b7c253568aceb362fa61f1b",
+ "commit": "af52cc72a2d687053b332255f70704cf3e45f6d6",
+ "config_sha256": "506ce620d041373c6b312ead25deed6221e79704fe3ce2fa60d24add0ea31c1e",
  "main_method": "unet",
- "threshold": 0.5,
- "threshold_status": "uncalibrated: raw p >= 0.5; calibration and final threshold are chosen on validation by calibration (#20, D-012)",
+ "threshold": 0.37,
+ "threshold_status": "calibrated (platt) and chosen on validation, D-029",
  "n_chips": 60,
  "valid_mask_sha256": {
   "Nigeria": "7eb3b2e2c9833a320b1e3e9e9421c1f27b995e337008daf9acd5adeb71cf7917",
@@ -13,77 +13,77 @@
  },
  "bootstrap_delta_iou": {
   "Nigeria": {
-   "delta": 0.11927839075325941,
+   "delta": 0.20575808688040542,
    "ci95": [
-    0.08193167537054422,
-    0.1444915512732367
+    0.1465419328933813,
+    0.2499902954152614
    ],
    "share_gt_0": 1.0,
    "n": 2000,
    "n_used": 2000
   },
   "Sri-Lanka": {
-   "delta": -0.05928985822487465,
+   "delta": 0.03502794968640055,
    "ci95": [
-    -0.222759579181708,
-    0.027136745224577794
+    -0.010087326462575411,
+    0.07906362699374819
    ],
-   "share_gt_0": 0.11,
+   "share_gt_0": 0.936,
    "n": 2000,
    "n_used": 2000
   },
   "ALL": {
-   "delta": 0.020530949251933106,
+   "delta": 0.1046030309235777,
    "ci95": [
-    -0.06617826427045763,
-    0.07912012844808528
+    0.04971620088860118,
+    0.1525251436511211
    ],
-   "share_gt_0": 0.6885,
+   "share_gt_0": 1.0,
    "n": 2000,
    "n_used": 2000
   }
  },
  "calibration": {
   "Nigeria": {
-   "ece": 0.04843611265172095,
-   "brier": 0.05610816256446403
+   "ece": 0.022902600395548776,
+   "brier": 0.04570755819890228
   },
   "Sri-Lanka": {
-   "ece": 0.03472921112271461,
-   "brier": 0.044300461467243306
+   "ece": 0.010652133581221263,
+   "brier": 0.03850214572472017
   },
   "ALL": {
-   "ece": 0.03506620551323366,
-   "brier": 0.04769532882033832
+   "ece": 0.007479134472099166,
+   "brier": 0.04057379535175402
   }
  },
  "uncertainty": {
   "Nigeria": {
-   "n_error": 302525,
-   "n_correct": 3717993,
-   "mean_u_error": 0.6450677888840083,
-   "mean_u_correct": 0.22356922385979697,
-   "auroc": 0.9022683550002814
+   "n_error": 228297,
+   "n_correct": 3792221,
+   "mean_u_error": 0.5635308285444498,
+   "mean_u_correct": 0.16083795693301106,
+   "auroc": 0.8931112397774176
   },
   "ALL": {
-   "n_error": 871023,
-   "n_correct": 13112756,
-   "mean_u_error": 0.6666113570541581,
-   "mean_u_correct": 0.23350531761192644,
-   "auroc": 0.8904468859915107
+   "n_error": 796723,
+   "n_correct": 13187056,
+   "mean_u_error": 0.6722052010936189,
+   "mean_u_correct": 0.18301759352989086,
+   "auroc": 0.9024556090740498
   },
   "Sri-Lanka": {
-   "n_error": 568498,
-   "n_correct": 9394763,
-   "mean_u_error": 0.6780757209757102,
-   "mean_u_correct": 0.23743754315266238,
-   "auroc": 0.8835090479867619
+   "n_error": 568426,
+   "n_correct": 9394835,
+   "mean_u_error": 0.7158521018860835,
+   "mean_u_correct": 0.1919703940500763,
+   "auroc": 0.9065234787290867
   }
  },
  "jrc_iou": {
   "main": {
-   "jrc_1": 0.7654220353234259,
-   "jrc_0": 0.4855222220405965
+   "jrc_1": 0.95070759554249,
+   "jrc_0": 0.5354798260568774
   },
   "baseline": {
    "jrc_1": 0.8916267847524525,
@@ -103,9 +103,9 @@
     "n_points": 10,
     "n_excluded_label_invalid": 0,
     "n_excluded_no_data": 0,
-    "mae_rub": 503281.48638,
-    "sum_abs_error_rub": 5032814.8638,
-    "sum_el_rub": 14396486.3298,
+    "mae_rub": 274285.6581999999,
+    "sum_abs_error_rub": 2742856.581999999,
+    "sum_el_rub": 16842207.718000002,
     "sum_el_ref_rub": 18000000.0
    },
    "all_chips_of_part": {
@@ -113,9 +113,9 @@
     "n_points": 536,
     "n_excluded_label_invalid": 64,
     "n_excluded_no_data": 0,
-    "mae_rub": 350006.3500302239,
-    "sum_abs_error_rub": 187603403.6162,
-    "sum_el_rub": 245611396.1862,
+    "mae_rub": 284926.43660130596,
+    "sum_abs_error_rub": 152720570.0183,
+    "sum_el_rub": 311392794.9373,
     "sum_el_ref_rub": 311300000.0
    },
    "note": "прокси по ручной метке воды, не фактические потери",
@@ -125,7 +125,7 @@
  "error_maps": [
   "Sri-Lanka_713926",
   "Nigeria_81933",
-  "Sri-Lanka_916628"
+  "Sri-Lanka_120804"
  ],
  "baseline_crosscheck": "совпадает (TP/FP/FN/TN и valid_mask_sha256)"
 }
