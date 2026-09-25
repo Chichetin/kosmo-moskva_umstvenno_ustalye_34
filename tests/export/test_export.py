@@ -245,6 +245,7 @@ def test_read_note_of_a_test_chip_says_the_label_is_sealed():
     assert "формат и значения" not in note
     assert "заголовок и хеш" in note and "eval-test" in note and "D-031" in note
     assert "калибр" in note  # says explicitly: not in calibration / threshold either
+    assert "разведке до разбиения" in note  # D-031: no claim that test was never looked at
 
 
 def test_read_note_of_a_validation_chip_names_calibration_and_threshold():
@@ -382,6 +383,20 @@ def test_old_s1_manifest_without_citation_exports_with_a_warning(env, capsys):
     warn = [w for w in meta["warnings"] if "source_manifest_s1.json" in w]
     assert len(warn) == 1 and "citation" in warn[0] and "make data" in warn[0]
     assert F.SOURCE_MANIFEST not in _failing(validate_run(dest))
+
+
+def test_export_takes_read_note_from_the_split_part_of_the_chip(env, monkeypatch):
+    # reviewer #88: run.py must pass the chip's own split part, not a constant
+    _, args = _stages(env)
+    real = assemble.chip_split
+    monkeypatch.setattr(assemble, "chip_split",
+                        lambda split, chip: "test" if chip == CHIP else real(split, chip))
+    assert export_run.run(args) == 0
+    _, short, _ = export_run.git_commit()
+    manifest = json.loads((env / f"{CHIP}_5000_{short}" / F.SOURCE_MANIFEST)
+                          .read_text(encoding="utf-8"))
+    s1 = next(s for s in manifest["sources"] if s.get("chip_id") == CHIP)
+    assert s1["label"]["read_note"] == _read_note("test")
 
 
 def test_without_assets_sensitivity_only_sensitivity_fails(env, capsys):
