@@ -126,6 +126,11 @@ def test_fixed_plan_c_rows_recompute_covered_el():
     assert float(rows[1]["covered_expected_loss_rub"]) == pytest.approx(225000)
     assert json.loads(rows[0]["changed_inputs_json"])["plan_C_fixed"] == ["Z-A02"]
     assert len(warns) == 1 and "w" in warns[0]
+    unchanged = {"p_flood": {"factor": 1.0}, "scope": "portfolio",
+                 "portfolio_expected_loss_rub": 650000}
+    same, _ = assemble.fixed_plan_rows([_sens("k1", unchanged)], assets, loss, comp, ["Z-A02"])
+    assert same[0]["covered_expected_loss_rub"] == "450000.00"  # k = 1 -> comparison value
+    assert assemble.fixed_plan_rows([_sens("s", single)], assets, loss, [], [])[0] == []
     noted = assemble.with_model_note([_sens("s", single)])
     assert assemble.MODEL_NOTE in noted[0]["interpretation"]
 

@@ -12,6 +12,7 @@ from decimal import Decimal
 from typing import Any
 
 from floodvalue.contracts import files as F
+from floodvalue.contracts.geo import round_half_up
 
 SPLIT_PARTS = ("train", "dev", "validation", "test")
 METRICS_FIELDS = ["method", "split", "event", "iou", "f1", "precision", "recall", "tp", "fp",
@@ -118,7 +119,9 @@ def fixed_plan_rows(assets_rows: list[dict], assets: list[dict], loss_rows: list
     not match `portfolio_expected_loss_rub` of assets is skipped with a warning."""
     by_asset = {a["asset_id"]: a for a in assets}
     ok = {r["asset_id"]: r for r in loss_rows if r["status"] == "ok"}
-    c = next(r for r in comparison if r["strategy"] == "C")
+    c = next((r for r in comparison if r["strategy"] == "C"), None)
+    if c is None or not c.get("covered_expected_loss_rub"):
+        return [], ["strategy_comparison.csv без строки C с охватом: строки плана C не добавлены"]
     covered_ids = set((c.get("covered_asset_ids") or "").split()) & set(ok)
     out, warnings = [], []
     for r in assets_rows:
@@ -139,7 +142,7 @@ def fixed_plan_rows(assets_rows: list[dict], assets: list[dict], loss_rows: list
             "changed_inputs_json": json.dumps({**changed, "plan_C_fixed": sorted(plan_c)},
                                               ensure_ascii=False, sort_keys=True),
             "decision_cost_rub": c["decision_cost_rub"],
-            "covered_expected_loss_rub": repr(covered),
+            "covered_expected_loss_rub": f"{round_half_up(covered, '0.01'):.2f}",
             "result_status": "fixed_plan",
             "interpretation": (
                 f"план C зафиксирован ({', '.join(sorted(plan_c)) or 'пусто'}), стоимость решения "
