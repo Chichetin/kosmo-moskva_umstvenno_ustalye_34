@@ -211,8 +211,15 @@ def export(chip_id: str, work: Path, dest: Path | None = None,
     # source_manifest.json ----------------------------------------------------------------------
     pricing = yaml.safe_load((CONFIGS_DIR / "pricing.yaml").read_text(encoding="utf-8"))
     s1_manifest = _read_json(data_dir() / "interim" / "source_manifest_s1.json")
+    split = _read_json(SPLIT_FILE)
+    lacking_top = assemble.missing_s1_manifest_keys(s1_manifest)
+    if lacking_top:
+        warnings.append(f"source_manifest_s1.json без {lacking_top} (манифест до D-031): "
+                        "в source_manifest.json нет цитирования/таблицы событий — "
+                        "перезапустить make data")
     manifest = assemble.source_manifest(s1_manifest, chip_id, label_read=False,
-                                        extra_sources=[])
+                                        extra_sources=[],
+                                        chip_part=assemble.chip_split(split, chip_id))
     s1_entry = next(e for e in manifest["sources"] if e.get("chip_id") == chip_id)
     event_date = s1_entry.get("observation_date")
     if not event_date:
@@ -228,7 +235,6 @@ def export(chip_id: str, work: Path, dest: Path | None = None,
     run_config = rc.model_dump(mode="json") if rc.chip_id == chip_id else {}
     event_id = s1_entry.get("event_id") or (rc.event_id if rc.chip_id == chip_id
                                             else chip_id.rsplit("_", 1)[0])
-    split = _read_json(SPLIT_FILE)
     baseline_config = _read_json(BASELINE_CONFIG)
     main_cfg_path = MODELS_DIR / str(prediction.get("method", "")) / "config.json"
     main_config = (_read_json(main_cfg_path) if main_cfg_path.is_file()
