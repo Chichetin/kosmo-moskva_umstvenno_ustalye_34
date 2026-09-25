@@ -295,9 +295,46 @@ def test_models_must_equal_the_commit_that_produced_the_kit(tmp_path):
     with pytest.raises(rb.ReleaseError, match="models/unet/member_0.pt"):
         rb.check_models_committed(repo, repo / "models", v1[:7])  # kit made by v1, models are v2
 
+    (repo / ".gitignore").write_text("*.bin\n")
+    (repo / "models" / "unet" / "ignored.bin").write_bytes(b"ignored but would be zipped")
+    with pytest.raises(rb.ReleaseError, match="ignored.bin"):
+        rb.check_models_committed(repo, repo / "models", "HEAD")
+    (repo / "models" / "unet" / "ignored.bin").unlink()
+
     (repo / "models" / "unet" / "extra.pt").write_bytes(b"untracked")
     with pytest.raises(rb.ReleaseError, match="extra.pt"):
         rb.check_models_committed(repo, repo / "models", "HEAD")
 
     with pytest.raises(rb.ReleaseError, match="не найден"):
         rb.check_models_committed(repo, repo / "models", "deadbeef")
+
+
+def test_build_checks_repo_models_against_kit_commit(models, tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(rb, "REPO_ROOT", tmp_path)  # models fixture = <REPO_ROOT>/models
+    monkeypatch.setattr(rb, "is_reference", lambda run_dir, metadata: False)
+    monkeypatch.setattr(rb, "check_run", lambda run_dir: {"run_id": "r", "commit": "abc", "methods": {}})
+    monkeypatch.setattr(rb, "check_models_committed", lambda *a: calls.append(a))
+    rb.build(GOOD, models, tmp_path / "release")
+    assert calls == [(tmp_path, models, "abc")]
+
+
+def test_cli_refuses_to_upload_dirty_kit(models, tmp_path, fake_api):
+    kit = tmp_path / "kit"
+    shutil.copytree(GOOD, kit)
+    meta = json.loads((kit / "run_metadata.json").read_text(encoding="utf-8"))
+    meta["commit"] = _git(REPO_ROOT, "rev-parse", "HEAD")
+    meta["commit_dirty"] = True
+    (kit / "run_metadata.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+    monkeypatch_argv = [str(kit), str(models), str(tmp_path / "r")]
+    res = subprocess.run([sys.executable, "-c",
+                          "import sys, importlib.util as u; s=u.spec_from_file_location('rb', sys.argv[1]);"
+                          "m=u.module_from_spec(s); s.loader.exec_module(m);"
+                          "m.check_run=lambda d: __import__('json').loads((d/'run_metadata.json').read_text());"
+                          "m.check_models_committed=lambda *a: None;"
+                          "sys.exit(m.main(['--out', sys.argv[2], '--models', sys.argv[3], '--dest', sys.argv[4],"
+                          " '--upload', 'v-test']))", str(SCRIPT), *monkeypatch_argv],
+                         capture_output=True, text=True, cwd=REPO_ROOT)
+    assert res.returncode != 0
+    assert "commit_dirty" in res.stderr
+    assert fake_api.calls == []

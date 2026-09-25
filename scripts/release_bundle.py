@@ -137,8 +137,7 @@ def check_models_committed(repo: Path, models_dir: Path, commit: str) -> None:
     rel = models_dir.resolve().relative_to(repo.resolve()).as_posix()
     changed = subprocess.run(["git", "-C", str(repo), "diff", "--name-only", res.stdout.strip(), "--", rel],
                              capture_output=True, text=True, check=True).stdout.split()
-    untracked = subprocess.run(["git", "-C", str(repo), "ls-files", "--others", "--exclude-standard",
-                                "--", rel], capture_output=True, text=True, check=True).stdout.split()
+    untracked = subprocess.run(["git", "-C", str(repo), "ls-files", "--others", "--", rel], capture_output=True, text=True, check=True).stdout.split()
     if changed or untracked:
         raise ReleaseError(f"{rel}/ отличается от commit {commit}, которым собран комплект "
                            f"(изменены: {', '.join(changed) or '—'}; не в git: {', '.join(untracked) or '—'})")
@@ -282,6 +281,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.upload:
             if is_reference(args.out, metadata):
                 raise ReleaseError("эталон tests/fixtures/good в релиз не загружается")
+            if metadata.get("commit_dirty"):
+                raise ReleaseError("комплект собран из рабочего дерева с незакоммиченными правками "
+                                   "(run_metadata.commit_dirty=true) — commit не воспроизводит его")
             target = _resolve_commit(str(metadata.get("commit", "")))
             body = (f"Комплект запуска {metadata.get('run_id')} (commit {target}) и веса models/.\n"
                     f"Проверка: sha256sum -c {SUMS}\n\n" + (dest / SUMS).read_text(encoding="utf-8"))
