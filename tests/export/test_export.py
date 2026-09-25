@@ -103,6 +103,33 @@ def test_sensitivity_merge_and_missing_keys():
         ["asset_value_rub", "p_flood", "vulnerability_coef"]
 
 
+def test_fixed_plan_c_rows_recompute_covered_el():
+    assets = [{"asset_id": a, "asset_value_rub": "1000000", "vulnerability_coef": "0.5"}
+              for a in ("A01", "A02", "A03")]
+    loss = [{"asset_id": "A01", "p_flood": "0.4", "status": "ok"},
+            {"asset_id": "A02", "p_flood": "0.9", "status": "ok"},
+            {"asset_id": "A03", "p_flood": "", "status": "no_data"}]
+    comp = [{"strategy": "C", "decision_cost_rub": "2500.00",
+             "covered_expected_loss_rub": "450000.0", "covered_asset_ids": "A02"}]
+    single = {"p_flood": {"factor": 2.0}, "scope": "single_asset", "asset_id": "A02",
+              "portfolio_expected_loss_rub": 200000 + 500000}  # p clipped to 1
+    portfolio = {"vulnerability_coef": {"factor": 0.5}, "scope": "portfolio",
+                 "portfolio_expected_loss_rub": 325000}
+    wrong = {"asset_value_rub": {"factor": 2.0}, "scope": "portfolio",
+             "portfolio_expected_loss_rub": 1}
+    rows, warns = assemble.fixed_plan_rows(
+        [_sens("s", single), _sens("p", portfolio), _sens("w", wrong)], assets, loss, comp,
+        ["Z-A02"])
+    assert [(r["scenario_id"], r["strategy"], r["decision_cost_rub"]) for r in rows] == \
+        [("s__C_fixed", "C", "2500.00"), ("p__C_fixed", "C", "2500.00")]
+    assert float(rows[0]["covered_expected_loss_rub"]) == pytest.approx(500000)
+    assert float(rows[1]["covered_expected_loss_rub"]) == pytest.approx(225000)
+    assert json.loads(rows[0]["changed_inputs_json"])["plan_C_fixed"] == ["Z-A02"]
+    assert len(warns) == 1 and "w" in warns[0]
+    noted = assemble.with_model_note([_sens("s", single)])
+    assert assemble.MODEL_NOTE in noted[0]["interpretation"]
+
+
 def _s1_manifest(chip):
     return {"dataset": "Sen1Floods11 v1.1", "repository": "https://example.org/repo",
             "sources": [
@@ -161,23 +188,13 @@ def _stages(out, budget=5000.0):
     return work, args
 
 
-def _write_assets_sensitivity(work):
-    """Stand-in for #9 (assets_sensitivity.csv): one row per p, V, q variation."""
-    rows = [_sens("p_x1.2", {"p_flood": "x1.2"}), _sens("V_x0.5", {"asset_value_rub": "x0.5"}),
-            _sens("q_x1.5", {"vulnerability_coef": "x1.5"})]
-    with open(work / "assets_sensitivity.csv", "w", encoding="utf-8", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(F.SENSITIVITY_FIELDS))
-        w.writeheader()
-        w.writerows(rows)
-
-
 def _failing(errors):
     return {name for name, errs in errors.items() if errs}
 
 
 def test_all_stages_to_valid_result_set(env):
     work, args = _stages(env)
-    _write_assets_sensitivity(work)
+    assert (work / "assets_sensitivity.csv").is_file()  # written by assets (#9, D-028)
     assert export_run.run(args) == 0
     _, short, _ = export_run.git_commit()
     dest = env / f"{CHIP}_5000_{short}"
@@ -200,18 +217,24 @@ def test_all_stages_to_valid_result_set(env):
     assert "Other_1_S1Hand.tif" not in [s.get("file") for s in manifest["sources"]]
     with open(dest / F.SENSITIVITY, encoding="utf-8") as f:
         sens = list(csv.DictReader(f))
-    assert {r["scenario_id"] for r in sens} >= {"p_x1.2", "V_x0.5", "q_x1.5"}
+    ids = {r["scenario_id"] for r in sens}
+    assert {"p_portfolio_x0.5", "V_portfolio_x0.5", "q_portfolio_x0.5"} <= ids
+    assert "p_portfolio_x0.5__C_fixed" in ids
+    assert not [w for w in meta["warnings"] if "план C" in w]
     with open(dest / "metrics.csv", encoding="utf-8") as f:
         metrics = list(csv.DictReader(f))
     assert {r["method"] for r in metrics} == {"baseline", "main"}
 
 
 def test_without_assets_sensitivity_only_sensitivity_fails(env, capsys):
-    _, args = _stages(env)
+    work, args = _stages(env)
+    (work / "assets_sensitivity.csv").unlink()
     assert export_run.run(args) == 0
     assert "assets_sensitivity.csv" in capsys.readouterr().out
     _, short, _ = export_run.git_commit()
-    assert _failing(validate_run(env / f"{CHIP}_5000_{short}")) == {F.SENSITIVITY}
+    dest = env / f"{CHIP}_5000_{short}"
+    assert _failing(validate_run(dest)) == {F.SENSITIVITY}
+    assert not (dest / "assets_sensitivity.csv").exists()
 
 
 def test_new_budget_is_a_new_set_with_the_same_rasters(env):
@@ -245,6 +268,5 @@ def test_in_place_export_when_stages_used_out(env):
     baseline_predict.predict_chip(CHIP, work)
     args = argparse.Namespace(chip=CHIP, budget=5000.0, out=str(work))
     assert assets_run.run(args) == 0 and procure_run.run(args) == 0
-    _write_assets_sensitivity(work)
     assert export_run.run(args) == 0
     assert _failing(validate_run(work)) == set()

@@ -174,6 +174,13 @@ def export(chip_id: str, work: Path, dest: Path | None = None,
     if assets_sens is None:
         warnings.append("нет assets_sensitivity.csv (#9): sensitivity.csv только из procurement "
                         "(бюджет, ставка) — сценарии p, V, q отсутствуют")
+    if assets_sens:
+        c_rows, c_warn = assemble.fixed_plan_rows(
+            assets_sens, _read_csv(work / F.ASSETS_CSV), _read_csv(work / F.ASSET_LOSS),
+            _read_csv(work / F.STRATEGY_COMPARISON),
+            _read_json(work / F.STRATEGY_PLANS).get("C", []))
+        warnings += c_warn
+        assets_sens = assemble.with_model_note(assets_sens) + c_rows
     sens = assemble.merge_sensitivity(proc_sens, assets_sens)
     lacking = assemble.missing_sensitivity_keys(sens)
     if lacking:

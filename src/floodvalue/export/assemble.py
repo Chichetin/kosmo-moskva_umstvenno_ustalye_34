@@ -85,6 +85,75 @@ def merge_sensitivity(procurement_rows: list[dict], assets_rows: list[dict] | No
     return [*procurement_rows, *(assets_rows or [])]
 
 
+MODEL_NOTE = ("строка — про модель ущерба (p, V, q), не про корзину: план закупки не "
+              "пересчитывается")
+PARAM_CLIP = {"p_flood": True, "asset_value_rub": False, "vulnerability_coef": True}
+
+
+def perturbed_el(assets: dict[str, dict], loss: dict[str, dict], changed: dict) -> dict[str, float]:
+    """EL of every `ok` asset under one assets_sensitivity scenario (D-028 rules):
+    x' = x * k for the scenario's parameter, clipped to [0, 1] for p and q; `scope` is
+    `portfolio` (all ok assets) or `single_asset` (`asset_id`)."""
+    param = next(k for k in PARAM_CLIP if k in changed)
+    k = float(changed[param]["factor"])
+    targets = ({changed["asset_id"]} if changed.get("scope") == "single_asset"
+               else set(loss))
+    out = {}
+    for aid, r in loss.items():
+        x = {"p_flood": float(r["p_flood"]), "asset_value_rub": float(assets[aid]["asset_value_rub"]),
+             "vulnerability_coef": float(assets[aid]["vulnerability_coef"])}
+        if aid in targets:
+            x[param] *= k
+            if PARAM_CLIP[param]:
+                x[param] = min(1.0, max(0.0, x[param]))
+        out[aid] = x["p_flood"] * x["asset_value_rub"] * x["vulnerability_coef"]
+    return out
+
+
+def fixed_plan_rows(assets_rows: list[dict], assets: list[dict], loss_rows: list[dict],
+                    comparison: list[dict], plan_c: list[str]) -> tuple[list[dict], list[str]]:
+    """For each p/V/q scenario of `assets` (strategy A, no plan) add a row for the fixed plan
+    C of this set: decision_cost_rub of C and the EL it covers under the changed inputs
+    (reviewer #55). Returns (rows, warnings); a scenario whose recomputed portfolio EL does
+    not match `portfolio_expected_loss_rub` of assets is skipped with a warning."""
+    by_asset = {a["asset_id"]: a for a in assets}
+    ok = {r["asset_id"]: r for r in loss_rows if r["status"] == "ok"}
+    c = next(r for r in comparison if r["strategy"] == "C")
+    covered_ids = set((c.get("covered_asset_ids") or "").split()) & set(ok)
+    out, warnings = [], []
+    for r in assets_rows:
+        try:
+            changed = json.loads(r["changed_inputs_json"])
+            el = perturbed_el(by_asset, ok, changed)
+        except (ValueError, KeyError, StopIteration, TypeError) as exc:
+            warnings.append(f"{r.get('scenario_id')}: план C не пересчитан ({exc})")
+            continue
+        total = changed.get("portfolio_expected_loss_rub")
+        if total is not None and abs(sum(el.values()) - float(total)) > 0.01:
+            warnings.append(f"{r['scenario_id']}: ΣEL {sum(el.values()):.2f} ≠ assets "
+                            f"{float(total):.2f} — строка для плана C не добавлена")
+            continue
+        covered = sum(el[a] for a in covered_ids)
+        out.append({
+            "scenario_id": f"{r['scenario_id']}__C_fixed", "strategy": "C",
+            "changed_inputs_json": json.dumps({**changed, "plan_C_fixed": sorted(plan_c)},
+                                              ensure_ascii=False, sort_keys=True),
+            "decision_cost_rub": c["decision_cost_rub"],
+            "covered_expected_loss_rub": repr(covered),
+            "result_status": "fixed_plan",
+            "interpretation": (
+                f"план C зафиксирован ({', '.join(sorted(plan_c)) or 'пусто'}), стоимость решения "
+                f"{c['decision_cost_rub']} руб. не меняется; охват EL "
+                f"{float(c['covered_expected_loss_rub']):.2f} -> {covered:.2f} руб.; "
+                f"{MODEL_NOTE}")})
+    return out, warnings
+
+
+def with_model_note(rows: list[dict]) -> list[dict]:
+    return [{**r, "interpretation": f"{r['interpretation']}; {MODEL_NOTE}"}
+            if MODEL_NOTE not in r.get("interpretation", "") else r for r in rows]
+
+
 def sensitivity_fields(rows: list[dict]) -> list[str]:
     fields = list(F.SENSITIVITY_FIELDS)
     for r in rows:
