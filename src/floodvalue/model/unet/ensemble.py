@@ -22,8 +22,13 @@ import torch
 
 from floodvalue.model import metrics as M
 from floodvalue.model.unet import train as T
-from floodvalue.model.unet.predict import (CONFIG_FILE, WEIGHTS_FILE, build_model, file_sha256,
-                                           members_sha256)
+from floodvalue.model.unet.predict import (
+    CONFIG_FILE,
+    WEIGHTS_FILE,
+    build_model,
+    file_sha256,
+    members_sha256,
+)
 from floodvalue.paths import MODELS_DIR
 
 

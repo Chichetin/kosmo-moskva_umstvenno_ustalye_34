@@ -7,8 +7,15 @@ import numpy as np
 from floodvalue.data import io
 from floodvalue.data.split import SealedTestError, chip_ids, load_split
 
-__all__ = ["SealedTestError", "split_chip_ids", "split_sha256", "event_of", "read_s1",
-           "read_label", "load_chips"]
+__all__ = [
+    "SealedTestError",
+    "event_of",
+    "load_chips",
+    "read_label",
+    "read_s1",
+    "split_chip_ids",
+    "split_sha256",
+]
 
 
 def split_chip_ids(part: str) -> list[str]:
