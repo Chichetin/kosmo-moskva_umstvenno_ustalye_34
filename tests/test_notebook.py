@@ -136,3 +136,9 @@ def test_unknown_flag_is_rejected_by_the_parser():
         parse_floodvalue_command("python -m floodvalue train --epochs 1")
     with pytest.raises(SystemExit):
         parse_floodvalue_command("python -m floodvalue.model.unet.train --smoke 4")
+
+
+def test_every_cell_has_a_unique_id():
+    # nbformat 4.5 requires `id` on every cell; strict validators reject the notebook otherwise.
+    ids = [c.get("id") for c in load_nb()["cells"]]
+    assert all(ids) and len(set(ids)) == len(ids), ids
