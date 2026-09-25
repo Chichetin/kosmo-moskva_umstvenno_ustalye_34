@@ -2,7 +2,12 @@
 
 Чип validation `Sri-Lanka_713926` (до заморозки — D-010), калиброванный U-Net (порог 0,37,
 D-029), портфель seed 20260925, `decision_at` 2017-05-30 12:00 UTC, `decision_deadline`
-+12 ч (`configs/run.yaml`). Цена — учебный сценарий ПП 840, Б = 788,64 руб./км²
++12 ч (`configs/run.yaml` на момент отчёта). **С D-042 (#84)** `decision_at` = конец суток S1
+чипа, 2017-05-30T23:59:59 UTC, срок +12 ч: все абсолютные времена в таблицах ниже сдвигаются
+на +11 ч 59 мин 59 с (сроки предложений отсчитываются от `decision_at`), `as_of` (2017-05-30),
+Т, Р, цены, состав планов и охват не меняются — проверено `make all CHIP=Sri-Lanka_713926
+BUDGET=5000`: `strategy_comparison.csv`, `strategy_plans.json`, `procurement_sensitivity.csv`
+байт в байт с кодом `1eaf2cc` (PR #104). Цена — учебный сценарий ПП 840, Б = 788,64 руб./км²
 (`base_rate_status=scenario`), L2, internal, К = 1. Сроки, облачность и наличие снимков —
 сценарные (`timing_status=scenario`), поставщиком не подтверждены.
 
