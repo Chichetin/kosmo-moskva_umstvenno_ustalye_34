@@ -16,7 +16,7 @@
 | `assets` | `src/floodvalue/assets/` | `assets.*`, `asset_loss.csv`, чувствительность p/V/q | p-растр, `configs/assets.yaml` |
 | `procurement` | `src/floodvalue/procurement/`, `configs/pricing.yaml` | зоны, цена, A/B/C, `procurement_plan.csv`, `strategy_*`, чувствительность бюджета/ставки | `asset_loss.csv`, p, неопределённость |
 | `export` | `src/floodvalue/export/` | сборка 12 файлов, `run_metadata.json`, `validate` | всё выше |
-| `app` | `src/floodvalue/app/` | интерфейс оператора | файлы в `outputs/`, `procurement` как функция пересчёта бюджета |
+| `app` | `src/floodvalue/app/` (API, собранный бандл в `static/`), `web/` (React) | интерфейс оператора | файлы в `outputs/`, `procurement` как функция пересчёта бюджета |
 | `contracts` | `src/floodvalue/contracts/`, `docs/contracts.md` | схемы 12 файлов, форматы растров, интерфейс метода | все |
 | `infra` | `Makefile`, `pyproject.toml`, `uv.lock`, `.claude/`, `.githooks/`, `scripts/` | окружение, хуки, синхронизация GitVerse | — |
 | `docs` | `README.md`, `docs/`, `HANDOFF.md` | README, ограничения | — |
@@ -43,5 +43,6 @@ models/      веса и калибраторы (LFS)
 notebooks/   Colab-обёртка обучения
 tests/       по модулям + tests/fixtures (маленькие синтетические растры)
 docs/        data, contracts, decisions, tz-compliance, verification/, research/, plans/
+web/         исходники интерфейса на React (D-013), сборка → src/floodvalue/app/static/
 scripts/     sync-gitverse.sh и прочее
 ```
