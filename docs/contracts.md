@@ -40,13 +40,18 @@ def predict_proba(s1_db: np.ndarray) -> np.ndarray:
 ```json
 {"version": 1, "criterion": "event", "seed": 20260925,
  "source": "Sen1Floods11 v1.1 HandLabeled",
- "train": ["Ghana_103272", "..."], "validation": ["..."], "test": ["..."],
- "events": {"train": ["Ghana", "..."], "validation": ["..."], "test": ["..."]},
+ "train": ["Ghana_103272", "..."], "dev": ["USA_..."], "validation": ["..."], "test": ["..."],
+ "events": {"train": ["Ghana", "..."], "dev": ["USA"], "validation": ["..."], "test": ["..."]},
  "excluded": {"<chip_id>": "причина"},
- "sha256": "<sha256 от канонического JSON списков train/validation/test>"}
+ "protocol": {"train": "…", "dev": "…", "validation": "…", "test": "…", "weak": "…"},
+ "sha256": "<sha256 канонического JSON четырёх списков train/dev/validation/test>"}
 ```
 
-Хеш — в `docs/decisions.md`. Test-чипы читает только `eval-test`.
+Хеш — не sha256 файла, а sha256 от `json.dumps({train, dev, validation, test}, sort_keys=True,
+separators=(",", ":"), ensure_ascii=True)`; записан в `docs/decisions.md` D-016, сверяется
+`make split`. Роли частей — D-012/D-016: dev — выбор модели и эксперимент, validation —
+калибровка и порог. Загрузчик — `floodvalue.data.split.chip_ids(part)`; test отдаётся только с
+`allow_test=True`, и это делает только `eval-test` (D-010).
 
 ## 5. Конфиги
 
