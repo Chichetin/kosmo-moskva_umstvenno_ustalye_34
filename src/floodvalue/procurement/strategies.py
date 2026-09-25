@@ -1,4 +1,4 @@
-"""Стратегии A/B/C над одним каталогом и одной функцией цены (чистые функции, D-023, D-031).
+"""Стратегии A/B/C над одним каталогом и одной функцией цены (чистые функции, D-023, D-032).
 
 * A — открытые данные: платных зон нет.
 * B — широкая закупка по заранее объявленному правилу :data:`RULE_B`; бюджет не
@@ -8,7 +8,7 @@
   прироста цены корзины, пока корзина ≤ бюджета; опция — социальное ограничение покрытия.
 
 Остаточная неопределённость B/C — ``scenario`` (сумма неопределённости непокрытых оценённых
-объектов, «если бы снимок снял неопределённость покрытых»), не наблюдение (D-031).
+объектов, «если бы снимок снял неопределённость покрытых»), не наблюдение (D-032).
 
 EL, неопределённость и охват берутся из файлов assets (``asset_loss.csv``) и каталога;
 p-растр, маска и порог здесь не читаются — смена бюджета их не меняет.
@@ -324,4 +324,12 @@ def sensitivity(catalog: Mapping[str, Any], cov: Mapping[str, list[str]], eligib
                             f"{'да' if sc.get('satisfied') else 'нет'}; данные "
                             f"{c['data_cost_rub']} руб. при бюджете {budget}; охват EL "
                             f"{c['covered_expected_loss_rub']:.2f} руб.; {unc_note(c)}"))
+    elif list(required):  # constraint enabled in config: show the plan without it
+        res = compute_plan(catalog, cov, eligible, loss, budget, cfg, as_of,
+                           other_cfg=other_cfg, required=[])
+        row("social_constraint_off", "C", {"social_constraint": False}, res,
+            lambda ids, c: (f"социальное ограничение выключено (в конфиге включено): "
+                            f"{diff(ids)}; данные {c['data_cost_rub']} руб. при бюджете "
+                            f"{budget}; охват EL {c['covered_expected_loss_rub']:.2f} руб.; "
+                            f"{unc_note(c)}"))
     return rows

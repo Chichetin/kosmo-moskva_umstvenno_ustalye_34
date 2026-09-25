@@ -292,3 +292,33 @@ def test_b_empty_reason_when_wide_not_eligible():
     res = strategies.compute_plan(cat, cov, elig - {"W-CHIP"}, LOSS, Decimal(5000), CFG, AS_OF,
                                   other_cfg=OTHER)
     assert res["plans"]["B"] == [] and "B пуста" in res["reasons"]["B_empty"]
+
+
+def test_uncertainty_tie_break_prefers_larger_uncertainty():
+    """Равные EL на рубль и цена: берётся позиция с большей неопределённостью новых объектов."""
+    items = {"P": _item("P", "1.440"), "Q": _item("Q", "1.440")}
+    cov = {"P": ["A01"], "Q": ["A02"]}
+    el = {"A01": {"el": 5.0, "unc": 0.1}, "A02": {"el": 5.0, "unc": 0.9}}
+    chosen, _, _ = strategies.select_c(items, cov, el, Decimal("2452.98"), CFG, AS_OF)
+    assert chosen == ["Q"]
+
+
+def test_social_phase_cost_per_required_not_el_ratio():
+    """BIG лучше по EL на рубль, но S1 дешевле на обязательный объект A01 — социальная фаза
+    берёт S1; без ограничения берётся BIG."""
+    items = {"BIG": _item("BIG", "3.000"), "S1": _item("S1", "1.440")}
+    cov = {"BIG": ["A01", "A02"], "S1": ["A01"]}
+    el = {"A01": {"el": 1.0, "unc": 0}, "A02": {"el": 100.0, "unc": 0}}
+    chosen, _, _ = strategies.select_c(items, cov, el, Decimal("5200"), CFG, AS_OF,
+                                       required=["A01"])
+    assert chosen == ["S1"]
+    chosen, _, _ = strategies.select_c(items, cov, el, Decimal("5200"), CFG, AS_OF)
+    assert chosen == ["BIG"]
+
+
+def test_sensitivity_social_off_row_when_enabled():
+    cat, cov, elig = ctx()
+    rows = strategies.sensitivity(cat, cov, elig, LOSS, Decimal(5000), CFG, AS_OF, [], [],
+                                  other_cfg=OTHER, required=["A10"], social_ids=["A10"])
+    ids = [r["scenario_id"] for r in rows]
+    assert "social_constraint_off" in ids and "social_constraint_on" not in ids
