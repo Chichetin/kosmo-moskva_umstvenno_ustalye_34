@@ -15,7 +15,10 @@ Chichetin, Ivana-banana, M1hairu (проверено в этом PR).
 |---|---|---|
 | 25.09 GitVerse | `hackrus.experts/kosmo-moskva_umstvenno_ustalye_34`: `scripts/sync-gitverse.sh` (#31), LFS-проба 2 МБ прошла; ветка по умолчанию `lfs-probe` = main (сменить может только admin) | 0ff5f08 |
 | 25.09 каркас | каркас, план v2, 35 issues (#2–#36); collaborators добавлены, git-lfs стоит, кейс № 3 | 20ad6e3 |
-| 25.09 сквозной путь | 16 PR (#41–#57, ветка `worktree-XX-…` → `main`), см. список ниже: split заморожен, официальный baseline (VH ≤ −23,0 dB, validation IoU 0,580), основной метод U-Net (ансамбль 5 seed, dev IoU 0,584 против baseline 0,391), портфель 10 объектов и чувствительность p/V/q, зоны+A/B/C+ПП 840 (редакция проверена), контракты v1 и валидатор, экспорт: `make all CHIP=Sri-Lanka_713926 BUDGET=5000` → 12/12 файлов. Блокеры этой вехи: `calibrate`, `eval-test`, `app` ещё не реализованы (README, `docs/tz-compliance.md`) | 56288a4 |
+| 25.09 сквозной путь | 16 PR (#41–#57, ветка `worktree-XX-…` → `main`), см. список ниже: split заморожен, официальный baseline (VH ≤ −23,0 dB, validation IoU 0,580), основной метод U-Net (ансамбль 5 seed, dev IoU 0,584 против baseline 0,391), портфель 10 объектов и чувствительность p/V/q, зоны+A/B/C+ПП 840 (редакция проверена), контракты v1 и валидатор, экспорт: `make all CHIP=Sri-Lanka_713926 BUDGET=5000` → 12/12 файлов. Ещё не реализованы на этой вехе: `calibrate`, `eval-test`, `app` | 56288a4 |
+| 25.09 eval-test | PR #58 (Closes #29, D-030): `make eval-test --part <dev\|validation\|test>` — метрики на идентичных валидных пикселях, парный бутстрэп ΔIoU, reliability/ECE/Brier, неопределённость на ошибках (AUROC), JRC-диагностика, перенос по группам чипов, прокси-проверка ущерба. **Test запечатан честно**: `--part test` без `FLOODVALUE_EVAL_TEST_CONFIRM=<sha256>` и при незакоммиченном дереве — отказ (код 3); запуск на test — issue #32, после заморозки. На **validation** (60 чипов, не test): ALL IoU основной 0,600 против baseline 0,580 (ΔIoU CI [−0,066; +0,079]); ECE 0,035, Brier 0,048; неопределённость AUROC 0,890; перенос по группам чипов — основной метод хуже baseline на доле воды 1–30 % (0,121–0,173 против 0,265–0,379), лучше на ≥ 30 % воды (0,767 против 0,710); прокси-проверка EL vs EL_ref — MAE 350 006 руб. на 536 из 600 точек. `pytest tests/eval` 27 passed; `make check` → 334 passed. Перепроверено в PR #30 (`scribe`): `make eval-test` (bare) → отказ с sha256; `--part validation` → 60 чипов, отчёт | 09c52b4 |
+| 25.09 calibration | PR #59 (Closes #20, D-029): `make calibrate` — калибратор `p_raw → p` (Platt, выбран по log-loss вне события), порог 0,37 по max IoU на validation; `predict` подключает `models/unet/calibration.json` автоматически. Validation было → стало (сырая p≥0,5 → Platt p≥0,37): IoU 0,600 → **0,685**, F1 0,750 → 0,813, ECE 0,0398 → **0,0100**, Brier 0,0477 → 0,0406, log-loss 0,1693 → 0,1462; парный бутстрэп ΔIoU +0,084 [+0,021; +0,155]. Перенос порога между событиями: Sri-Lanka 0,593 (было 0,526), Nigeria 0,773 (было 0,691). Раскрытое ограничение: на dev (USA, не участвовал в подборе) ECE ухудшается 0,032 → 0,051. Follow-up вне PR: `export` пока берёт метрики main из сырого `unet-metrics.csv` (порог 0,5), калиброванные строки уже есть в `docs/verification/calibration/unet-metrics.csv`. Перепроверено в PR #30 (`scribe`): `make calibrate` реально выполнен (Platt a=1,4647, b=1,5210, порог 0,37); `predict` подхватывает калибровку без правок вызова | 09c52b4 |
+| 25.09 validator | PR #61 (Closes #14): валидатор доведён до полного объёма — кольца зон замкнуты и ≥ 4 точек, зона обязана пересекать экстент чипа (ловит перепутанный [lat, lon]), каталог/`run_metadata.pricing` сверяются с `configs/pricing.yaml`; 6 сломанных fixtures дают каждый свой текст ошибки (`test_broken_fixture_gives_its_own_error`). `make check` → 353 passed, 4 skipped; мутаций 7, все убиты | 09c52b4 |
 
 ### PR #41–#57 (25.09, сквозной путь): что влито
 
@@ -41,9 +44,15 @@ Chichetin, Ivana-banana, M1hairu (проверено в этом PR).
 | #56 | export: комплект outputs/<run_id>, run_metadata, source_manifest, metrics, make all · Closes #10 | `make all CHIP=Sri-Lanka_713926 BUDGET=5000` → validate 11/12 на момент PR (без `assets_sensitivity.csv`, ожидаемо до #55); `pytest` 259 passed, в т.ч. tests/export 12; мутаций 6, выжила 1 → закрыта |
 | #57 | procurement: ПП 840 — редакция проверена, источники и допущения зафиксированы · Closes #23 | `pytest` 247 passed; `validate` 12/12; редакция ПП № 840 от 29.06.2019 в ред. № 1297 от 27.08.2025, `legal_checked_at=2026-09-25`, источники government.ru + base.garant.ru |
 
-Сквозной путь после слияния всех 16 PR проверен заново в PR #30 (`scribe`, этот PR):
-`make all CHIP=Sri-Lanka_713926 BUDGET=5000` → `outputs/Sri-Lanka_713926_5000_56288a4/`,
+Сквозной путь после слияния всех 16 PR (#41–#57) проверен заново в PR #30 (`scribe`,
+этот PR): `make all CHIP=Sri-Lanka_713926 BUDGET=5000` → `outputs/Sri-Lanka_713926_5000_56288a4/`,
 `validate` 12/12; чистый клон ветки → `git lfs pull; make setup && make check` →
 303 passed, 4 skipped, hooks 40/40, validate 12/12 на эталоне, без обращения к
-Sen1Floods11. Ещё не реализовано после этой вехи: `calibrate` (#20), `eval-test`
-(журнал `docs/verification/test-log.md` пуст), `app` (#11 интерфейс).
+Sen1Floods11. Пока этот PR готовился, в `main` последовательно влились PR #58
+(`eval-test`), #59 (`calibration`) и #61 (`validator`) — worktree трижды смёржен с
+`origin/main` (`56288a4` → `09c52b4` → `0c06c33`), README и `docs/tz-compliance.md`
+пересверены под каждое новое состояние (все команды в README перепроверены реальными
+запусками после финального слияния). Ещё не реализован **только** `app` (#11
+интерфейс). `eval-test` реализован и запечатан правильно, `calibrate` реально
+выполнен и подключён в `predict`; сам прогон `eval-test` на **test** — ещё нет, ждёт
+заморозки функций (#32, D-022).
