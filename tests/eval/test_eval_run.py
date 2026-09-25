@@ -212,9 +212,9 @@ def git_repo(tmp_path):
     (root / "models" / "unet").mkdir(parents=True)
     (root / "models" / "baseline").mkdir(parents=True)
     (root / "splits").mkdir()
-    (root / "models" / "unet" / "config.json").write_text("{}")
-    (root / "models" / "baseline" / "config.json").write_text("{}")
-    (root / "splits" / "split_v1.json").write_text("{}")
+    (root / "models" / "unet" / "config.json").write_text("{}", encoding="utf-8")
+    (root / "models" / "baseline" / "config.json").write_text("{}", encoding="utf-8")
+    (root / "splits" / "split_v1.json").write_text("{}", encoding="utf-8")
     for cmd in (["init", "-q"], ["add", "."],
                 ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "x"]):
         subprocess.run(["git", "-C", str(root), *cmd], check=True, capture_output=True)
@@ -224,21 +224,21 @@ def git_repo(tmp_path):
 def test_calibrator_next_to_method_changes_the_config_hash(tmp_path):
     root = git_repo(tmp_path)
     before = E.frozen_config_hash(root, "unet")
-    (root / "models" / "unet" / "calibration.json").write_text('{"a": 1}')   # where #20 puts it
+    (root / "models" / "unet" / "calibration.json").write_text('{"a": 1}', encoding="utf-8")   # where #20 puts it
     assert "models/unet/calibration.json" in E.config_files("unet", root)
     after = E.frozen_config_hash(root, "unet")
     assert after != before
-    (root / "models" / "unet" / "calibration.json").write_text('{"a": 2}')
+    (root / "models" / "unet" / "calibration.json").write_text('{"a": 2}', encoding="utf-8")
     assert E.frozen_config_hash(root, "unet") != after
 
 
 def test_gate_sees_untracked_calibrator_and_modified_config(tmp_path):
     root = git_repo(tmp_path)
     assert E.uncommitted_frozen_paths(root, "unet") == ""
-    (root / "models" / "unet" / "calibration.json").write_text("{}")         # make calibrate
+    (root / "models" / "unet" / "calibration.json").write_text("{}", encoding="utf-8")         # make calibrate
     assert "calibration.json" in E.uncommitted_frozen_paths(root, "unet")
     (root / "models" / "unet" / "calibration.json").unlink()
-    (root / "models" / "baseline" / "config.json").write_text('{"t": -22}')
+    (root / "models" / "baseline" / "config.json").write_text('{"t": -22}', encoding="utf-8")
     assert "config.json" in E.uncommitted_frozen_paths(root, "unet")
 
 

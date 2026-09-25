@@ -69,7 +69,7 @@ def write_bucket_manifest(raw):
         manifest[f"v1.1/data/flood_events/{rel}"] = {
             "size": p.stat().st_size, "md5Hash": md5_b64(p), "crc32c": None,
             "updated": "2020-10-01T17:17:33.484Z", "generation": "1601572653484826"}
-    (raw / "bucket_manifest.json").write_text(json.dumps(manifest))
+    (raw / "bucket_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
 
 @pytest.fixture
@@ -82,17 +82,17 @@ def raw(tmp_path, monkeypatch):
     split = raw / "splits/flood_handlabeled"
     split.mkdir(parents=True)
     (split / "flood_train_data.csv").write_text(
-        "Sri-Lanka_713926_S1Hand.tif,Sri-Lanka_713926_LabelHand.tif\n")
+        "Sri-Lanka_713926_S1Hand.tif,Sri-Lanka_713926_LabelHand.tif\n", encoding="utf-8")
     (split / "flood_valid_data.csv").write_text(
-        "Mekong_922373_S1Hand.tif,Mekong_922373_LabelHand.tif\n\n")
-    (split / "flood_test_data.csv").write_text("")
-    (split / "flood_bolivia_data.csv").write_text("")
+        "Mekong_922373_S1Hand.tif,Mekong_922373_LabelHand.tif\n\n", encoding="utf-8")
+    (split / "flood_test_data.csv").write_text("", encoding="utf-8")
+    (split / "flood_bolivia_data.csv").write_text("", encoding="utf-8")
     meta = {"type": "FeatureCollection", "features": [
         {"type": "Feature", "geometry": None,
          "properties": {"location": "Sri-Lanka", "s1_date": "2017/05/30"}},
         {"type": "Feature", "geometry": None,
          "properties": {"location": "Cambodia", "s1_date": "2018/08/05"}}]}
-    (raw / "Sen1Floods11_Metadata.geojson").write_text(json.dumps(meta))
+    (raw / "Sen1Floods11_Metadata.geojson").write_text(json.dumps(meta), encoding="utf-8")
     write_bucket_manifest(raw)
     write_split(tmp_path / "split_v1.json", monkeypatch)
     return raw
@@ -105,7 +105,7 @@ def write_split(path, monkeypatch, *, validation=("Sri-Lanka_713926",), test=("M
     doc = {"train": [], "dev": [], "validation": list(validation), "test": list(test),
            "excluded": {}}
     doc["sha256"] = split.canonical_hash(doc)
-    path.write_text(json.dumps(doc))
+    path.write_text(json.dumps(doc), encoding="utf-8")
     monkeypatch.setattr(fetch, "SPLIT_PATH", path)
     return path
 
