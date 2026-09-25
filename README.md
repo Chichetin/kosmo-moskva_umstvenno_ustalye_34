@@ -133,7 +133,7 @@ make validate OUT=outputs/<chip_id>_<руб>_<commit>
 **Важно:** `decision_at`/`decision_deadline` (сроки для A/B/C) берутся из
 `configs/run.yaml` и не подстраиваются под `--chip` автоматически — для реалистичного
 сценария A/B/C на чипе другого события отредактируйте их в `configs/run.yaml` перед
-`make procure`/`make all` (подробности — `docs/verification/transfer-val.md` §7).
+`make procure`/`make all` (подробности — `docs/verification/transfer-val.md` §7; привязка к дате S1 чипа — #84).
 `flood_probability.tif`/`flood_mask.tif`/`asset_loss.csv` от этого не зависят.
 
 ## Результаты
