@@ -1,6 +1,6 @@
 # `predict --s1` на S1-файле вне HandLabeled (#87)
 
-Commit кода: ветка `worktree-87-predict-s1` (PR закрывает #87), база `main` 628f269.
+Commit кода: ветка `worktree-87-predict-s1` (PR закрывает #87), sha256 «до» сняты на `main` 628f269; после merge `origin/main` (450af86) `--chip` повторён — те же sha256.
 Веса `models/unet` sha256 `504944cd…0cc1bb3`, калибратор `models/unet/calibration.json`
 sha256 `3e5bad6c…a255ee60f` (Platt), порог 0,37 — ничего не подбиралось.
 
@@ -48,7 +48,7 @@ FLOODVALUE_DATA_DIR=<пустой каталог> uv run --frozen python -m floo
 `uv run --frozen pytest tests/model/test_predict_s1.py` — синтетический S1 без метки:
 растры на сетке входа, NaN → −9999/255, `mask = p ≥ порог`, `label_status: no_label`,
 `chip_id` из имени, отказы (нет файла, `--chip` и `--s1` вместе, не 2 канала, ни одного флага).
-Мутации `predict.py` — 6 из 6 убиты.
+Мутации `predict.py` (каждая — замена в коде и `uv run --frozen pytest tests/model/test_predict_s1.py tests/model/test_dispatch.py`): `chip_id` = весь stem; нет `label_status`; проверка каналов `!= 2` → `> 2`; `--chip` и `--s1` вместе разрешены; каталог выхода по `args.chip`; `--s1` читается из HandLabeled — 6 из 6 дали красные тесты.
 
 ## Граница
 
