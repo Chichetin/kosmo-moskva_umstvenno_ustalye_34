@@ -18,7 +18,7 @@
 | `export` | `src/floodvalue/export/` | сборка 12 файлов, `run_metadata.json`, `validate` | всё выше |
 | `app` | `src/floodvalue/app/` (API, собранный бандл в `static/`), `web/` (React) | интерфейс оператора | файлы в `outputs/`, `procurement` как функция пересчёта бюджета |
 | `contracts` | `src/floodvalue/contracts/`, `docs/contracts.md` | схемы 12 файлов, форматы растров, интерфейс метода | все |
-| `infra` | `Makefile`, `pyproject.toml`, `uv.lock`, `.claude/`, `.githooks/`, `scripts/` | окружение, хуки, синхронизация GitVerse | — |
+| `infra` | `Makefile`, `pyproject.toml`, `uv.lock`, `pyrightconfig.json`, `.claude/`, `.githooks/`, `scripts/` | окружение, хуки, синхронизация GitVerse | — |
 | `docs` | `README.md`, `docs/`, `HANDOFF.md` | README, ограничения | — |
 
 Общие файлы, которые правят все в своих PR (конфликт — сохранить обе стороны):

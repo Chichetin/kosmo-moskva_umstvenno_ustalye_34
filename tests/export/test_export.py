@@ -182,8 +182,15 @@ def test_fixed_plan_c_rows_recompute_covered_el():
     assert assemble.MODEL_NOTE in noted[0]["interpretation"]
 
 
-def _s1_manifest(chip):
+S1_TOP = {"citation": "Bonafilia D. et al. Sen1Floods11. CVPRW 2020",
+          "license": "не указана явно", "license_note": "Q-01: цитировать Bonafilia et al. 2020",
+          "events_source": "https://example.org/Sen1Floods11_Metadata.geojson",
+          "events": [{"event_id": "Fixture", "s1_date": "2017-05-30", "s2_date": "2017-05-31"}]}
+
+
+def _s1_manifest(chip, top=True):
     return {"dataset": "Sen1Floods11 v1.1", "repository": "https://example.org/repo",
+            **(S1_TOP if top else {}),
             "sources": [
                 {"source_id": f"sen1floods11-v1.1:S1Hand:{chip}", "chip_id": chip,
                  "event_id": chip.rsplit("_", 1)[0], "file": f"{chip}_S1Hand.tif",
@@ -199,13 +206,62 @@ def _s1_manifest(chip):
 
 
 def test_source_manifest_keeps_only_this_chip_and_marks_label():
-    m = assemble.source_manifest(_s1_manifest(CHIP), CHIP, label_read=False, extra_sources=[])
+    m = assemble.source_manifest(_s1_manifest(CHIP), CHIP, label_read=False, extra_sources=[],
+                                 chip_part="none")
     assert [s["chip_id"] for s in m["sources"]] == [CHIP]
     s = m["sources"][0]
     assert s["label"]["used_by_method"] is False and s["applies_to"] == CHIP
     assert s["after_event_note"]  # published after the event: the note is explicit
     with pytest.raises(ValueError):
-        assemble.source_manifest(_s1_manifest(CHIP), "Missing_1", False, [])
+        assemble.source_manifest(_s1_manifest(CHIP), "Missing_1", False, [], chip_part="none")
+
+
+def test_source_manifest_carries_citation_license_note_and_events():
+    # #67 / Q-01: the dataset citation and the events table of the data stage reach the set
+    m = assemble.source_manifest(_s1_manifest(CHIP), CHIP, label_read=False, extra_sources=[],
+                                 chip_part="validation")
+    for key, value in S1_TOP.items():
+        assert m[key] == value
+    assert assemble.missing_s1_manifest_keys(_s1_manifest(CHIP)) == []
+
+
+def test_source_manifest_without_top_keys_does_not_fail_and_names_them():
+    old = _s1_manifest(CHIP, top=False)
+    m = assemble.source_manifest(old, CHIP, label_read=False, extra_sources=[],
+                                 chip_part="validation")
+    assert "citation" not in m and m["sources"][0]["chip_id"] == CHIP
+    assert assemble.missing_s1_manifest_keys(old) == sorted(S1_TOP)
+
+
+def _read_note(part):
+    m = assemble.source_manifest(_s1_manifest(CHIP), CHIP, label_read=False, extra_sources=[],
+                                 chip_part=part)
+    return m["sources"][0]["label"]["read_note"]
+
+
+def test_read_note_of_a_test_chip_says_the_label_is_sealed():
+    # D-031: QC of a test chip reads only the header and the hash, never the label pixels
+    note = _read_note("test")
+    assert "формат и значения" not in note
+    assert "заголовок и хеш" in note and "eval-test" in note and "D-031" in note
+    assert "калибр" in note  # says explicitly: not in calibration / threshold either
+    assert "разведке до разбиения" in note  # D-031: no claim that test was never looked at
+
+
+def test_read_note_of_a_validation_chip_names_calibration_and_threshold():
+    # D-029: calibrator and threshold of the main method are fitted on validation labels
+    note = _read_note("validation")
+    assert "формат и значения" in note and "D-029" in note and "порог" in note
+    assert "eval-test" not in note
+    assert "только по S1" in note
+
+
+def test_read_note_differs_by_split_part():
+    notes = {p: _read_note(p) for p in ("train", "dev", "validation", "test", "none")}
+    assert len(set(notes.values())) == 5
+    assert "D-021" in notes["train"] and "D-021" in notes["dev"]
+    for part, note in notes.items():
+        assert "predict, assets, procure" in note, part
 
 
 # --- end to end on a synthetic chip ---------------------------------------------------------------
@@ -267,6 +323,10 @@ def test_all_stages_to_valid_result_set(env):
     manifest = json.loads((dest / F.SOURCE_MANIFEST).read_text(encoding="utf-8"))
     assert f"{CHIP}_S1Hand.tif" in [s.get("file") for s in manifest["sources"]]
     assert "Other_1_S1Hand.tif" not in [s.get("file") for s in manifest["sources"]]
+    assert manifest["citation"] == S1_TOP["citation"] and manifest["events"] == S1_TOP["events"]
+    s1 = next(s for s in manifest["sources"] if s.get("chip_id") == CHIP)
+    assert s1["label"]["read_note"] == _read_note("none")  # fixture chip is outside the split
+    assert not [w for w in meta["warnings"] if "source_manifest_s1.json" in w]
     with open(dest / F.SENSITIVITY, encoding="utf-8") as f:
         sens = list(csv.DictReader(f))
     ids = {r["scenario_id"] for r in sens}
@@ -309,6 +369,34 @@ def test_export_carries_calibrator_into_run_metadata_and_drops_uncalibrated_warn
     main_val_all = next(r for r in rows if r["method"] == "main" and r["split"] == "validation"
                         and r["event"] == "ALL")
     assert float(main_val_all["threshold"]) == meta["threshold"]  # metrics threshold = mask
+
+
+def test_old_s1_manifest_without_citation_exports_with_a_warning(env, capsys):
+    (env.parent / "data" / "interim" / "source_manifest_s1.json").write_text(
+        json.dumps(_s1_manifest(CHIP, top=False)), encoding="utf-8")
+    _, args = _stages(env)
+    assert export_run.run(args) == 0
+    assert "citation" in capsys.readouterr().out
+    _, short, _ = export_run.git_commit()
+    dest = env / f"{CHIP}_5000_{short}"
+    meta = json.loads((dest / F.RUN_METADATA).read_text(encoding="utf-8"))
+    warn = [w for w in meta["warnings"] if "source_manifest_s1.json" in w]
+    assert len(warn) == 1 and "citation" in warn[0] and "make data" in warn[0]
+    assert F.SOURCE_MANIFEST not in _failing(validate_run(dest))
+
+
+def test_export_takes_read_note_from_the_split_part_of_the_chip(env, monkeypatch):
+    # reviewer #88: run.py must pass the chip's own split part, not a constant
+    _, args = _stages(env)
+    real = assemble.chip_split
+    monkeypatch.setattr(assemble, "chip_split",
+                        lambda split, chip: "test" if chip == CHIP else real(split, chip))
+    assert export_run.run(args) == 0
+    _, short, _ = export_run.git_commit()
+    manifest = json.loads((env / f"{CHIP}_5000_{short}" / F.SOURCE_MANIFEST)
+                          .read_text(encoding="utf-8"))
+    s1 = next(s for s in manifest["sources"] if s.get("chip_id") == CHIP)
+    assert s1["label"]["read_note"] == _read_note("test")
 
 
 def test_without_assets_sensitivity_only_sensitivity_fails(env, capsys):
