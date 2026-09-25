@@ -34,7 +34,7 @@ def test_run_offline_on_complete_raw_writes_qc_and_manifest(raw, offline, capsys
     assert float(r["valid_frac"]) == pytest.approx(62 / 64)
     assert r["db_scale_ok"] == r["qc_pass"] == r["usable"] == "True"
 
-    doc = json.loads((raw.parent / "interim/source_manifest_s1.json").read_text())
+    doc = json.loads((raw.parent / "interim/source_manifest_s1.json").read_text(encoding="utf-8"))
     by_chip = {e["chip_id"]: e for e in doc["sources"]}
     assert by_chip["Mekong_922373"]["observation_date"] == "2018-08-05"  # Mekong -> Cambodia
     e = by_chip["Sri-Lanka_713926"]
@@ -49,16 +49,16 @@ def test_run_offline_on_complete_raw_writes_qc_and_manifest(raw, offline, capsys
 
 def test_second_run_is_offline_and_identical(raw, offline):
     assert fetch.run(None) == 0
-    first = (raw.parent / "interim/qc.csv").read_text()
+    first = (raw.parent / "interim/qc.csv").read_text(encoding="utf-8")
     assert fetch.run(None) == 0
-    assert (raw.parent / "interim/qc.csv").read_text() == first
+    assert (raw.parent / "interim/qc.csv").read_text(encoding="utf-8") == first
 
 
 def test_missing_files_are_downloaded_only(raw, monkeypatch):
     src = raw / "HandLabeled/S1Hand/Mekong_922373_S1Hand.tif"
     payload = src.read_bytes()
     src.unlink()
-    manifest = json.loads((raw / "bucket_manifest.json").read_text())
+    manifest = json.loads((raw / "bucket_manifest.json").read_text(encoding="utf-8"))
     items = [{"name": n, **m} for n, m in manifest.items()]
     monkeypatch.setattr(fetch, "list_objects",
                         lambda prefix: [i for i in items if i["name"].startswith(prefix)])
@@ -174,7 +174,7 @@ def test_run_returns_1_on_qc_failure(raw, offline):
 
 def test_inventory_rejects_mismatched_pair(raw):
     (raw / "splits/flood_handlabeled/flood_test_data.csv").write_text(
-        "USA_1_S1Hand.tif,USA_2_LabelHand.tif\n")
+        "USA_1_S1Hand.tif,USA_2_LabelHand.tif\n", encoding="utf-8")
     with pytest.raises(ValueError):
         fetch.chip_inventory(raw)
 
@@ -218,5 +218,5 @@ def test_readable_chips_are_open_parts_and_excluded(tmp_path, monkeypatch):
     doc = {"train": ["A_1"], "dev": ["B_2"], "validation": ["C_3"], "test": ["D_4"],
            "excluded": {"E_5": "all -1"}}
     doc["sha256"] = split.canonical_hash(doc)
-    (tmp_path / "s.json").write_text(json.dumps(doc))
+    (tmp_path / "s.json").write_text(json.dumps(doc), encoding="utf-8")
     assert fetch.label_readable_chips(tmp_path / "s.json") == {"A_1", "B_2", "C_3", "E_5"}

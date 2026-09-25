@@ -45,7 +45,7 @@ def test_predict_chip_writes_on_s1_grid(tmp_path, monkeypatch):
                        width=12, height=8, crs="EPSG:4326", transform=tr, nodata=np.nan) as d:
         d.write(s1)
     cfg = tmp_path / "config.json"
-    cfg.write_text(json.dumps(CFG))
+    cfg.write_text(json.dumps(CFG), encoding="utf-8")
     monkeypatch.setenv("FLOODVALUE_DATA_DIR", str(tmp_path / "data"))
     out = predict.predict_chip("X_1", tmp_path / "out", cfg)
     for name, dtype, nodata in (("flood_probability", "float32", -9999),
@@ -55,7 +55,7 @@ def test_predict_chip_writes_on_s1_grid(tmp_path, monkeypatch):
             assert (r.width, r.height, r.count) == (12, 8, 1)
             assert r.dtypes[0] == dtype and r.nodata == nodata
             assert r.read(1)[2, 2] == nodata
-    assert json.loads((out / "prediction.json").read_text())["threshold"] == 0.5
+    assert json.loads((out / "prediction.json").read_text(encoding="utf-8"))["threshold"] == 0.5
 
 
 def test_run_without_chip_is_error():

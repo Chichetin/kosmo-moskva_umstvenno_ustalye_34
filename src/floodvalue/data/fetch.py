@@ -122,7 +122,7 @@ def download(name: str, out: Path, md5_b64: str | None, attempts: int = 5) -> No
 
 def load_bucket_manifest(raw: Path) -> dict:
     p = raw / "bucket_manifest.json"
-    return json.loads(p.read_text()) if p.exists() else {}
+    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
 
 
 def save_bucket_manifest(raw: Path, items: list[dict]) -> dict:
@@ -133,7 +133,7 @@ def save_bucket_manifest(raw: Path, items: list[dict]) -> dict:
                                "crc32c": i.get("crc32c"), "updated": i.get("updated"),
                                "generation": i.get("generation")}
     raw.mkdir(parents=True, exist_ok=True)
-    (raw / "bucket_manifest.json").write_text(json.dumps(manifest, indent=1, sort_keys=True))
+    (raw / "bucket_manifest.json").write_text(json.dumps(manifest, indent=1, sort_keys=True), encoding="utf-8")
     return manifest
 
 
@@ -162,7 +162,7 @@ def chip_inventory(raw: Path) -> list[str]:
     inventory of 446 chips; the project split is splits/split_v1.json)."""
     chips = set()
     for rel in SPLIT_FILES:
-        with open(raw / rel, newline="") as f:
+        with open(raw / rel, newline="", encoding="utf-8") as f:
             for row in csv.reader(f):
                 if not row:
                     continue
@@ -176,7 +176,7 @@ def chip_inventory(raw: Path) -> list[str]:
 
 def event_dates(raw: Path) -> dict[str, str]:
     """location -> s1_date as ISO date (metadata stores YYYY/MM/DD)."""
-    d = json.loads((raw / METADATA_REL).read_text())
+    d = json.loads((raw / METADATA_REL).read_text(encoding="utf-8"))
     return {f["properties"]["location"]:
             date(*map(int, f["properties"]["s1_date"].split("/"))).isoformat()
             for f in d["features"]}
@@ -390,7 +390,7 @@ def write_source_manifest(entries: list[dict], path: Path) -> None:
            "repository": "https://github.com/cloudtostreet/Sen1Floods11",
            "license": LICENSE, "sources": entries}
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(doc, ensure_ascii=False, indent=1, allow_nan=False))
+    path.write_text(json.dumps(doc, ensure_ascii=False, indent=1, allow_nan=False), encoding="utf-8")
 
 
 # --- stage ---------------------------------------------------------------------------------

@@ -108,7 +108,7 @@ def main():
     manifest = {i["name"]: {"size": int(i["size"]), "md5Hash": i.get("md5Hash"), "crc32c": i.get("crc32c"),
                             "updated": i.get("updated"), "generation": i.get("generation")} for i in items}
     os.makedirs(a.dest, exist_ok=True)
-    with open(os.path.join(a.dest, "bucket_manifest.json"), "w") as f:
+    with open(os.path.join(a.dest, "bucket_manifest.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=1, sort_keys=True)
     stat = {"ok": 0, "skip": 0, "fail": 0}
     with ThreadPoolExecutor(a.workers) as ex:

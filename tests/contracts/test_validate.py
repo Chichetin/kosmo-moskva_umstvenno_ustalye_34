@@ -82,7 +82,7 @@ def test_default_run_dir_prefers_newest_output_else_fixture(tmp_path, monkeypatc
     assert V.default_run_dir() == V.FIXTURE_RUN
     for name in ("old", "new"):
         (tmp_path / name).mkdir()
-        (tmp_path / name / F.RUN_METADATA).write_text("{}")
+        (tmp_path / name / F.RUN_METADATA).write_text("{}", encoding="utf-8")
     os.utime(tmp_path / "old" / F.RUN_METADATA, (1, 1))
     assert V.default_run_dir() == tmp_path / "new"
 
@@ -103,7 +103,7 @@ def test_inf_in_comparison_fails(run_dir):
 
 def test_nan_in_json_fails(run_dir):
     text = (run_dir / F.RUN_METADATA).read_text(encoding="utf-8")
-    (run_dir / F.RUN_METADATA).write_text(text.replace('"threshold": 0.5', '"threshold": NaN', 1))
+    (run_dir / F.RUN_METADATA).write_text(text.replace('"threshold": 0.5', '"threshold": NaN', 1), encoding="utf-8")
     assert F.RUN_METADATA in failing(run_dir)
 
 

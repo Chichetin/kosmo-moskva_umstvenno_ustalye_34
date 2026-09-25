@@ -1,6 +1,8 @@
 """Shared arithmetic, schemas and configs/run.yaml of contracts v1."""
 
 import importlib.util
+import json
+import math
 from pathlib import Path
 
 import numpy as np
@@ -17,6 +19,17 @@ from floodvalue.contracts.schemas import AssetLossRow, StrategyComparisonRow
 
 HERE = Path(__file__).resolve().parent
 GOOD = HERE.parent / "fixtures" / "good"
+
+
+def _close(a, b) -> bool:
+    """Structural equality; floats equal up to 1e-12 relative (PROJ last-bit differences)."""
+    if isinstance(a, float) or isinstance(b, float):
+        return isinstance(a, (int, float)) and isinstance(b, (int, float)) and math.isclose(a, b, rel_tol=1e-12)
+    if isinstance(a, dict):
+        return isinstance(b, dict) and a.keys() == b.keys() and all(_close(a[k], b[k]) for k in a)
+    if isinstance(a, list):
+        return isinstance(b, list) and len(a) == len(b) and all(map(_close, a, b))
+    return a == b
 
 
 def test_round_half_up_not_bankers():
@@ -79,5 +92,10 @@ def test_fixture_is_reproduced_by_builder(tmp_path):
         if name.endswith(".tif"):
             with rasterio.open(tmp_path / name) as a, rasterio.open(GOOD / name) as b:
                 assert np.array_equal(a.read(), b.read()) and a.profile == b.profile
+        elif name.endswith(".geojson"):
+            # PROJ may differ in the last float bit across platforms: compare coordinates with tolerance.
+            a = json.loads((tmp_path / name).read_text(encoding="utf-8"))
+            b = json.loads((GOOD / name).read_text(encoding="utf-8"))
+            assert _close(a, b), name
         else:
             assert (tmp_path / name).read_bytes() == (GOOD / name).read_bytes(), name
