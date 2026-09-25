@@ -220,3 +220,89 @@ def test_readable_chips_are_open_parts_and_excluded(tmp_path, monkeypatch):
     doc["sha256"] = split.canonical_hash(doc)
     (tmp_path / "s.json").write_text(json.dumps(doc))
     assert fetch.label_readable_chips(tmp_path / "s.json") == {"A_1", "B_2", "C_3", "E_5"}
+
+
+# --- P23 (#28): label shares, VV > 0 dB, sealed S1, manifest with event dates --------------
+
+def test_open_chip_reports_label_shares_and_positive_db(raw, offline):
+    assert fetch.run(None) == 0
+    r = read_qc(raw.parent)["Sri-Lanka_713926"]
+    # label_array(): rows 0..3 water except one -1 pixel, rows 4..7 dry
+    assert float(r["label_invalid_frac"]) == pytest.approx(1 / 64)
+    assert float(r["label_water_frac"]) == pytest.approx(31 / 64)
+    assert float(r["label_dry_frac"]) == pytest.approx(32 / 64)
+    s1 = s1_array()
+    # share of ALL pixels (NaN counts as "not > 0") so chip shares average over a part
+    assert float(r["vv_pos_frac"]) == pytest.approx(float((s1[0] > 0).sum()) / 64)
+    assert float(r["vh_pos_frac"]) == pytest.approx(float((s1[1] > 0).sum()) / 64)
+    assert float(r["vv_pos_frac"]) > 0  # fixture VV is uniform(-25, 5): some pixels > 0 dB
+    assert r["s1_checked"] == "True"
+
+
+def test_zero_vv_is_not_positive(raw):
+    s1 = s1_array()
+    s1[0] = -1.0
+    s1[0, 0, :2] = [0.0, 0.5]
+    r = _qc_one(raw, s1=s1)
+    assert float(r["vv_pos_frac"]) == pytest.approx(1 / 64)
+
+
+def test_sealed_test_chip_s1_pixels_are_not_read(raw, offline):
+    # Out-of-range S1 in a sealed chip is not seen: only header + md5 are checked.
+    write_chip(raw, "Mekong_922373", s1=_with(s1_array(), (0, 3, 3), 80.0))
+    write_bucket_manifest(raw)
+    assert fetch.run(None) == 0
+    r = read_qc(raw.parent)["Mekong_922373"]
+    assert r["s1_checked"] == "False" and r["qc_pass"] == "True"
+    for k in ("vv_nan_frac", "vv_max", "vv_pos_frac", "db_scale_ok", "usable",
+              "label_water_frac"):
+        assert r[k] == "", k
+    assert r["s1_sha256"] and r["s1_band_names"] == "VV/VH" and r["grid_match"] == "True"
+
+
+def test_sealed_test_chip_s1_header_still_checked(raw, offline):
+    from .conftest import write_tif
+    write_tif(raw / "HandLabeled/S1Hand/Mekong_922373_S1Hand.tif", s1_array(), "float32",
+              nodata=-9999.0, descriptions=("VV", "VH"))
+    write_bucket_manifest(raw)
+    assert fetch.run(None) == 1
+    assert "nodata" in read_qc(raw.parent)["Mekong_922373"]["issues"]
+
+
+def test_manifest_entries_pass_contract_and_carry_event_dates(raw, offline):
+    from floodvalue.contracts.schemas import SourceManifest
+
+    assert fetch.run(None) == 0
+    doc = json.loads((raw.parent / "interim/source_manifest_s1.json").read_text())
+    SourceManifest.model_validate(doc)  # the contract validator, entries as export copies them
+    for e in doc["sources"]:
+        SourceManifest.model_validate({"sources": [e]})
+        assert e["after_event_note"]  # published in 2020, after every event
+        assert e["event_date_source"].startswith(fetch.MEDIA)
+    by_chip = {e["chip_id"]: e for e in doc["sources"]}
+    m = by_chip["Mekong_922373"]
+    assert (m["event_date"], m["event_metadata_location"]) == ("2018-08-05", "Cambodia")
+    assert m["event_date"] == m["observation_date"]
+    events = {e["event_id"]: e for e in doc["events"]}
+    assert events["Mekong"]["s1_date"] == "2018-08-05"
+    assert events["Mekong"]["metadata_location"] == "Cambodia"
+    assert events["Mekong"]["n_chips"] == 1 and events["Sri-Lanka"]["n_chips"] == 1
+    assert "Q-01" in doc["license_note"]
+
+
+def test_event_table_from_metadata():
+    meta = {"features": [{"properties": {"location": "Cambodia", "ISO_CC": "KHM",
+                                         "s1_date": "2018/08/05", "s2_date": "2018/08/04"}}]}
+    ev = fetch.event_table(meta, {"Mekong": 30})
+    assert ev == [{"event_id": "Mekong", "metadata_location": "Cambodia", "iso_cc": "KHM",
+                   "s1_date": "2018-08-05", "s2_date": "2018-08-04", "n_chips": 30}]
+
+
+def test_run_fails_when_manifest_breaks_contract(raw, offline):
+    # No publication date for the S1 object -> SourceEntry has neither published_at nor
+    # available_date -> the stage must fail rather than write an invalid manifest.
+    manifest = json.loads((raw / "bucket_manifest.json").read_text())
+    for m in manifest.values():
+        m.pop("updated")
+    (raw / "bucket_manifest.json").write_text(json.dumps(manifest))
+    assert fetch.run(None) == 1

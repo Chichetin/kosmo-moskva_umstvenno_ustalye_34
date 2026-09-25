@@ -18,7 +18,9 @@ from pathlib import Path
 
 import numpy as np
 import rasterio
+from pydantic import ValidationError
 
+from floodvalue.contracts.schemas import SourceManifest
 from floodvalue.data.io import (
     JRC_LAYER,
     LABEL_LAYER,
@@ -58,6 +60,12 @@ GRID_ATOL_DEG = 1e-9  # S1 vs label pixel step differ by ~1e-17 deg (docs/data.m
 LICENSE = ("не указана явно: в репозитории cloudtostreet/Sen1Floods11 нет LICENSE "
            "(GitHub API license=null), в STAC-коллекциях \"license\": \"proprietary\"; "
            "авторы просят цитировать Bonafilia et al. 2020, CVPRW")
+LICENSE_NOTE = ("Q-01 (docs/questions-for-organizers.md): лицензия не указана авторами, "
+                "работаем по рекомендуемой трактовке — используем для учебного прототипа "
+                "с цитированием статьи, набор в репозиторий не кладём")
+CITATION = ("Bonafilia D., Tellman B., Anderson T., Issenberg E. Sen1Floods11: a georeferenced "
+            "dataset to train and test deep learning flood algorithms for Sentinel-1. "
+            "CVPR Workshops 2020, pp. 210-211")
 
 QC_FIELDS = [
     "chip_id", "event_id", "s1_file", "s1_sha256", "s1_md5_ok", "label_file", "label_sha256",
@@ -65,7 +73,8 @@ QC_FIELDS = [
     "s1_nodata", "s1_band_names", "label_bands", "label_dtype", "grid_match",
     "label_checked",
     "vv_nan_frac", "vh_nan_frac", "vv_min", "vv_median", "vv_max", "vh_min", "vh_median",
-    "vh_max", "db_scale_ok", "label_values", "label_values_ok", "label_invalid_frac",
+    "vh_max", "vv_pos_frac", "vh_pos_frac", "db_scale_ok", "s1_checked", "label_values",
+    "label_values_ok", "label_invalid_frac", "label_dry_frac", "label_water_frac",
     "valid_frac", "qc_pass", "usable", "issues",
 ]
 
@@ -174,6 +183,28 @@ def chip_inventory(raw: Path) -> list[str]:
     return sorted(chips)
 
 
+def _iso(ymd: str | None) -> str | None:
+    """Metadata dates are YYYY/MM/DD."""
+    return date(*map(int, ymd.split("/"))).isoformat() if ymd else None
+
+
+def event_table(meta: dict, chips_per_event: dict[str, int]) -> list[dict]:
+    """One row per event that has hand-labelled chips: file prefix, metadata `location`,
+    S1/S2 dates of Sen1Floods11_Metadata.geojson. Events without chips (Colombia) are
+    skipped; events missing from the metadata are left out too and caught by run()."""
+    alias_back = {v: k for k, v in EVENT_ALIASES.items()}
+    rows = []
+    for f in meta["features"]:
+        p = f["properties"]
+        event_id = alias_back.get(p["location"], p["location"])
+        if event_id not in chips_per_event:
+            continue
+        rows.append({"event_id": event_id, "metadata_location": p["location"],
+                     "iso_cc": p.get("ISO_CC"), "s1_date": _iso(p.get("s1_date")),
+                     "s2_date": _iso(p.get("s2_date")), "n_chips": chips_per_event[event_id]})
+    return sorted(rows, key=lambda r: r["event_id"])
+
+
 def event_dates(raw: Path) -> dict[str, str]:
     """location -> s1_date as ISO date (metadata stores YYYY/MM/DD)."""
     d = json.loads((raw / METADATA_REL).read_text())
@@ -237,9 +268,10 @@ def db_scale_ok(vv: np.ndarray, vh: np.ndarray) -> bool | None:
     return bool(np.median(fv) < 0 and np.median(fh) < 0 and max(fv.max(), fh.max()) <= DB_MAX)
 
 
-def qc_chip(chip_id: str, raw: Path, bucket: dict, read_label: bool = True) -> dict:
-    """QC one chip. With read_label=False (sealed test chip) the label file is hashed and
-    its header (dtype, bands, CRS, grid) checked, but its pixels are never read."""
+def qc_chip(chip_id: str, raw: Path, bucket: dict, read_pixels: bool = True) -> dict:
+    """QC one chip. With read_pixels=False (sealed test chip, D-010/D-029) the S1 and label
+    files are hashed and their headers (dtype, bands, nodata, names, CRS, grid) checked, but
+    no pixel of either is read: no statistics of test chips exist anywhere."""
     event_id, _ = parse_chip_id(chip_id)
     issues: list[str] = []  # format / integrity problems -> qc_pass=False
     notes: list[str] = []  # data properties worth knowing (all-NaN, all -1, extremes)
@@ -269,9 +301,9 @@ def qc_chip(chip_id: str, raw: Path, bucket: dict, read_label: bool = True) -> d
                    s1_band_names="/".join(str(d) for d in s1.descriptions),
                    label_bands=lb.count, label_dtype=",".join(sorted(set(lb.dtypes))),
                    grid_match=grids_match(s1, lb))
-        s1_arr = s1.read()
-        label = lb.read(1) if read_label else None
-    row["label_checked"] = read_label
+        s1_arr = s1.read() if read_pixels else None
+        label = lb.read(1) if read_pixels else None
+    row["label_checked"] = row["s1_checked"] = read_pixels
     if row["s1_bands"] != 2:
         issues.append(f"S1 bands={row['s1_bands']} (expected 2)")
     if row["s1_dtype"] != "float32":
@@ -289,12 +321,20 @@ def qc_chip(chip_id: str, raw: Path, bucket: dict, read_label: bool = True) -> d
     if not row["grid_match"]:
         issues.append("S1 grid != label grid")
 
+    if s1_arr is None:
+        notes.append("S1 and label pixels sealed (test)")
+        hard = [i for i in issues if not i.startswith(JRC_LAYER)]
+        row.update(qc_pass=not hard, usable=None, issues="; ".join(issues + notes))
+        return row
+
     if s1_arr.shape[0] >= 2:
         vv, vh = s1_arr[0].astype(np.float64), s1_arr[1].astype(np.float64)
         for name, band in (("vv", vv), ("vh", vh)):
             nan_frac, lo, med, hi = _stats(band)
             row.update({f"{name}_nan_frac": _num(nan_frac), f"{name}_min": _num(lo),
-                        f"{name}_median": _num(med), f"{name}_max": _num(hi)})
+                        f"{name}_median": _num(med), f"{name}_max": _num(hi),
+                        # share of all pixels (NaN is not > 0), so chip shares average
+                        f"{name}_pos_frac": _num(float((band > 0).mean()))})
         row["db_scale_ok"] = db_scale_ok(vv, vh)
         if row["db_scale_ok"] is False:
             issues.append("S1 values not in dB scale")
@@ -310,13 +350,13 @@ def qc_chip(chip_id: str, raw: Path, bucket: dict, read_label: bool = True) -> d
         if not row["label_values_ok"]:
             issues.append(f"label values {values}")
         row["label_invalid_frac"] = _num(float((label == -1).mean()))
+        row["label_dry_frac"] = _num(float((label == 0).mean()))
+        row["label_water_frac"] = _num(float((label == 1).mean()))
         if valid.shape == label.shape:
             valid = valid & (label != -1)
         if (label == -1).all():
             notes.append("label all -1")
         row["valid_frac"] = _num(float(valid.mean()))
-    else:
-        notes.append("label pixels sealed (test)")
     if not np.isfinite(s1_arr).any():
         notes.append("S1 all NaN")
 
@@ -360,9 +400,17 @@ def s1_source_entries(rows: list[dict], dates: dict[str, str], bucket: dict) -> 
             "md5_base64": s1_obj.get("md5Hash"),
             "observation_date": obs,
             "observation_date_source": "s1_date события в Sen1Floods11_Metadata.geojson",
+            "event_date": obs,
+            "event_metadata_location": EVENT_ALIASES.get(r["event_id"], r["event_id"]),
+            "event_date_source": MEDIA + VERSION_PREFIX + METADATA_REL,
             "published_at": s1_obj.get("updated"),
             "published_after_event": True,
             "license": LICENSE,
+            "license_note": LICENSE_NOTE,
+            "after_event_note": (
+                "файл чипа опубликован в бакете Sen1Floods11 в 2020 г., после события; сама "
+                "сцена S1 снята в observation_date, в имитации решения считается доступной в "
+                "день наблюдения"),
             "purpose": "вход Sentinel-1 VV/VH (dB) для baseline и основного метода",
             "limitations": (
                 "Чип — переобработанная авторами копия сцены S1 GRD от даты наблюдения, "
@@ -385,10 +433,16 @@ def s1_source_entries(rows: list[dict], dates: dict[str, str], bucket: dict) -> 
     return entries
 
 
-def write_source_manifest(entries: list[dict], path: Path) -> None:
+def write_source_manifest(entries: list[dict], path: Path,
+                          events: list[dict] | None = None) -> None:
+    """Write interim/source_manifest_s1.json. Raises pydantic.ValidationError when the
+    document breaks the SourceManifest contract (docs/contracts.md §9), before writing."""
     doc = {"dataset": DATASET_VERSION, "bucket": f"gs://{BUCKET}/{VERSION_PREFIX}",
            "repository": "https://github.com/cloudtostreet/Sen1Floods11",
-           "license": LICENSE, "sources": entries}
+           "citation": CITATION, "license": LICENSE, "license_note": LICENSE_NOTE,
+           "events_source": MEDIA + VERSION_PREFIX + METADATA_REL,
+           "events": events or [], "sources": entries}
+    SourceManifest.model_validate(doc)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(doc, ensure_ascii=False, indent=1, allow_nan=False))
 
@@ -416,16 +470,27 @@ def run(args=None) -> int:
     no_date = sorted({r["event_id"] for r in rows if event_s1_date(r["event_id"], dates) is None})
     if no_date:
         print(f"data: нет даты S1 для событий {no_date}", flush=True)
-    write_source_manifest(s1_source_entries(rows, dates, bucket), out / "source_manifest_s1.json")
+    meta = json.loads((raw / METADATA_REL).read_text())
+    per_event: dict[str, int] = {}
+    for r in rows:
+        per_event[r["event_id"]] = per_event.get(r["event_id"], 0) + 1
+    try:
+        write_source_manifest(s1_source_entries(rows, dates, bucket),
+                              out / "source_manifest_s1.json", event_table(meta, per_event))
+        manifest_ok = True
+    except ValidationError as exc:
+        print(f"data: source_manifest_s1.json не проходит контракт SourceManifest: {exc}",
+              flush=True)
+        manifest_ok = False
 
     failed = [r for r in rows if not r["qc_pass"]]
-    unusable = [r for r in rows if r["qc_pass"] and not r["usable"]]
+    unusable = [r for r in rows if r["qc_pass"] and r["usable"] is False]
     n_lab = sum(bool(r.get("label_checked")) for r in rows)
-    print(f"data: пиксели меток прочитаны у {n_lab} чипов (train/dev/validation/excluded), "
-          f"у {len(rows) - n_lab} — только заголовок и хеш", flush=True)
+    print(f"data: пиксели S1 и меток прочитаны у {n_lab} чипов (train/dev/validation/"
+          f"excluded), у {len(rows) - n_lab} (test) — только заголовки и хеши", flush=True)
     print(f"data: QC формата {len(rows) - len(failed)}/{len(rows)}; без валидных пикселей "
           f"{len(unusable)}: {' '.join(r['chip_id'] for r in unusable)} -> {out / 'qc.csv'}",
           flush=True)
     for r in failed[:20]:
         print(f"  FAIL {r['chip_id']}: {r['issues']}", flush=True)
-    return 1 if failed or no_date else 0
+    return 1 if failed or no_date or not manifest_ok else 0
