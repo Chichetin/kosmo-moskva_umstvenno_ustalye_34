@@ -25,6 +25,11 @@ uv sync --frozen && uv run --frozen pytest -o addopts="" -q   # 612 passed in 17
 | Другой чип | `make all CHIP=Nigeria_1095404` | `validate` 12/12 |
 | Интерфейс | `make app` | ❌ `stage 'app' not implemented yet` — #83 |
 
+План C при 20 000 руб. отличается от прогона 2 (19 272,96 руб., 8 зон): между `6fe66f0` и `6d8e99d`
+менялся `src/floodvalue/procurement/` (#99); p, маска и порог те же. На момент записи GitVerse
+`6d8e99d` отстаёт от `origin/main` (в том числе `predict --s1` #113, `src/floodvalue/app/`) — после
+следующей синхронизации прогон повторяется.
+
 ## Прогон 2 — 25.09 23:46, GitVerse @ `6fe66f0`, путь жюри без обходов — ✅
 
 Веса дозалиты в LFS GitVerse (PUT с Content-Length вместо chunked). Обычный клон, git lfs
