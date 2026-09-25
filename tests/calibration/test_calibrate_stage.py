@@ -162,3 +162,40 @@ def test_shipped_calibration_matches_shipped_model():
     cal = C.load(path, config["weights_sha256"])
     assert cal["fitted_on"]["part"] == "validation"
     assert set(cal["fitted_on"]["events"]) == {"Sri-Lanka", "Nigeria"}
+
+
+def test_load_chips_refuses_test_and_train():
+    with pytest.raises(ValueError):
+        R.load_chips("unet", "test")
+    with pytest.raises(ValueError):
+        R.load_chips("unet", "train")
+
+
+def test_metric_rows_follow_contract_and_hash_valid_masks():
+    from floodvalue.model import metrics as M
+    chips = synthetic_chips(n_per_event=2)
+    rows = R.metric_rows({"validation": chips}, "fake", {"kind": "identity"}, 0.4)
+    assert [r["event"] for r in rows] == ["ALL", "Nigeria", "Sri-Lanka"]
+    assert list(rows[0]) == M.METRIC_COLUMNS
+    all_row = rows[0]
+    assert all_row["tp"] + all_row["fn"] == sum(int((c.label[c.valid] == 1).sum()) for c in chips)
+    assert all_row["n_pixels"] == sum(int(c.valid.sum()) for c in chips)
+    assert all_row["valid_mask_sha256"] == M.mask_sha256(
+        [c.valid for c in sorted(chips, key=lambda c: c.chip_id)])
+    assert sum(r["tp"] for r in rows[1:]) == all_row["tp"]
+
+
+def test_shipped_calibrated_metrics_share_valid_pixels_with_baseline():
+    import csv
+    path = R.DOC_DIR / "unet-metrics.csv"
+    base = R.REPO_ROOT / "docs" / "verification" / "baseline-metrics.csv"
+    if not path.exists() or not base.exists():
+        pytest.skip("no shipped metrics")
+    cal = json.loads((R.MODELS_DIR / "unet" / "calibration.json").read_text())
+    b = {(r["split"], r["event"]): r["valid_mask_sha256"]
+         for r in csv.DictReader(base.read_text().splitlines())}
+    rows = list(csv.DictReader(path.read_text().splitlines()))
+    assert rows and {r["split"] for r in rows} == {"dev", "validation"}
+    for r in rows:
+        assert r["valid_mask_sha256"] == b[(r["split"], r["event"])]
+        assert float(r["threshold"]) == cal["threshold"]

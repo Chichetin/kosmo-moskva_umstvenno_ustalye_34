@@ -11,7 +11,9 @@ The final calibrator is refitted on all validation pixels.
 Writes:
   models/<method>/calibration.json          calibrator, threshold, provenance (read by predict)
   docs/verification/calibration-val.md      report: before -> after, reliability, JRC, nodata
-  docs/verification/calibration/*.csv|png   threshold curve, reliability, figures
+  docs/verification/calibration/*.csv|png   threshold curve, reliability, figures;
+                                            <method>-metrics.csv = contracts §7 rows of the
+                                            calibrated method (dev + validation) at the threshold
 """
 
 from __future__ import annotations
@@ -31,6 +33,7 @@ from scipy.ndimage import uniform_filter
 from floodvalue.calibration import calibrator as C
 from floodvalue.data import io
 from floodvalue.data.split import chip_ids, load_split
+from floodvalue.model import metrics as M
 from floodvalue.model.predict import METHODS as METHOD_MODULES
 from floodvalue.paths import MODELS_DIR, REPO_ROOT
 
@@ -57,10 +60,12 @@ class Chip:
         return np.isfinite(self.p_raw) & (self.label != -1)
 
 
-def load_chips(method: str) -> list[Chip]:
+def load_chips(method: str, part: str = "validation") -> list[Chip]:
+    if part not in ("validation", "dev"):
+        raise ValueError(f"calibrate reads only validation (fit) and dev (report), not {part!r}")
     predict_proba = importlib.import_module(METHOD_MODULES[method]).predict_proba
     chips = []
-    for cid in chip_ids("validation"):
+    for cid in chip_ids(part):
         s1, _ = io.load_s1(cid)
         label, _ = io.load_label(cid)
         jrc_path = io.layer_path(cid, "JRCWaterHand")
@@ -173,6 +178,24 @@ def git_commit() -> str:
         return "unknown"
 
 
+def metric_rows(parts: dict[str, list[Chip]], method: str, cal: dict, threshold: float) -> list[dict]:
+    """docs/contracts.md §7 rows of the calibrated main method: pooled per part and per event,
+    valid-mask hash over chips in chip_id order (same algorithm as baseline and U-Net)."""
+    rows = []
+    for part, chips in parts.items():
+        events = sorted({c.event for c in chips})
+        for ev in ("ALL", *events):
+            mine = sorted((c for c in chips if ev == "ALL" or c.event == ev), key=lambda c: c.chip_id)
+            q, y, _ = pooled(mine, None, cal)
+            r = at(q, y, threshold)
+            rows.append({"method": method, "split": part, "event": ev, "iou": r["iou"], "f1": r["f1"],
+                         "precision": r["precision"], "recall": r["recall"], "tp": r["tp"],
+                         "fp": r["fp"], "fn": r["fn"], "tn": r["tn"],
+                         "n_pixels": r["tp"] + r["fp"] + r["fn"] + r["tn"], "threshold": threshold,
+                         "valid_mask_sha256": M.mask_sha256([c.valid for c in mine])})
+    return rows
+
+
 def write_csv(path: Path, rows: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as f:
@@ -191,6 +214,9 @@ def run(args) -> int:
     config = json.loads((MODELS_DIR / method / "config.json").read_text(encoding="utf-8"))
     chips = load_chips(method)
     result = calibrate(chips, method, config)
+    cal = result["calibration"]
+    result["metrics"] = metric_rows({"dev": load_chips(method, "dev"), "validation": chips},
+                                    method, cal["calibrator"], cal["threshold"])
     write_outputs(result, chips, method)
     print(json.dumps({k: result["calibration"][k] for k in
                       ("method", "threshold", "calibrator")}, ensure_ascii=False))
@@ -293,5 +319,7 @@ def write_outputs(result: dict, chips: list[Chip], method: str) -> None:
                 "cal_water_share": b["water_share"]}
                for a, b in zip(result["rel_raw"], result["rel_cal"], strict=True)])
     write_csv(DOC_DIR / "cross_event.csv", result["cross"])
+    if result.get("metrics"):
+        write_csv(DOC_DIR / f"{method}-metrics.csv", result["metrics"])
     report.figures(result, chips, DOC_DIR, DEMO_CHIP)
     DOC.write_text(report.markdown(result, method), encoding="utf-8")
