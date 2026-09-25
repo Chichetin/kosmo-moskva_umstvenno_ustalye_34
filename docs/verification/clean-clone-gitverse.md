@@ -4,7 +4,7 @@
 `make all`. Демо-чип до `eval-test` — `Sri-Lanka_713926` (validation, D-010); другой чип —
 `Nigeria_1095404` (validation, не train, не демо). Test-чипы не читались.
 
-## Прогон 2 — 25.09 23:46, GitVerse @ `6fe66f0`, путь жюри без обходов — ✅
+## Прогон 2 — 25.09 23:46, GitVerse @ `6fe66f0`, путь жюри без обходов — ✅ (действующий статус)
 
 Веса дозалиты в LFS GitVerse (PUT с Content-Length вместо chunked). Обычный клон, git lfs
 включён, без `GIT_LFS_SKIP_SMUDGE` и без remote GitHub.
@@ -22,12 +22,13 @@ export FLOODVALUE_DATA_DIR=<каталог, заполненный make data с 
 |---|---|---|
 | Сквозной путь | `make all` | A 0,00; B 42 465,93 руб. (`в бюджете False`); C 4 905,96 руб., `Z-A02`, `Z-A10`; `validate` 12/12 |
 | Смена бюджета | `make all BUDGET=20000` | C 19 272,96 руб., 8 зон; `validate` 12/12 |
-| p/маска не меняются | `sha256sum …/flood_{probability,mask}.tif` (5000 и 20000) | `b767ad16cf4c3c88…`, `f38ec062c6736074…` в обоих — те же, что в прогонах 0 и 1b |
+| p/маска/порог не меняются | `sha256sum …/flood_{probability,mask}.tif` и `threshold` в `run_metadata.json` (5000 и 20000) | `b767ad16cf4c3c88…`, `f38ec062c6736074…` и 0,37 в обоих — те же, что в прогонах 0 и 1b |
 | Другой чип | `make all CHIP=Nigeria_1095404` | `validate` 12/12 |
 | Интерфейс | `make app` | ❌ `stage 'app' not implemented yet` — #83 |
 
-GitVerse отстаёт от `origin/main` на #94 (`scripts/sync-gitverse.sh`, тесты, `GIT.md`,
-`HANDOFF.md`; `src/` не затронут) — догоняется следующей синхронизацией.
+На момент записи GitVerse отстаёт от `origin/main` на #94 (`scripts/`, `GIT.md`, `HANDOFF.md`)
+и #89 (очерёдность осмотра D-035: `src/floodvalue/assets/`, `export/assemble.py`) — проверенный
+клон их не содержит; после синхронизации прогон повторяется.
 
 ## Прогон 1 — 25.09 ~23:40, GitVerse @ `6fe66f0`
 
@@ -77,6 +78,9 @@ export FLOODVALUE_DATA_DIR=<пустой каталог, заполнен make d
 
 ## Что осталось
 
-- После каждой синхронизации — `FLOODVALUE_REQUIRE_WEIGHTS=1 bash scripts/sync-gitverse.sh --verify`.
+- После каждой синхронизации — `FLOODVALUE_REQUIRE_WEIGHTS=1 bash scripts/sync-gitverse.sh --verify`
+  и `make all` в клоне.
+- Ветка по умолчанию GitVerse — `lfs-probe` (сменить может только admin): жюри без `-b`
+  клонирует её, поэтому перед сдачей `lfs-probe` = commit сдачи (скрипт держит её равной `main`).
 - `make app` — после #83.
 - Финальный прогон — на commit сдачи, после `eval-test` на `Spain_7370579`, до 27.09 00:00.
