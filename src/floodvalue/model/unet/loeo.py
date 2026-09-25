@@ -84,12 +84,26 @@ def read_weak_chip(chip_id: str) -> tuple[np.ndarray, np.ndarray]:
     root = io.raw_dir() / "WeaklyLabeled"
     with rasterio.open(root / "S1Weak" / f"{chip_id}_S1Weak.tif") as f:
         s1 = f.read().astype(np.float32)
+    if s1.shape[0] != 2:
+        raise ValueError(f"{chip_id}: S1Weak must have 2 bands (VV, VH), got {s1.shape[0]}")
     with rasterio.open(root / WEAK_LABEL / f"{chip_id}_{WEAK_LABEL}.tif") as f:
         raw = f.read(1)
     lab = np.full(raw.shape, -1, np.int16)
     lab[raw == 0] = 0
     lab[raw == 1] = 1
     return s1, lab
+
+
+def sample_batch(gen: torch.Generator, batch: int, hand: torch.Tensor, weak: torch.Tensor,
+                 hand_frac: float | None) -> torch.Tensor:
+    """Row indices of one batch. hand_frac None: uniform over all rows (D-019 / plain weak
+    mixing). Else round(batch * hand_frac) rows from `hand`, the rest from `weak`."""
+    if hand_frac is None:
+        return torch.randint(0, len(hand) + len(weak), (batch,), generator=gen)
+    n_h = int(round(batch * hand_frac))
+    parts = [hand[torch.randint(0, len(hand), (n_h,), generator=gen)],
+             weak[torch.randint(0, len(weak), (batch - n_h,), generator=gen)]]
+    return torch.cat(parts)
 
 
 def pool_chip_ids() -> list[str]:
@@ -231,20 +245,30 @@ def train_fold(x, y, m, cfg: dict, eval_epochs=EVAL_EPOCHS, device: str = "cpu",
     gen = torch.Generator().manual_seed(cfg["seed"])
     jstd = jitter_std(channels, cfg["std"]).to(device)
     weak_w = cfg.get("weak_weight")
+    hand_frac = cfg.get("hand_frac") if weak_w is not None else None
     if weak_w is None:  # D-019 path: everything on the device, boolean mask
         x, y, m = x.to(device), y.to(device), m.to(device)
+        rows_hand, rows_weak = torch.arange(len(x)), torch.arange(0)
+    else:  # mask codes: 2 hand label, 1 weak label (rows are hand chips first, then weak)
+        top = m.flatten(1).amax(1)
+        rows_hand, rows_weak = (top == 2).nonzero().flatten(), (top == 1).nonzero().flatten()
+        if len(rows_hand) == 0:
+            raise ValueError("no hand-labeled chip with valid pixels in this fold")
     amp = device.startswith("cuda")
     states = {}
     for epoch in range(1, cfg["epochs"] + 1):
         model.train()
         te, losses = time.time(), []
         for _ in range(steps):
-            idx = torch.randint(0, len(x), (cfg["batch"],), generator=gen)
+            if hand_frac is None:
+                idx = torch.randint(0, len(x), (cfg["batch"],), generator=gen)
+            else:
+                idx = sample_batch(gen, cfg["batch"], rows_hand, rows_weak, hand_frac)
             if weak_w is None:
                 idx = idx.to(device)
                 xs, ys, ms = x[idx], y[idx], m[idx]
             else:  # data stay in host memory; only the batch goes to the device
-                xs, ys, ms = (t[idx].to(device, non_blocking=True) for t in (x, y, m))
+                xs, ys, ms = (t[idx].to(device) for t in (x, y, m))
             xb, yb, mb = augment(xs, ys, ms, cfg["crop"], cfg["db_jitter"], jstd,
                                  len(channels), gen)
             with torch.autocast(device_type=device.split(":")[0], dtype=torch.bfloat16,
@@ -272,11 +296,12 @@ def train_fold(x, y, m, cfg: dict, eval_epochs=EVAL_EPOCHS, device: str = "cpu",
         # Stage 2: fine-tune on the hand-labeled rows only (mask code 2 when weak data are mixed
         # in, else every row), fresh OneCycle at lr * finetune_lr_mult. Scored as "ft" — fixed
         # in advance, no selection.
-        hand = (m.flatten(1).amax(1) == 2).nonzero().flatten() if weak_w is not None else \
-            torch.arange(len(x))
+        hand = rows_hand
         opt = torch.optim.AdamW(model.parameters(), lr=cfg["lr"] * cfg["finetune_lr_mult"],
                                 weight_decay=cfg["weight_decay"])
         steps_ft = max(1, (2 * len(hand)) // cfg["batch"])
+        if ft * steps_ft < 10:
+            log(f"  WARNING: fine-tune has only {ft * steps_ft} steps — OneCycle barely trains")
         sched = torch.optim.lr_scheduler.OneCycleLR(
             opt, max_lr=cfg["lr"] * cfg["finetune_lr_mult"], pct_start=0.1,
             total_steps=ft * steps_ft)
@@ -289,7 +314,7 @@ def train_fold(x, y, m, cfg: dict, eval_epochs=EVAL_EPOCHS, device: str = "cpu",
                     idx = idx.to(device)
                     xs, ys, ms = x[idx], y[idx], m[idx]
                 else:
-                    xs, ys, ms = (t[idx].to(device, non_blocking=True) for t in (x, y, m))
+                    xs, ys, ms = (t[idx].to(device) for t in (x, y, m))
                 xb, yb, mb = augment(xs, ys, ms, cfg["crop"], cfg["db_jitter"], jstd,
                                      len(channels), gen)
                 with torch.autocast(device_type=device.split(":")[0], dtype=torch.bfloat16,
@@ -320,8 +345,11 @@ def run_fold(fold: dict, cfg: dict, read: Reader = read_chip, baseline_t: float 
     n_weak = 0
     if cfg.get("weak_weight") is not None:
         wids = weak_chip_ids({D.event_of(c) for c in fold["train"]})
-        if fold["event"] in {D.event_of(c) for c in wids}:
-            raise ValueError("weak chips of the held-out event leaked into the fold")
+        weak_events = {D.event_of(c) for c in wids}
+        held_events = {D.event_of(c) for c in fold["held_out"]}  # independent of fold["event"]
+        if weak_events & held_events or not weak_events <= set(WEAK_EVENTS):
+            raise ValueError(f"weak events {sorted(weak_events)} overlap held-out "
+                             f"{sorted(held_events)} or leave {WEAK_EVENTS}")
         xw, yw, mw = build_tensors(wids, read_weak_chip, channels, mean, std)
         x, y, m = torch.cat([x, xw]), torch.cat([y, yw]), torch.cat([m * 2, mw])
         n_weak = len(wids)
@@ -442,6 +470,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--weak-weight", type=float, default=None,
                    help=f"add weakly-labeled chips ({WEAK_LABEL}) of the fold's training events "
                         f"among {', '.join(WEAK_EVENTS)} with this loss weight (hand = 1)")
+    p.add_argument("--hand-frac", type=float, default=None,
+                   help="with --weak-weight: fraction of each batch drawn from hand-labeled chips")
     p.add_argument("--finetune-epochs", type=int, default=0,
                    help="stage 2: fine-tune on hand-labeled chips only for N epochs (scored as unet_eft)")
     p.add_argument("--finetune-lr-mult", type=float, default=0.3)
@@ -454,6 +484,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--table-from", default=None,
                    help="print the markdown table of <dir>/loeo-metrics.csv and exit")
     return p.parse_args(argv)
+
+
+def replay_command(args: argparse.Namespace) -> str:
+    """Command line that re-runs exactly this configuration (flags without values for booleans;
+    0 and 0.0 kept — `--weak-weight 0.0` is not the same run as no weak data)."""
+    parts = []
+    for k, v in vars(args).items():
+        if k in ("out_dir", "device", "table_from") or v is None or v is False or v == "":
+            continue
+        flag = f"--{k.replace('_', '-')}"
+        parts.append(flag if v is True else f"{flag} {v}")
+    return "python -m floodvalue.model.unet.loeo " + " ".join(parts)
 
 
 def git_commit() -> str:
@@ -497,12 +539,11 @@ def main(argv: list[str] | None = None) -> int:
                                           "dice_weight", "db_jitter")}
     cfg |= {"epochs": args.epochs, "crop": args.crop, "seed": args.seed,
             "steps_mult": args.steps_mult, "tta": args.tta, "weak_weight": args.weak_weight,
-            "finetune_epochs": args.finetune_epochs, "finetune_lr_mult": args.finetune_lr_mult}
+            "finetune_epochs": args.finetune_epochs, "finetune_lr_mult": args.finetune_lr_mult,
+            "hand_frac": args.hand_frac}
     shipped = shipped_baseline_rule()
     only = {e.strip() for e in args.events.split(",") if e.strip()}
-    command = "python -m floodvalue.model.unet.loeo " + " ".join(
-        f"--{k.replace('_', '-')} {v}" for k, v in vars(args).items()
-        if k not in ("out_dir", "device", "table_from") and v not in ("", 0, None))
+    command = replay_command(args)
     t_all = time.time()
     all_rows, chip_rows, info = [], [], []
     for fold in folds(limit_per_event(pool_chip_ids(), args.max_chips)):
