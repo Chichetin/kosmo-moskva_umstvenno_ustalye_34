@@ -72,8 +72,7 @@ def usage_coef(usage: str, cfg: Mapping[str, Any]) -> Decimal:
 def _to_date(value: date | datetime | str) -> date:
     """Календарная дата в UTC: aware-datetime приводится к UTC, naive считается UTC (D-017)."""
     if isinstance(value, str):
-        value = datetime.fromisoformat(value) if "T" in value \
-            else date.fromisoformat(value)
+        value = datetime.fromisoformat(value) if len(value) > 10 else date.fromisoformat(value)
     if isinstance(value, datetime):
         if value.tzinfo is not None:
             value = value.astimezone(UTC)

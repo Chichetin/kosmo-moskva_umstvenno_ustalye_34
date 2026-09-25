@@ -11,19 +11,19 @@ AS_OF = date(2026, 9, 20)
 
 
 def item(cid="z1", **kw):
-    base = dict(candidate_id=cid, sensor_type="optical", resolution_m=1,
-                acquisition_type="new", guaranteed_purchase=True, observation_at=None,
-                processing_level="L2", usage_type="internal", area_km2=Decimal("1.000"))
+    base = {"candidate_id": cid, "sensor_type": "optical", "resolution_m": 1,
+            "acquisition_type": "new", "guaranteed_purchase": True, "observation_at": None,
+            "processing_level": "L2", "usage_type": "internal", "area_km2": Decimal("1.000")}
     base.update(kw)
     return base
 
 
 FRESHNESS_ITEM = {
-    "new_guaranteed": dict(acquisition_type="new", guaranteed_purchase=True),
-    "operational": dict(acquisition_type="operational", guaranteed_purchase=False,
-                        observation_at=date(2026, 9, 10)),
-    "archive": dict(acquisition_type="archive", guaranteed_purchase=False,
-                    observation_at=date(2025, 1, 1)),
+    "new_guaranteed": {"acquisition_type": "new", "guaranteed_purchase": True},
+    "operational": {"acquisition_type": "operational", "guaranteed_purchase": False,
+                    "observation_at": date(2026, 9, 10)},
+    "archive": {"acquisition_type": "archive", "guaranteed_purchase": False,
+                "observation_at": date(2025, 1, 1)},
 }
 
 
@@ -90,10 +90,12 @@ def test_freshness_boundary_90_days_inclusive(days, coef, cat):
 
 
 def test_freshness_age_uses_calendar_date_of_datetimes():
-    from datetime import datetime
+    from datetime import UTC, datetime
     # 23:59 минус 90 дней и 00:01 — всё ещё 90 календарных дней
-    assert pricing.existing_data_category(datetime(2026, 6, 22, 0, 1),
-                                          datetime(2026, 9, 20, 23, 59), CFG) == "operational"
+    assert pricing.existing_data_category(datetime(2026, 6, 22, 0, 1, tzinfo=UTC),
+                                          datetime(2026, 9, 20, 23, 59, tzinfo=UTC),
+                                          CFG) == "operational"
+    assert pricing.existing_data_category("2026-06-22 10:00", "2026-09-20", CFG) == "operational"
     assert pricing.existing_data_category("2026-06-21T23:59:00Z", "2026-09-20", CFG) == "archive"
 
 
@@ -156,11 +158,11 @@ def test_discount_recomputed_over_whole_group_when_zone_added():
     two = pricing.price_basket([item("a", area_km2="1.5"), item("b", area_km2="1.5")],
                                CFG, as_of=AS_OF)
     assert one[0]["discount_coef"] == Decimal(1)
-    # S = 3 км²: 1,037 − 0,058·ln 3 = 0,973280227 — у ОБЕИХ строк группы
+    # S = 3 км²: 1,037 − 0,058·ln 3 = 0,973280487 — у ОБЕИХ строк группы
     assert [r["discount_coef"] for r in two] == [Decimal("0.973280487")] * 2
     assert [r["group_area_km2"] for r in two] == [Decimal("3.000")] * 2
     assert two[0]["cost_rub"] < one[0]["cost_rub"]
-    # 788,64·1,2·1,8·0,973280227 = 1657,946... → 1657,95; ×1,5 = 2486,925 → 2486,93
+    # 788,64·1,2·1,8·0,973280487 = 1657,946... → 1657,95; ×1,5 = 2486,925 → 2486,93
     assert two[0]["unit_price_rub_km2"] == Decimal("1657.95")
     assert two[0]["cost_rub"] == Decimal("2486.93")
 
@@ -174,7 +176,7 @@ def test_groups_split_by_sensor_resolution_and_year():
     assert all(r["group_area_km2"] == Decimal("2.000") for r in rows)
 
 
-def test_group_key_is_sensor_family(monkeypatch):
+def test_group_key_is_sensor_family():
     cfg = {**CFG, "discount": {**CFG["discount"],
                                "sensor_family": {"optical": ["optical", "optical_b"],
                                                  "sar": ["sar"]}}}
