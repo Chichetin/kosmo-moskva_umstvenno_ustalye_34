@@ -6,6 +6,7 @@ train`) — no training logic inside — and must not carry outputs or secrets i
 
 import json
 import re
+import shlex
 
 import pytest
 
@@ -78,3 +79,60 @@ def test_sh_fails_the_cell_on_error_and_masks_secret(monkeypatch, tmp_path, caps
         ns["sh"]("false")
     with pytest.raises(RuntimeError):
         ns["sh"]("false | cat")  # pipefail
+
+
+def cell_with(marker: str) -> str:
+    cells = [src for src in code_cells(load_nb()) if marker in src]
+    assert len(cells) == 1, marker
+    return cells[0]
+
+
+def recorded_commands(monkeypatch, tmp_path, mode: str) -> list[str]:
+    """Execute the data and training cells with `sh` replaced by a recorder."""
+    monkeypatch.setenv("FLOODVALUE_NB_MODE", mode)
+    ns = run_setup_cells(monkeypatch, tmp_path)
+    calls: list[str] = []
+    ns["sh"] = lambda cmd, **kw: calls.append(cmd)
+    ns.update(PY="python", ENV={})
+    for marker in ('sh(f"{PY} -m floodvalue data', 'sh(f"{PY} -m floodvalue train'):
+        exec(compile(cell_with(marker), "cell", "exec"), ns)
+    return calls
+
+
+def parse_floodvalue_command(cmd: str):
+    """Parse `python -m <module> <args>` with the real argparse parser of that module."""
+    from floodvalue import cli
+
+    argv = shlex.split(cmd)
+    assert argv[:2] == ["python", "-m"], cmd
+    module, rest = argv[2], argv[3:]
+    if module == "floodvalue":
+        assert rest[0] in cli.STAGES, rest[0]
+        return module, cli.build_parser().parse_args(rest)
+    assert module == "floodvalue.model.unet.train", module
+    from floodvalue.model.unet import train as unet_train
+
+    return module, unet_train.parse_args(rest)
+
+
+def test_full_mode_commands_match_the_cli_of_main(monkeypatch, tmp_path):
+    calls = recorded_commands(monkeypatch, tmp_path, "full")
+    parsed = [parse_floodvalue_command(c) for c in calls]  # argparse exits on unknown flags
+    assert [(m, a.stage) for m, a in parsed] == [("floodvalue", "data"), ("floodvalue", "train")]
+    assert parsed[1][1].out == str(tmp_path / "outputs")
+
+
+def test_smoke_mode_uses_real_flags_of_unet_train(monkeypatch, tmp_path):
+    calls = recorded_commands(monkeypatch, tmp_path, "smoke")
+    (_, data), (module, a) = [parse_floodvalue_command(c) for c in calls]
+    assert data.stage == "data" and module == "floodvalue.model.unet.train"
+    assert (a.epochs, a.max_chips, a.batch) == (1, 4, 2)
+    assert a.out_dir == str(tmp_path / "outputs" / "unet-smoke")
+
+
+def test_unknown_flag_is_rejected_by_the_parser():
+    # Guard for the two tests above: a flag that main does not know must fail parsing.
+    with pytest.raises(SystemExit):
+        parse_floodvalue_command("python -m floodvalue train --epochs 1")
+    with pytest.raises(SystemExit):
+        parse_floodvalue_command("python -m floodvalue.model.unet.train --smoke 4")
