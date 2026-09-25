@@ -11,7 +11,7 @@ USA (dev), Nigeria и Sri-Lanka (validation). **Test (Spain/Mekong/Bolivia) не
 Метод не менялся и не переобучался: `models/unet/config.json` (`weights_sha256
 504944cd880c0b2e94acf2481e6ddc4db985ddbd64d550a3591321e8b0cc1bb3`) и `models/unet/calibration.json`
 (Platt `a=1.4647, b=1.5210`, порог `0.37`, D-029) — те же файлы, что в `main` на момент
-запуска (commit `b749b18a3816`, 2026-09-25). Все команды ниже — из этого worktree,
+запуска (commit `7bc47eaf7c01`, 2026-09-25). Все команды ниже — из этого worktree,
 после `set -a; . ./.env; set +a`.
 
 ## 1. Выбор чипов
@@ -50,25 +50,25 @@ done
 procure: A: данные 0.00 руб., в бюджете True, охват EL 0.00 руб.
 procure: B: данные 33775.84 руб., в бюджете False, охват EL 4434415.20 руб., зоны ['W-CHIP']
 procure: C: данные 4905.96 руб., в бюджете True, охват EL 3798297.68 руб., зоны ['Z-A06', 'Z-A02']
-export: комплект USA_198411_5000_b749b18 -> outputs/USA_198411_5000_b749b18
+export: комплект USA_198411_5000_7bc47ea -> outputs/USA_198411_5000_7bc47ea
 OK x12 -> 12/12 файлов прошли проверку
 
 === Nigeria_81933 ===
 {"chip_id": "Nigeria_81933", ..., "valid_pixels": 262144, "seconds": 1.74}
 procure: B: охват EL 13079124.26 руб.; C: данные 4905.96 руб., охват EL 10692832.06 руб.
-export: комплект Nigeria_81933_5000_b749b18 -> outputs/Nigeria_81933_5000_b749b18
+export: комплект Nigeria_81933_5000_7bc47ea -> outputs/Nigeria_81933_5000_7bc47ea
 OK x12 -> 12/12 файлов прошли проверку
 
 === Sri-Lanka_916628 ===
 {"chip_id": "Sri-Lanka_916628", ..., "valid_pixels": 262144, "seconds": 2.15}
 procure: B: охват EL 8844166.02 руб.; C: данные 4905.96 руб., охват EL 8054372.73 руб.
-export: комплект Sri-Lanka_916628_5000_b749b18 -> outputs/Sri-Lanka_916628_5000_b749b18
+export: комплект Sri-Lanka_916628_5000_7bc47ea -> outputs/Sri-Lanka_916628_5000_7bc47ea
 OK x12 -> 12/12 файлов прошли проверку
 
 === Sri-Lanka_713926 ===
 {"chip_id": "Sri-Lanka_713926", ..., "valid_pixels": 262144, "seconds": 1.74}
 procure: B: охват EL 16842207.72 руб.; C: данные 4905.96 руб., охват EL 12610565.84 руб.
-export: комплект Sri-Lanka_713926_5000_b749b18 -> outputs/Sri-Lanka_713926_5000_b749b18
+export: комплект Sri-Lanka_713926_5000_7bc47ea -> outputs/Sri-Lanka_713926_5000_7bc47ea
 OK x12 -> 12/12 файлов прошли проверку
 ```
 
@@ -78,8 +78,8 @@ OK x12 -> 12/12 файлов прошли проверку
 `make validate` на каждом комплекте (сверх того, что уже входит в `make all`):
 
 ```bash
-$ make validate OUT=outputs/USA_198411_5000_b749b18
-Комплект: outputs/USA_198411_5000_b749b18
+$ make validate OUT=outputs/USA_198411_5000_7bc47ea
+Комплект: outputs/USA_198411_5000_7bc47ea
 OK   flood_probability.tif
 OK   flood_mask.tif
 ... (12 строк OK)
@@ -152,7 +152,7 @@ $ uv run --frozen python -m floodvalue validate
 ## 5. Метрики переноса по событиям (критерий 7)
 
 Источники: `docs/verification/calibration-val.md` (validation, уже с калибровкой) и
-`python -m floodvalue eval-test --part dev` (запущено 2026-09-25 при commit `b749b18a3816`,
+`python -m floodvalue eval-test --part dev` (запущено 2026-09-25 при commit `7bc47eaf7c01`,
 sha256 конфигурации `506ce620d041373c6b312ead25deed6221e79704fe3ce2fa60d24add0ea31c1e`
 — тот же сквозной путь, что у `predict`/`make all`, метки dev/validation читать разрешено,
 D-010 запечатывает только test). Результат команды — `docs/verification/eval-dev.md`;
@@ -272,7 +272,7 @@ VH «нет воды» конфликтует с разметкой. `Nigeria_81
 `metrics.csv` из сырых `unet-metrics.csv`, не из `calibration/unet-metrics.csv`; уже
 отслеженная проблема, `docs/tz-compliance.md` критерий 5) — не специфично для переноса.
 После `git merge origin/main` (#62 объединён) все пять чипов перезапущены на commit
-`b749b18a3816`: предупреждение пропало, `metrics.csv` main берёт калиброванный порог
+`7bc47eaf7c01`: предупреждение пропало, `metrics.csv` main берёт калиброванный порог
 0,37 без расхождения; числа EL/зон/nodata — те же, что до слияния (export копирует
 готовые файлы, не пересчитывает).
 
