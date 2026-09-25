@@ -24,7 +24,7 @@ import numpy as np
 
 from floodvalue.baseline import core
 from floodvalue.model import metrics
-from floodvalue.paths import MODELS_DIR, REPO_ROOT, data_dir, output_dir
+from floodvalue.paths import MODELS_DIR, REPO_ROOT, output_dir
 
 PARTS = ("train", "dev", "validation")
 METHOD = "baseline"
@@ -241,14 +241,10 @@ def fit_and_evaluate(parts: dict[str, list[str]],
 
 
 def read_chip(chip_id: str) -> tuple[np.ndarray, np.ndarray]:
-    import rasterio
+    """S1 (2, H, W) dB and LabelHand via the sealed loader: test labels raise (D-010)."""
+    from floodvalue.data.io import load_label, load_s1
 
-    hand = data_dir() / "raw" / "HandLabeled"
-    with rasterio.open(hand / "S1Hand" / f"{chip_id}_S1Hand.tif") as src:
-        s1 = src.read().astype(np.float32)
-    with rasterio.open(hand / "LabelHand" / f"{chip_id}_LabelHand.tif") as src:
-        label = src.read(1)
-    return s1, label
+    return load_s1(chip_id)[0], load_label(chip_id)[0]
 
 
 def git_commit() -> str:
