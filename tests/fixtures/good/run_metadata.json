@@ -1,0 +1,99 @@
+{
+  "contract_version": "1",
+  "run_id": "Synthetic_000001_5000_fixture",
+  "chip_id": "Synthetic_000001",
+  "event_id": "Synthetic",
+  "event_date": "2017-05-30",
+  "created_at": "2026-09-25T20:00:00+00:00",
+  "commit": "fixture",
+  "threshold": 0.5,
+  "source": {
+    "dataset": "синтетический эталон (не Sen1Floods11)",
+    "dataset_url": "https://github.com/cloudtostreet/Sen1Floods11",
+    "s1_files": [
+      "Synthetic_000001_S1Hand.tif"
+    ],
+    "source_manifest": "source_manifest.json"
+  },
+  "split": {
+    "file": "splits/split_v1.json",
+    "sha256": null,
+    "chip_split": "none"
+  },
+  "portfolio": {
+    "seed": 20260925,
+    "placement_rule": "фиксированные пиксели эталона",
+    "assets_config": "configs/assets.yaml"
+  },
+  "methods": {
+    "baseline": {
+      "name": "vh_threshold",
+      "version": "fixture",
+      "weights": [],
+      "threshold": -20.0,
+      "threshold_units": "dB VH",
+      "threshold_source": "эталон"
+    },
+    "main": {
+      "name": "gradient",
+      "version": "fixture",
+      "weights": [],
+      "threshold": 0.5,
+      "threshold_units": "p",
+      "threshold_source": "эталон"
+    },
+    "evaluation_order": "baseline и main на одной маске валидных пикселей"
+  },
+  "expected_loss": {
+    "formula": "EL = p_flood × V × q",
+    "p_source": "flood_probability.tif, пиксель объекта",
+    "status_rules": "ok — пиксель валиден; no_data — nodata; partial — не используется"
+  },
+  "budget": {
+    "budget_rub": 5000.0,
+    "decision_at": "2017-05-30T12:00:00+00:00",
+    "decision_deadline": "2017-05-31T00:00:00+00:00"
+  },
+  "pricing": {
+    "config": "configs/pricing.yaml",
+    "legal_edition": "ПП РФ № 840 от 29.06.2019 в ред. ПП РФ № 1297 от 27.08.2025",
+    "base_rate_rub_km2": 788.64,
+    "base_rate_status": "scenario",
+    "discount_rule": "Р по корзине группы, previous_area_km2 = 0",
+    "grouping": "strategy × sensor_type × resolution_m × calendar_year"
+  },
+  "zones": {
+    "construction": "квадраты в EPSG:6933 вокруг объектов",
+    "availability_rule": "охват — только event_observation с available_at ≤ decision_deadline",
+    "area_method": "EPSG:6933, always_xy",
+    "unknown_dates_rule": "observation_at пуст — дата будущей съёмки неизвестна"
+  },
+  "strategies": {
+    "rule_B": "все зоны каталога",
+    "rule_C": "зоны event_observation в пределах бюджета",
+    "other_costs": "1500 руб. — ручная проверка аналитиком",
+    "coverage_aggregation": "сумма EL уникальных asset_id под covers",
+    "coverage_share_note": null
+  },
+  "uncertainty": {
+    "meaning": "p(1−p) в пикселе объекта",
+    "units": "безразмерная, [0; 0,25]",
+    "method": "аналитически из p",
+    "raster": null
+  },
+  "proxy_check": {
+    "status": "not_done",
+    "test_chip": null,
+    "control_points": null,
+    "fixed_v_q": null,
+    "n_points": null,
+    "error_metric": null,
+    "result": null
+  },
+  "metrics": {
+    "files": []
+  },
+  "reproduce": [
+    "uv run --frozen python tests/contracts/build_fixture.py tests/fixtures/good"
+  ]
+}

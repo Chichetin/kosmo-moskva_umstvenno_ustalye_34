@@ -1,0 +1,13 @@
+# Параметры одного запуска (docs/contracts.md §5). Схема — floodvalue.contracts.schemas.RunConfig.
+# До заморозки основного метода сквозной путь и интерфейс гоняются на чипе validation
+# (D-010). После заморозки chip_id -> Spain_7370579 (test), event_id -> Spain,
+# chip_split -> test, decision_* -> от даты S1 этого чипа; только замороженной конфигурацией.
+chip_id: Sri-Lanka_713926
+event_id: Sri-Lanka
+chip_split: validation
+portfolio_seed: 20260925          # seed размещения 10 объектов (только по валидности S1)
+budget_rub: 5000                  # лимит на платные данные (C обязана уложиться); сценарный
+# Момент решения оператора и срок, к которому данные должны быть доступны (D-001: 6–12 ч).
+# Дата S1 события Sri-Lanka — 2017-05-30 (docs/data.md §5); время суток — сценарное.
+decision_at: "2017-05-30T12:00:00+00:00"
+decision_deadline: "2017-05-31T00:00:00+00:00"
