@@ -67,3 +67,13 @@ def test_token_not_on_command_line() -> None:
     # the token reaches curl via stdin (-H @-), never as an argument or inside a URL
     assert "-H \"Authorization" not in TEXT
     assert not re.search(r"https://[^\s\"]*\$\{?GITVERSE_TOKEN", TEXT)
+
+
+def test_lfs_goes_through_content_length_loader() -> None:
+    # git-lfs sends chunked bodies that GitVerse rejects with 403; the script must not use it for upload
+    assert "python3 scripts/gitverse_lfs_push.py --commit \"$want\"" in TEXT
+    assert "lfs push" not in TEXT
+    assert "push_opts=(--no-verify)" in TEXT
+    assert "нет записи в LFS" not in TEXT
+    assert "проверьте права токена" in TEXT
+    assert (REPO_ROOT / "scripts" / "gitverse_lfs_push.py").is_file()

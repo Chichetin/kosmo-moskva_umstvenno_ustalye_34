@@ -2,6 +2,10 @@
 # Зеркало сдачи в GitVerse (D-002, GIT.md «GitVerse»): push origin/main в main, master и
 # ветку по умолчанию GitVerse, LFS-объекты (веса) — явно и первыми, теги origin; затем
 # сверка по чистому клону ветки по умолчанию (её клонирует жюри).
+# LFS грузит scripts/gitverse_lfs_push.py (PUT с Content-Length): git-lfs шлёт тело chunked
+# (так велит upload.header GitVerse), и GitVerse на такой PUT отвечает 403. Ветки поэтому
+# пушатся с --no-verify: pre-push хук git-lfs снова попытался бы chunked-загрузку, а
+# gitverse_lfs_push.py уже проверил повторным batch, что все объекты на сервере.
 #   bash scripts/sync-gitverse.sh              # LFS, затем код + сверка; LFS упал — выход 1
 #   bash scripts/sync-gitverse.sh --code-only  # LFS упал — всё равно отправить код (веса — указатели)
 #   bash scripts/sync-gitverse.sh --verify     # только сверка
@@ -63,26 +67,28 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 if [ "$mode" != verify ]; then
   git lfs fetch --all origin               # веса нужны локально, чтобы их отправить
   lfs_ok=1
-  echo "[sync] LFS → GitVerse (HTTP/1.1, предел ${LFS_TIMEOUT} с)"
-  if gv_lfs push gitverse "$want" 2>&1 | tee "$tmp/lfs.log"; then :; else
+  echo "[sync] LFS → GitVerse: gitverse_lfs_push.py, PUT с Content-Length (предел ${LFS_TIMEOUT} с)"
+  if GITVERSE_URL="$GITVERSE_URL" GITVERSE_USER="$GITVERSE_USER" GITVERSE_TOKEN="$GITVERSE_TOKEN" timeout -k 30 "$LFS_TIMEOUT" \
+      python3 scripts/gitverse_lfs_push.py --commit "$want" 2>&1 | tee "$tmp/lfs.log"; then :; else
     rc=$?; lfs_ok=0
     if [ "$rc" = 124 ]; then
       echo "[sync] FAIL: LFS не уложился в ${LFS_TIMEOUT} с (GITVERSE_LFS_TIMEOUT)" >&2
-    elif grep -qiE '\b403\b|Authorization error|Forbidden' "$tmp/lfs.log"; then
-      echo "[sync] FAIL: LFS PUT → 403: у токена нет записи в LFS GitVerse — нужен токен с правом записи/LFS (или права от admin hackrus.experts)" >&2
+    elif grep -qE '\bHTTP 403\b' "$tmp/lfs.log"; then
+      echo "[sync] FAIL: 403 на PUT объекта: проверьте права токена; git-lfs chunked-загрузку GitVerse отвергает, поэтому используется gitverse_lfs_push.py" >&2
     else
-      echo "[sync] FAIL: git lfs push завершился с кодом $rc" >&2
+      echo "[sync] FAIL: gitverse_lfs_push.py завершился с кодом $rc" >&2
     fi
   fi
   rm -f "$tmp/lfs.log"
-  push_opts=()
+  # --no-verify всегда: объекты уже на сервере (проверено повторным batch), а pre-push хук
+  # git-lfs грузил бы их chunked и получил бы 403.
+  push_opts=(--no-verify)
   if [ "$lfs_ok" = 0 ]; then
     if [ "$mode" != code-only ]; then
       echo "[sync] код в GitVerse не отправлен. Чтобы GitVerse не отставал: bash scripts/sync-gitverse.sh --code-only (веса останутся указателями)" >&2
       exit 1
     fi
-    echo "[sync] WARN: --code-only — код отправляется без LFS (--no-verify), веса в GitVerse — указатели; сверка ниже даст FAIL" >&2
-    push_opts=(--no-verify)
+    echo "[sync] WARN: --code-only — код отправляется без LFS-объектов, веса в GitVerse — указатели; сверка ниже даст FAIL" >&2
   fi
   refspecs=()
   for b in "${branches[@]}"; do refspecs+=("${want}:refs/heads/${b}"); done
