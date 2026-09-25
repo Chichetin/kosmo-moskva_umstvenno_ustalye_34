@@ -6,7 +6,7 @@ OUT ?=
 GPU ?=
 STAGE_ARGS = $(if $(CHIP),--chip $(CHIP)) $(if $(BUDGET),--budget $(BUDGET)) $(if $(OUT),--out $(OUT))
 
-# GPU-окружение для обучения (scripts/setup_gpu_env.sh, D-023): отдельный venv вне
+# GPU-окружение для обучения (scripts/setup_gpu_env.sh, D-024): отдельный venv вне
 # репозитория, вне uv.lock (тот фиксирует CPU-torch для инференса у жюри, D-003).
 ifdef FLOODVALUE_GPU_VENV
 GPU_VENV := $(FLOODVALUE_GPU_VENV)
