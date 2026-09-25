@@ -98,13 +98,13 @@ def test_nan_literal_in_csv_fails(run_dir):
 def test_inf_in_comparison_fails(run_dir):
     edit_csv(run_dir / F.STRATEGY_COMPARISON, lambda rows: row(rows, strategy="A").update(
         residual_uncertainty="inf"))
-    assert F.STRATEGY_COMPARISON in failing(run_dir)
+    assert "'inf' — вместо NaN/Inf нужна пустая ячейка" in only(failing(run_dir), F.STRATEGY_COMPARISON)
 
 
 def test_nan_in_json_fails(run_dir):
     text = (run_dir / F.RUN_METADATA).read_text(encoding="utf-8")
     (run_dir / F.RUN_METADATA).write_text(text.replace('"threshold": 0.5', '"threshold": NaN', 1))
-    assert F.RUN_METADATA in failing(run_dir)
+    assert "недопустимое значение NaN" in " ".join(failing(run_dir)[F.RUN_METADATA])
 
 
 def test_nan_in_probability_raster_fails(run_dir):
@@ -112,7 +112,7 @@ def test_nan_in_probability_raster_fails(run_dir):
         p = dst.read(1)
         p[40, 40] = np.nan
         dst.write(p, 1)
-    assert F.FLOOD_PROBABILITY in failing(run_dir)
+    assert "NaN/Inf в 1 пикселях" in " ".join(failing(run_dir)[F.FLOOD_PROBABILITY])
 
 
 # --- rasters -----------------------------------------------------------------------------------
@@ -161,7 +161,7 @@ def test_probability_wrong_nodata_fails(run_dir):
     prof["nodata"] = -1.0
     with rasterio.open(run_dir / F.FLOOD_PROBABILITY, "w", **prof) as dst:
         dst.write(p, 1)
-    assert F.FLOOD_PROBABILITY in failing(run_dir)
+    assert "nodata -1.0, нужен -9999" in " ".join(failing(run_dir)[F.FLOOD_PROBABILITY])
 
 
 # --- assets ------------------------------------------------------------------------------------
@@ -313,7 +313,7 @@ def test_multipolygon_fails(run_dir):
         g = doc["features"][0]["geometry"]
         doc["features"][0]["geometry"] = {"type": "MultiPolygon", "coordinates": [g["coordinates"]]}
     edit_json(run_dir / F.CANDIDATE_ORDERS, upd)
-    assert F.CANDIDATE_ORDERS in failing(run_dir)
+    assert "'MultiPolygon', ожидается Polygon" in " ".join(failing(run_dir)[F.CANDIDATE_ORDERS])
 
 
 def test_self_intersecting_polygon_fails(run_dir):
@@ -335,7 +335,8 @@ def test_new_without_guarantee_fails(run_dir):
     def upd(doc):
         doc["features"][0]["properties"]["guaranteed_purchase"] = False
     edit_json(run_dir / F.CANDIDATE_ORDERS, upd)
-    assert F.CANDIDATE_ORDERS in failing(run_dir)
+    assert "acquisition_type=new без guaranteed_purchase=true" in \
+        " ".join(failing(run_dir)[F.CANDIDATE_ORDERS])
 
 
 def test_archive_with_guarantee_fails(run_dir):
@@ -343,7 +344,8 @@ def test_archive_with_guarantee_fails(run_dir):
         f = next(f for f in doc["features"] if f["properties"]["candidate_id"] == "Z3")
         f["properties"]["guaranteed_purchase"] = True
     edit_json(run_dir / F.CANDIDATE_ORDERS, upd)
-    assert F.CANDIDATE_ORDERS in failing(run_dir)
+    assert "guaranteed_purchase=true допустимо только для acquisition_type=new" in \
+        " ".join(failing(run_dir)[F.CANDIDATE_ORDERS])
 
 
 # --- plan, strategies, comparison --------------------------------------------------------------
@@ -410,12 +412,12 @@ def test_strategy_plans_differ_from_plan_rows_fails(run_dir):
 
 def test_strategy_a_with_zones_fails(run_dir):
     edit_json(run_dir / F.STRATEGY_PLANS, lambda d: d["A"].append("Z1"))
-    assert F.STRATEGY_PLANS in failing(run_dir)
+    assert "список A должен быть пустым" in only(failing(run_dir), F.STRATEGY_PLANS)
 
 
 def test_plan_row_for_a_fails(run_dir):
     edit_csv(run_dir / F.PROCUREMENT_PLAN, lambda rows: rows + [dict(rows[-1], strategy="A")])
-    assert F.PROCUREMENT_PLAN in failing(run_dir)
+    assert "strategy: Input should be 'B' or 'C'" in only(failing(run_dir), F.PROCUREMENT_PLAN)
 
 
 def test_plan_duplicate_pair_fails(run_dir):
@@ -453,7 +455,7 @@ def test_plan_wrong_freshness_fails(run_dir):
 def test_plan_bool_must_be_true_false(run_dir):
     edit_csv(run_dir / F.PROCUREMENT_PLAN, lambda rows: row(rows, strategy="C", candidate_id="Z1")
              .update(guaranteed_purchase="1"))
-    assert F.PROCUREMENT_PLAN in failing(run_dir)
+    assert "ожидается true/false" in only(failing(run_dir), F.PROCUREMENT_PLAN)
 
 
 # --- sensitivity, metadata, manifest -----------------------------------------------------------
@@ -466,12 +468,12 @@ def test_sensitivity_missing_q_fails(run_dir):
 
 def test_sensitivity_invalid_json_fails(run_dir):
     edit_csv(run_dir / F.SENSITIVITY, lambda rows: rows[0].update(changed_inputs_json="{p: 1"))
-    assert F.SENSITIVITY in failing(run_dir)
+    assert "строка 2: changed_inputs_json" in only(failing(run_dir), F.SENSITIVITY)
 
 
 def test_metadata_missing_key_fails(run_dir):
     edit_json(run_dir / F.RUN_METADATA, lambda d: d.pop("proxy_check"))
-    assert F.RUN_METADATA in failing(run_dir)
+    assert "proxy_check: Field required" in " ".join(failing(run_dir)[F.RUN_METADATA])
 
 
 def test_metadata_threshold_changed_breaks_mask(run_dir):
@@ -552,3 +554,177 @@ def test_cli_marks_fixture_fallback(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("FLOODVALUE_OUTPUT_DIR", str(tmp_path / "none"))
     assert cli.main(["validate"]) == 0
     assert "ЭТАЛОН" in capsys.readouterr().out
+
+
+# --- P01b (#14): [lon, lat] of zones, closed rings, catalog ↔ pricing.yaml, plan ↔ plans ↔ catalog
+
+def zone(doc, cid):
+    return next(f for f in doc["features"] if f["properties"]["candidate_id"] == cid)
+
+
+def test_zone_swapped_lat_lon_fails(run_dir):
+    # [lat, lon] instead of [lon, lat]: (7.78, 80.01) is still in range, but not on the chip
+    def swap(doc):
+        for pos in zone(doc, "Z2")["geometry"]["coordinates"][0]:
+            pos.reverse()
+    edit_json(run_dir / F.CANDIDATE_ORDERS, swap)
+    assert "Z2: зона не пересекает чип (порядок [долгота, широта]?)" in \
+        " ".join(failing(run_dir)[F.CANDIDATE_ORDERS])
+
+
+def test_zone_outside_chip_fails(run_dir):
+    # a valid ≥ 1 km² zone far from the chip, area written correctly: only the extent check fires
+    x, y = TO_EA.transform(81.5, 7.78)
+    poly = square_ll(x, y, 1300)
+    replace_zone(run_dir, poly, V.round_half_up(area_km2(poly), "0.001"))
+    msg = " ".join(failing(run_dir)[F.CANDIDATE_ORDERS])
+    assert "Z3: зона не пересекает чип" in msg
+    assert "ROUND_HALF_UP" not in msg
+
+
+def test_zone_ring_not_closed_fails(run_dir):
+    # GeoJSON (RFC 7946 §3.1.6): the first and last positions of a ring are identical
+    def unclose(doc):
+        zone(doc, "Z1")["geometry"]["coordinates"][0].pop()
+    edit_json(run_dir / F.CANDIDATE_ORDERS, unclose)
+    assert "объект 0: кольцо 0 не замкнуто" in only(failing(run_dir), F.CANDIDATE_ORDERS)
+
+
+def test_nan_coordinate_in_geojson_fails(run_dir):
+    text = (run_dir / F.ASSETS_GEOJSON).read_text(encoding="utf-8")
+    doc = json.loads(text)
+    lon = doc["features"][0]["geometry"]["coordinates"][0]
+    (run_dir / F.ASSETS_GEOJSON).write_text(text.replace(json.dumps(lon), "NaN", 1), encoding="utf-8")
+    assert "недопустимое значение NaN" in " ".join(failing(run_dir)[F.ASSETS_GEOJSON])
+
+
+def test_catalog_base_rate_not_pricing_config_fails(run_dir):
+    edit_json(run_dir / F.CANDIDATE_ORDERS,
+              lambda d: zone(d, "Z4")["properties"].update(base_rate_rub_km2=800.0))
+    assert "Z4: base_rate_rub_km2=800.0 ≠ configs/pricing.yaml 788.64" in \
+        " ".join(failing(run_dir)[F.CANDIDATE_ORDERS])
+
+
+def test_catalog_base_rate_status_official_without_config_fails(run_dir):
+    edit_json(run_dir / F.CANDIDATE_ORDERS,
+              lambda d: zone(d, "Z4")["properties"].update(base_rate_status="official"))
+    assert "Z4: base_rate_status='official' ≠ configs/pricing.yaml 'scenario'" in \
+        " ".join(failing(run_dir)[F.CANDIDATE_ORDERS])
+
+
+def test_metadata_pricing_differs_from_config_fails(run_dir):
+    edit_json(run_dir / F.RUN_METADATA, lambda d: d["pricing"].update(base_rate_status="official"))
+    assert "pricing.base_rate_status='official' ≠ configs/pricing.yaml 'scenario'" in \
+        only(failing(run_dir), F.RUN_METADATA)
+
+
+def test_metadata_legal_edition_differs_from_config_fails(run_dir):
+    edit_json(run_dir / F.RUN_METADATA, lambda d: d["pricing"].update(legal_edition="ред. 2019"))
+    assert "pricing.legal_edition" in only(failing(run_dir), F.RUN_METADATA)
+
+
+def test_plan_candidate_not_in_catalog_fails(run_dir):
+    edit_csv(run_dir / F.PROCUREMENT_PLAN, lambda rows: row(rows, strategy="C", candidate_id="Z2")
+             .update(candidate_id="Z9"))
+    assert "C/Z9: candidate_id нет в candidate_orders.geojson" in \
+        " ".join(failing(run_dir)[F.PROCUREMENT_PLAN])
+
+
+def test_strategy_plans_unknown_candidate_fails(run_dir):
+    edit_json(run_dir / F.STRATEGY_PLANS, lambda d: d["B"].append("Z9"))
+    msg = only(failing(run_dir), F.STRATEGY_PLANS)
+    assert "B: нет в candidate_orders.geojson: ['Z9']" in msg
+
+
+def test_strategy_plans_missing_plan_row_fails(run_dir):
+    edit_json(run_dir / F.STRATEGY_PLANS, lambda d: d["B"].remove("Z3"))
+    assert "B: состав ≠ строкам procurement_plan.csv" in only(failing(run_dir), F.STRATEGY_PLANS)
+
+
+def test_b_over_budget_counterfactual_passes(run_dir):
+    # reference B exceeds the budget and is marked budget_feasible=false: that is allowed
+    with open(run_dir / F.STRATEGY_COMPARISON, encoding="utf-8") as f:
+        b = row(list(csv.DictReader(f)), strategy="B")
+    assert float(b["data_cost_rub"]) > float(b["budget_rub"]) and b["budget_feasible"] == "false"
+    assert failing(run_dir) == {}
+
+
+def test_zone_ring_too_short_fails(run_dir):
+    # [a, b, a] is "closed" but not a linear ring: at least 4 positions
+    def short(doc):
+        ring = zone(doc, "Z1")["geometry"]["coordinates"][0]
+        ring[:] = [ring[0], ring[1], ring[0]]
+    edit_json(run_dir / F.CANDIDATE_ORDERS, short)
+    assert "объект 0: кольцо 0 не замкнуто или короче 4 точек" in \
+        only(failing(run_dir), F.CANDIDATE_ORDERS)
+
+
+def test_chip_extent_non_square_and_projected():
+    from rasterio.crs import CRS
+    from rasterio.transform import from_origin
+    p = np.zeros((2, 5), dtype=np.float64)  # 2 rows, 5 columns
+    prof = {"crs": CRS.from_epsg(4326), "transform": from_origin(80.0, 7.8, 0.01, 0.01)}
+    assert V._chip_lonlat((p, p > 0, prof)).bounds == pytest.approx((80.0, 7.78, 80.05, 7.8))
+    utm = {"crs": CRS.from_epsg(32644), "transform": from_origin(500000.0, 862000.0, 10.0, 10.0)}
+    west, south, east, north = V._chip_lonlat((p, p > 0, utm)).bounds
+    assert 80.9 < west < east < 81.1 and 7.7 < south < north < 7.9  # degrees, not metres
+
+
+# --- acceptance #14: each broken fixture from the task gives its own, distinguishable error ----
+
+def _break_nan(run_dir):
+    with rasterio.open(run_dir / F.FLOOD_PROBABILITY, "r+") as dst:
+        p = dst.read(1)
+        p[40, 40] = np.nan
+        dst.write(p, 1)
+
+
+def _break_hole(run_dir):
+    x, y = TO_EA.transform(80.01, 7.78)
+    poly = square_ll(x, y, 1300, hole=100)
+    replace_zone(run_dir, poly, V.round_half_up(area_km2(poly), "0.001"))
+
+
+def _break_09996(run_dir):
+    x, y = TO_EA.transform(80.01, 7.78)
+    replace_zone(run_dir, square_ll(x, y, 0.9996 ** 0.5 * 1000), 1.0)
+
+
+def _break_dup_asset(run_dir):
+    edit_json(run_dir / F.ASSETS_GEOJSON,
+              lambda d: d["features"][1]["properties"].update(asset_id="a01"))
+
+
+def _break_mask(run_dir):
+    with rasterio.open(run_dir / F.FLOOD_MASK, "r+") as dst:
+        m = dst.read(1)
+        m[50, 50] = 1 - m[50, 50]
+        dst.write(m, 1)
+
+
+def _break_b_unmarked(run_dir):
+    edit_csv(run_dir / F.STRATEGY_COMPARISON,
+             lambda rows: row(rows, strategy="B").update(budget_feasible="true"))
+
+
+BROKEN = {
+    "nan": (_break_nan, F.FLOOD_PROBABILITY, "NaN/Inf в 1 пикселях"),
+    "hole": (_break_hole, F.CANDIDATE_ORDERS, "Z3: есть внутренние вырезы (holes)"),
+    "area_09996": (_break_09996, F.CANDIDATE_ORDERS, "< 1 км² (до округления)"),
+    "dup_asset_id": (_break_dup_asset, F.ASSETS_GEOJSON, "asset_id a01 повторяется 2 раз"),
+    "mask_threshold": (_break_mask, F.FLOOD_MASK, "mask ≠ (p ≥ threshold=0.5) в 1 пикселях"),
+    "b_over_budget": (_break_b_unmarked, F.STRATEGY_COMPARISON,
+                      "B: budget_feasible=true, а data_cost > бюджета"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(BROKEN))
+def test_broken_fixture_gives_its_own_error(run_dir, case):
+    breaker, name, signature = BROKEN[case]
+    breaker(run_dir)
+    errors = failing(run_dir)
+    assert signature in " ".join(errors.get(name, [])), errors
+    everything = " ".join(" ".join(v) for v in errors.values())
+    for other, (_, _, other_sig) in BROKEN.items():
+        if other != case:
+            assert other_sig not in everything, (case, other)
