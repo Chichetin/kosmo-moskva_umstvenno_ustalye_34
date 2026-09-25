@@ -9,7 +9,7 @@ PKG = Path(floodvalue.__file__).parent
 # contracts/paths (D-005), chip reader (D-015), split loader (contracts.md §4), shared §7
 # metrics (D-032), the method registry (D-041), itself.
 ALLOWED = {"floodvalue.contracts", "floodvalue.paths", "floodvalue.data.io",
-           "floodvalue.data.split", "floodvalue.model.metrics", "floodvalue.model.predict",
+           "floodvalue.data.split", "floodvalue.model.metrics", "floodvalue.model.predict.METHODS",
            "floodvalue.calibration"}
 
 
