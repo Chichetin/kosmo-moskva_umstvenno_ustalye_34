@@ -57,7 +57,7 @@ gv clone -q "$GITVERSE_URL" "$tmp/c"
 mapfile -t lfs_files < <(cd "$tmp/c" && git lfs ls-files -n)
 bad=0
 for f in "${lfs_files[@]}"; do
-  if head -c 100 "$tmp/c/$f" | grep -q '^version https://git-lfs'; then
+  if [[ "$(head -c 100 "$tmp/c/$f" 2>/dev/null | tr -d '\0')" == "version https://git-lfs"* ]]; then
     echo "[verify] FAIL: $f в GitVerse — указатель, объекта нет" >&2; bad=1
   else
     echo "[verify] ok: $f $(sha256sum "$tmp/c/$f" | cut -c1-16)… $(stat -c %s "$tmp/c/$f") байт"

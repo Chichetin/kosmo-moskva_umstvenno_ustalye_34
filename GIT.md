@@ -13,7 +13,7 @@
   через PR (0 обязательных апрувов — аппрув даёт `reviewer`), правило действует и на
   админа, force-push и удаление `main` запрещены. Дублируется `permissions.deny` в
   `.claude/settings.json`. Проверка: `gh api repos/Chichetin/kosmo-moskva_umstvenno_ustalye_34/branches/main --jq .protected`.
-- **Сдача — GitVerse**, зеркало (`gitverse` remote) заводится позже; см. «GitVerse».
+- **Сдача — GitVerse**: зеркало `origin/main` скриптом `scripts/sync-gitverse.sh`; см. «GitVerse».
 
 ## Автономность агента
 
