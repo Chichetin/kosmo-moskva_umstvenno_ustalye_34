@@ -15,7 +15,7 @@ GPU_VENV := $(HOME)/.cache/floodvalue-gpu
 endif
 GPU_PY := $(GPU_VENV)/bin/python -m floodvalue
 
-.PHONY: setup test hooks-test check data split baseline train calibrate predict assets procure export validate app eval-test all gpu-env
+.PHONY: setup test hooks-test check data data-qc split baseline train calibrate predict assets procure export validate app eval-test all gpu-env
 
 setup:            ## окружение строго по lockfile + git-хук стража данных
 	uv sync --frozen
@@ -34,6 +34,9 @@ check: test hooks-test validate   ## полный прогон перед push
 
 data split baseline calibrate predict assets procure export validate app eval-test:
 	$(PY) $@ $(STAGE_ARGS)
+
+data-qc:            ## docs/verification/data-qc.md из interim/qc.csv (после make data); test — без пикселей
+	uv run --frozen python -m floodvalue.data.qc_report
 
 train:              ## GPU=1 — обучение через python из GPU-venv (make gpu-env), иначе CPU по uv.lock
 ifeq ($(filter 1,$(GPU)),1)

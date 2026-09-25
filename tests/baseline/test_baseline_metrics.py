@@ -5,7 +5,8 @@ import math
 import numpy as np
 import pytest
 
-from floodvalue.baseline import core, run
+from floodvalue.baseline import run
+from floodvalue.data import io
 from floodvalue.model import metrics as m
 
 
@@ -14,7 +15,7 @@ def test_valid_mask_needs_finite_s1_in_both_channels_and_label_not_minus_one():
     s1[0, 0, 0] = np.nan  # VV missing
     s1[1, 0, 1] = np.nan  # VH missing
     label = np.array([[1, 1], [-1, 0]], np.int16)
-    assert core.valid_mask(s1, label).tolist() == [[False, False], [False, True]]
+    assert io.valid_mask(s1, label).tolist() == [[False, False], [False, True]]
 
 
 def test_confusion_counts_only_valid_pixels_and_minus_one_is_not_water():
