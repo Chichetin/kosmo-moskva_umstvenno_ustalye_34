@@ -4,6 +4,7 @@ CHIP ?=
 BUDGET ?=
 OUT ?=
 GPU ?=
+TAG ?=
 STAGE_ARGS = $(if $(CHIP),--chip $(CHIP)) $(if $(BUDGET),--budget $(BUDGET)) $(if $(OUT),--out $(OUT))
 
 # GPU-окружение для обучения (scripts/setup_gpu_env.sh, D-024): отдельный venv вне
@@ -15,7 +16,7 @@ GPU_VENV := $(HOME)/.cache/floodvalue-gpu
 endif
 GPU_PY := $(GPU_VENV)/bin/python -m floodvalue
 
-.PHONY: setup test hooks-test check data data-qc split baseline train calibrate predict assets procure export validate app eval-test all gpu-env
+.PHONY: setup test hooks-test check data data-qc split baseline train calibrate predict assets procure export validate app eval-test all gpu-env release
 
 setup:            ## окружение строго по lockfile + git-хук стража данных
 	uv sync --frozen
@@ -34,6 +35,9 @@ check: test hooks-test validate   ## полный прогон перед push
 
 data split baseline calibrate predict assets procure export validate app eval-test:
 	$(PY) $@ $(STAGE_ARGS)
+
+release:            ## архивы комплекта OUT и models/ + SHA256SUMS для релиза GitVerse (#85); TAG=<тег> — загрузить
+	uv run --frozen python scripts/release_bundle.py $(if $(OUT),--out $(OUT)) $(if $(TAG),--upload $(TAG))
 
 data-qc:            ## docs/verification/data-qc.md из interim/qc.csv (после make data); test — без пикселей
 	uv run --frozen python -m floodvalue.data.qc_report
