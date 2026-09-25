@@ -178,6 +178,16 @@ def git_commit() -> str:
         return "unknown"
 
 
+def transfer_check(chips: list[Chip], cal: dict, threshold: float) -> list[dict]:
+    """Report-only: raw@0.5 vs calibrated@threshold on another part (dev, USA, low water)."""
+    p, y, _ = pooled(chips)
+    q = C.apply(cal, p)
+    return [{"stage": "raw_0.5", "threshold": RAW_THRESHOLD, **at(p, y, RAW_THRESHOLD),
+             **C.prob_scores(p, y, N_BINS)},
+            {"stage": "calibrated", "threshold": threshold, **at(q, y, threshold),
+             **C.prob_scores(q, y, N_BINS)}]
+
+
 def metric_rows(parts: dict[str, list[Chip]], method: str, cal: dict, threshold: float) -> list[dict]:
     """docs/contracts.md §7 rows of the calibrated main method: pooled per part and per event,
     valid-mask hash over chips in chip_id order (same algorithm as baseline and U-Net)."""
@@ -215,8 +225,10 @@ def run(args) -> int:
     chips = load_chips(method)
     result = calibrate(chips, method, config)
     cal = result["calibration"]
-    result["metrics"] = metric_rows({"dev": load_chips(method, "dev"), "validation": chips},
+    dev = load_chips(method, "dev")
+    result["metrics"] = metric_rows({"dev": dev, "validation": chips},
                                     method, cal["calibrator"], cal["threshold"])
+    result["dev_check"] = transfer_check(dev, cal["calibrator"], cal["threshold"])
     write_outputs(result, chips, method)
     print(json.dumps({k: result["calibration"][k] for k in
                       ("method", "threshold", "calibrator")}, ensure_ascii=False))
