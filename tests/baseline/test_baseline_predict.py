@@ -73,9 +73,6 @@ def test_committed_config_is_complete():
     assert cfg["fitted_on"] == "train"
 
 
-if __name__ == "__main__":
-    pytest.main([__file__])
-
 
 def test_predict_chip_reads_s1_through_shared_loader(tmp_path, monkeypatch):
     """S1 comes from data.io.load_s1 (D-015), not from a private reader."""
@@ -100,3 +97,7 @@ def test_predict_chip_reads_s1_through_shared_loader(tmp_path, monkeypatch):
         assert r.transform == tr and (r.read(1) == 1).all()
     assert json.loads((out / "prediction.json").read_text())["s1_file"] == \
         "Sri-Lanka_1_S1Hand.tif"
+
+
+if __name__ == "__main__":
+    pytest.main([__file__])

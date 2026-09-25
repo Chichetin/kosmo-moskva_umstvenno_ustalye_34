@@ -7,34 +7,48 @@ import floodvalue
 
 PKG = Path(floodvalue.__file__).parent
 # Everything baseline may import from floodvalue: contracts/paths (D-005), the chip reader
-# (D-015), the split loader (contracts.md §1b), the shared §7 metrics (D-032), itself.
+# (D-015), the split loader (contracts.md §4), the shared §7 metrics (D-032), itself.
 ALLOWED = {"floodvalue.contracts", "floodvalue.paths", "floodvalue.data.io",
            "floodvalue.data.split", "floodvalue.model.metrics", "floodvalue.baseline"}
 
 
-def _imports(path: Path) -> set[str]:
+def _imports_of(text: str, package: str) -> set[str]:
+    """Absolute imported names; relative imports are resolved against `package`."""
     out = set()
-    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+    for node in ast.walk(ast.parse(text)):
         if isinstance(node, ast.Import):
             out |= {a.name for a in node.names}
-        elif isinstance(node, ast.ImportFrom) and node.module:
+        elif isinstance(node, ast.ImportFrom):
+            base = node.module or ""
+            if node.level:
+                parent = package.rsplit(".", node.level - 1)[0] if node.level > 1 else package
+                base = f"{parent}.{base}" if base else parent
             # `from floodvalue.data import io` -> floodvalue.data.io
-            out |= {f"{node.module}.{a.name}" for a in node.names}
+            out |= {f"{base}.{a.name}" for a in node.names}
     return out
 
 
-def _floodvalue_imports(path: Path) -> set[str]:
-    return {m for m in _imports(path) if m == "floodvalue" or m.startswith("floodvalue.")}
+def _imports(path: Path) -> set[str]:
+    package = ".".join(("floodvalue", *path.parent.relative_to(PKG).parts))
+    return _imports_of(path.read_text(encoding="utf-8"), package)
 
 
 def _allowed(name: str) -> bool:
     return any(name == a or name.startswith(a + ".") for a in ALLOWED)
 
 
+def test_relative_imports_are_resolved():
+    names = _imports_of("from ..model.unet import net\nfrom . import core\n",
+                        "floodvalue.baseline")
+    assert names == {"floodvalue.model.unet.net", "floodvalue.baseline.core"}
+    assert not _allowed("floodvalue.model.unet.net") and _allowed("floodvalue.baseline.core")
+
+
 def test_baseline_imports_only_contracts_paths_and_recorded_exceptions():
     files = sorted((PKG / "baseline").glob("*.py"))
     assert files
-    bad = {f.name: sorted(m for m in _floodvalue_imports(f) if not _allowed(m)) for f in files}
+    bad = {f.name: sorted(m for m in _imports(f)
+                          if m.startswith("floodvalue.") and not _allowed(m)) for f in files}
     assert not {k: v for k, v in bad.items() if v}
 
 
