@@ -127,13 +127,24 @@ bash scripts/sync-gitverse.sh --verify   # только сверка: commit с�
 тем же sha256.
 
 Транспорт и сбои (25.09): по HTTP/2 GitVerse рвёт LFS-поток (`PROTOCOL_ERROR`), поэтому
-скрипт ходит в GitVerse по HTTP/1.1, LFS — в один поток, с 2 повторами и пределом
+git в GitVerse ходит по HTTP/1.1. **LFS-объекты грузит не `git lfs push`, а
+`scripts/gitverse_lfs_push.py`**: batch-ответ GitVerse кладёт в `upload.header`
+`Transfer-Encoding: chunked`, git-lfs шлёт тело chunked, и GitVerse отвечает 403 — дело не
+в правах токена. Тот же PUT с `Content-Length` → 200, verify → 200; так 25.09 ~23:50 залиты
+веса (5 × U-Net, `models/unet/member_0..4.pt`), повторный batch по каждому oid отвечает без
+`actions.upload`. Загрузчик: batch → PUT с `Content-Length` (без `Transfer-Encoding`) →
+verify → повторный batch; выход 0, только если сервер больше ничего не просит загрузить;
+сетевые сбои — до 3 попыток, HTTP 4xx — без повторов. Предел шага —
 `GITVERSE_LFS_TIMEOUT` (900 с). LFS идёт первым; упал — код не отправляется, выход 1.
-LFS PUT → 403 при `push:true` в API — у токена нет записи в LFS: нужен токен с правом
-записи/LFS или права от admin `hackrus.experts`. Пока его нет —
-`bash scripts/sync-gitverse.sh --code-only`: ветки уходят с `--no-verify`, веса остаются
-указателями, сверка честно даёт FAIL. Трассировку git (`GIT_TRACE*`, `GIT_CURL_VERBOSE`)
-не включать — она печатает заголовок Authorization.
+Ветки и теги пушатся с `--no-verify`: pre-push хук git-lfs снова грузил бы chunked и падал
+на 403, а объекты уже проверены. 403 от загрузчика на PUT — проверить права токена.
+Если LFS-шаг не проходит, а код отставать не должен — `bash scripts/sync-gitverse.sh
+--code-only`: веса остаются указателями, сверка честно даёт FAIL. Трассировку git
+(`GIT_TRACE*`, `GIT_CURL_VERBOSE`) не включать — она печатает заголовок Authorization;
+загрузчик печатает только код статуса и первые 200 байт тела ответа.
+Ветку по умолчанию скрипт берёт из API GitVerse (curl с 3 повторами: API периодически рвёт
+соединение); пустой ответ — запасной путь `git ls-remote --symref gitverse HEAD`; не
+получилось и так — сообщение и выход 1.
 
 Синхронизация — после каждой волны merge (D-033) и не реже раза в 3 часа; последняя — до
 27.09 00:00, затем `--verify` и контрольный прогон из чистого клона GitVerse.
