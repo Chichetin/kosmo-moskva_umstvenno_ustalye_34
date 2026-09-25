@@ -281,8 +281,11 @@ def write_outputs(run_dir: Path, budget_rub: float) -> dict[str, Any]:
         "social_constraint": {**ctx["rc"]["social_constraint"],
                               "asset_ids": ctx["social_ids"], "result": res["social_constraint"],
                               "note": ("отдельное ограничение покрытия C, не множитель рублей EL "
-                                       "(task.md); эффект — строка social_constraint_on в "
-                                       "procurement_sensitivity.csv")},
+                                       "(task.md); эффект — строка "
+                                       + ("social_constraint_off (опция включена)"
+                                          if ctx["required"] else
+                                          "social_constraint_on (опция выключена)")
+                                       + " в procurement_sensitivity.csv")},
         "c_selection": res["c_selection"],
         "reasons": res["reasons"],
         "other_cost": {**ctx["rc"]["other_cost"],
