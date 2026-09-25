@@ -183,9 +183,9 @@ def chip_ids(part: str, *, allow_test: bool = False, path: Path | None = None) -
 
 
 def decisions_hash(path: Path = DECISIONS_PATH) -> str | None:
-    """sha256 recorded in the decisions log row that mentions split_v1.json."""
+    """sha256 recorded in the D-016 row of the decisions log (the split freeze)."""
     for line in path.read_text().splitlines():
-        if "split_v1.json" in line:
+        if line.startswith("| D-016 |") and "split_v1.json" in line:
             m = re.search(r"sha256[^0-9a-f]*([0-9a-f]{64})", line)
             if m:
                 return m.group(1)
