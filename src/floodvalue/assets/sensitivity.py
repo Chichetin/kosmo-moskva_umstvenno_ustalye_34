@@ -163,7 +163,7 @@ def _interpretation(
         direction = "поднялся" if (new_r or 99) < (old_r or 99) else "опустился"
         parts.append(f"{cls} ({aid}) {direction} с {old_r} на {new_r}")
 
-    # D-035: the same inspection rule on the scenario's p and EL (uncertainty held at baseline).
+    # D-035: the same inspection rule on the scenario's p and EL (entropy follows p', see _inspection).
     parts.append(f"очерёдность осмотра: {', '.join(inspection_moves) or 'без изменений'}")
 
     if clipped:
@@ -184,7 +184,8 @@ def _inspection(base: dict[str, dict], overrides: dict, els: dict, ranks: dict) 
         p, u = overrides.get(aid, {}).get("p", b["p"]), b["uncertainty"]
         # The D-018 entropy is a function of p: for the inspection rule it follows p' (not a new
         # observation), otherwise a lower p would stay "uncertain". A measure independent of p
-        # (#21) stays at its baseline value.
+        # (#21) stays at its baseline value. The name check is always true today on purpose:
+        # it is the switch #21 flips when the measure stops being a function of p.
         if "p" in overrides.get(aid, {}) and UNCERTAINTY_NAME == "binary_entropy_bits":
             u = binary_entropy(p)
         rows.append({"asset_id": aid, "p_flood": p, "expected_loss_rub": els[aid],

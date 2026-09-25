@@ -85,8 +85,9 @@ def _action(r: dict, group: str, uncertainty_high: float | None) -> str:
 def _reason(r: dict, group: str, uncertainty_high: float | None,
             mask_threshold: float | None) -> str:
     if group == "not_assessed":
-        return (f"нет оценки p (статус {r['status']}: нет данных в точке объекта) — проверить на "
-                "месте или снимком; рублями не ранжируется")
+        missing = "нет данных в точке объекта" if r["status"] == "no_data" else "данные неполные"
+        return (f"нет оценки p (статус {r['status']}: {missing}) — проверить на месте или "
+                "снимком; рублями не ранжируется")
     p, u = r["p_flood"], r["uncertainty"]
     el = f"EL {_rub(r['expected_loss_rub'])} руб. (место {r['rank']} по ущербу)"
     if u is None:
