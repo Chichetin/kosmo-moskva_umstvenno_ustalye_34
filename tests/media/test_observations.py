@@ -57,7 +57,8 @@ def test_local_catalog_skips_sealed_test_events(conn, tmp_path):
     for chip, event in (("Sri-Lanka_1", "Sri-Lanka"), ("Spain_1", "Spain")):  # Spain is test
         _tif(s1 / f"{chip}_S1Hand.tif", 81.6, 7.8)
         sources.append({"chip_id": chip, "event_id": event, "observation_date": "2017-05-30"})
-    (data / "interim" / "source_manifest_s1.json").write_text(json.dumps({"sources": sources}))
+    (data / "interim" / "source_manifest_s1.json").write_text(json.dumps({"sources": sources}),
+        encoding="utf-8")
     refs = [c["ref"] for c in obs.local_catalog(conn, data)]
     assert refs == ["Sri-Lanka_1"]
 
