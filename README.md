@@ -71,14 +71,14 @@ python3 scripts/download_sen1floods11.py            # HandLabeled + perm_water +
 | Обучение основного метода (U-Net, ансамбль 5 seed) | `make train` (GPU: `make train GPU=1`; Colab: `notebooks/train_colab.ipynb`) | готово — веса 5 членов в `models/unet/` через LFS, dev IoU 0,584 против baseline 0,391 (D-019, `docs/verification/unet-metrics.md`); команда обучения проверена смоук-прогоном (`--max-chips`, CPU и GPU, код 0), полный переобучающий прогон (~75 с/член на GPU) после обучения весов сдачи не повторялся (время и устройство — `docs/verification/unet-metrics.md` §«Воспроизведение») |
 | Калибровка и порог на validation | `make calibrate` | готово — Platt-калибровка, порог 0,37 по IoU на validation (D-029, `docs/verification/calibration-val.md`); пишет `models/unet/calibration.json`, `predict` подхватывает его автоматически без правок вызова |
 | Inference на чипе (S1-only, оба метода) | `FLOODVALUE_METHOD=unet\|baseline make predict CHIP=<chip_id>` | готово — на `Sri-Lanka_713926` (unet: `threshold 0.37, threshold_status "calibrated (platt) and chosen on validation, D-029"`, `valid_pixels 262144`; baseline: `seconds 0.0`) и на `Nigeria_1095404` (другой официальный чип, unet: `valid_pixels 262144`) |
-| Финальная оценка на part (validation/dev/test) | `make eval-test` (сырое, по умолчанию `--part test` — запечатан); `uv run --frozen python -m floodvalue eval-test --part validation` | готово, **test честно запечатан**: `make eval-test` без подтверждения → `eval-test: отказ — test is sealed (D-010): set FLOODVALUE_EVAL_TEST_CONFIRM=<sha256 of the frozen configuration>; ...`; `--part validation` реально считает 60 чипов → `docs/verification/eval-validation.md` (калиброванная модель: IoU 0,685 против baseline 0,580, ECE 0,007, Brier 0,041, AUROC неопределённости 0,902); `docs/verification/test-log.md` по test пуст — test ещё не открывался (`eval-test` замороженной конфигурации — не позже 26.09 20:00, D-033) |
+| Финальная оценка на part (validation/dev/test) | `make eval-test` (сырое, по умолчанию `--part test` — запечатан); `uv run --frozen python -m floodvalue eval-test --part validation` | готово, **test честно запечатан**: `make eval-test` без подтверждения → `eval-test: отказ — test is sealed (D-010): set FLOODVALUE_EVAL_TEST_CONFIRM=<sha256 of the frozen configuration>; ...`; `--part validation` реально считает 60 чипов → `docs/verification/eval-validation.md` (калиброванная модель: IoU 0,685 против baseline 0,580, ECE 0,007 по 10 корзинам, Brier 0,041, AUROC неопределённости 0,902; ECE 0,010 в `docs/verification/calibration-val.md` — та же калибровка по 15 корзинам, Brier совпадает); `docs/verification/test-log.md` по test пуст — test ещё не открывался (`eval-test` замороженной конфигурации — не позже 26.09 20:00, D-033) |
 | 10 объектов и ущерб | `make assets CHIP=<chip_id>` | готово — `assets: 10 объектов, оценено 10` (D-018; `pytest tests/assets`) |
 | Зоны, цена, A/B/C | `make procure BUDGET=<руб>` | готово — `procure: A/B/C` с ценой, охватом EL, ценой ошибки решения и `budget_feasible` (D-023; `pytest tests/procurement`). C покупает снимки там, где они могут изменить решение: max прироста R = V·q·min(p, 1−p) (сценарная «цена ошибки решения», не снижение потерь) на рубль корзины; объекты с почти известным исходом (p ≈ 0 или 1) не покупаются; прежнее правило «EL на рубль» — строка `C_by_EL` в `sensitivity.csv` (D-049). Поэтому доля покрытого EL у C может быть малой: объекты с исходом, почти известным по карте (p ≈ 1), идут на осмотр (D-035), а не на снимок |
 | 12 обязательных файлов | `make export && make validate` | готово — реальный комплект `make all CHIP=Sri-Lanka_713926 BUDGET=5000` → `12/12 файлов прошли проверку`, `flood_mask.tif`/`flood_probability.tif` — с калиброванным порогом 0,37, `metrics.csv` — с калиброванными метриками main (D-027, D-029; `pytest tests/contracts tests/export`); `run_metadata.warnings` пуст на чистом дереве — `make all CHIP=Sri-Lanka_713926 BUDGET=5000` на commit `89c8e4f` (26.09) → `warnings: []`, validate 12/12 (ранее было предупреждение про рассинхрон порога метрик, снято подключением калибратора в `export`) |
 | Интерфейс оператора | `make app` | готово — React + MapLibre + FastAPI (D-050): карта Земли, слои S1/p/маска/неопределённость, 10 объектов, зоны с ценой и сроком, A/B/C с долей EL и адресуемой цены ошибки решения, чувствительность, выгрузка комплекта. `make app` на комплекте `Sri-Lanka_713926` (main e7f4389): бюджет 2 500 / 5 000 / 20 000 руб. → C из 1 / 2 / 6 зон, sha256 `flood_probability.tif`, `flood_mask.tif`, `uncertainty.tif` не меняются; test-чипы скрыты до `eval-test` (`pytest tests/app`) |
 | Отчёт QC данных | `make data-qc` | готово — `docs/verification/data-qc.md` из `interim/qc.csv` после `make data` |
 | Комплект и веса для релиза | `make release OUT=<комплект> [TAG=<тег>]` | готово — `run_<run_id>.zip`, `models_<commit>.zip`, `SHA256SUMS` (D-037, `pytest tests/test_release_bundle.py`); загрузка финального комплекта — после `eval-test` |
-| Перенос рецепта U-Net между событиями (LOEO) | `python -m floodvalue.model.unet.loeo` через `notebooks/loeo_colab.ipynb` (D-036) | прогнан `MODE=full` на commit `1eaf2cc9e572` (локально на RTX 4080 вместо Colab, 6 фолдов): IoU U-Net на невиданном событии 0,206–0,532, ΔIoU к порогу фолда значимо > 0 в 4 из 6 фолдов — `docs/verification/transfer-loeo.md` (таблица из отчёта прогона в #86, CSV/JSON фолдов не приложены); проводка — `pytest tests/model/test_loeo.py tests/model/test_loeo_notebook.py` |
+| Перенос рецепта U-Net между событиями (LOEO) | `python -m floodvalue.model.unet.loeo` через `notebooks/loeo_colab.ipynb` (D-036) | прогнан `MODE=full` на commit `1eaf2cc9e572` (локально на RTX 4080 вместо Colab, 6 фолдов): IoU U-Net на невиданном событии 0,206–0,532, ΔIoU к порогу фолда значимо > 0 в 4 из 6 фолдов — `docs/verification/transfer-loeo.md` (таблица из отчёта прогона в #86; CSV/JSON фолдов, лог и `COMMIT` — `docs/verification/loeo/`, PR #154); проводка — `pytest tests/model/test_loeo.py tests/model/test_loeo_notebook.py` |
 | Всё на готовых весах | `make all CHIP=<chip_id> BUDGET=<руб>` | готово — `make all CHIP=Sri-Lanka_713926 BUDGET=5000` собирает `outputs/Sri-Lanka_713926_5000_<commit>/` (predict уже калиброван) и проходит `validate` 12/12 (`app` в цепочку не входит; `calibrate` — отдельный шаг, записывает веса в `models/unet/calibration.json` заранее) |
 
 Статусы получены реальными запусками перечисленных команд в PR #60 (`.env` из
@@ -92,6 +92,8 @@ python3 scripts/download_sen1floods11.py            # HandLabeled + perm_water +
 эталон `tests/fixtures/good` (12/12); `make validate OUT=<комплект>` — конкретный
 собранный комплект. Чистый клон GitVerse `6fe66f0`: `uv sync --frozen && uv run --frozen
 pytest` → 473 passed, `make all` → validate 12/12 (`docs/verification/clean-clone-gitverse.md`).
+Число 473 относится к commit `6fe66f0` (прогон из чистого клона), 646 ниже — к `89c8e4f`
+(26.09); текущее число — вывод `make check` на нужном commit.
 На commit `89c8e4f` (26.09) `make check` → 646 passed, 4 skipped, `test-hooks.sh` OK,
 `validate` 12/12. Число тестов растёт с каждым PR.
 
@@ -101,7 +103,9 @@ pytest` → 473 passed, `make all` → validate 12/12 (`docs/verification/clean-
 показывает исходный S1, вероятность воды и маску, объекты с ожидаемым ущербом,
 кандидатные и выбранные зоны, сравнение A/B/C и сценарии чувствительности. Бюджет
 можно менять числом или ползунком: пересчитывается только план закупки, без запуска
-модели и изменения растров. Кнопка «Скачать комплект» выгружает архив результатов.
+модели и изменения растров. Цены зон — по сценарной ставке Б (`base_rate_status=scenario`, не тариф): подпись под
+бюджетом вместе со сроком решения `decision_deadline`. Кнопка «Выгрузить комплект» отдаёт файлы `make all` при
+бюджете, с которым комплект рассчитан (подпись рядом с кнопкой); для другого бюджета — `make all CHIP=… BUDGET=…`.
 Начальный экран — интерактивная Земля MapLibre. Маркеры и поиск показывают реальные
 локальные наблюдения Sen1Floods11; прямой выбор точки открывает её территорию на той
 же карте. Каталог читает даты из `data/interim/source_manifest_s1.json`, а границы и
@@ -118,7 +122,9 @@ validation, и только для чипов с готовым комплект
 В локальном режиме доступны географическая карта OpenFreeMap / OpenStreetMap и
 оптическая мозаика EOX Sentinel-2 cloudless за 2019 год, а отдельно — исходный S1,
 вероятность воды, маска, объекты и зоны. Внешняя оптика служит только контекстом:
-она не является снимком паводка за 2017 год и не входит в модель. Мозаика 2019 года
+она не является снимком паводка за 2017 год и не входит в модель. Обе подложки (OSM — текущая карта, EOX —
+мозаика 2019 года) появились позже даты события: они только для ориентира и не входят в p, ущерб и план
+(подпись в панели слоёв, D-050). Мозаика 2019 года
 распространяется на условиях CC BY-NC-SA 4.0; её использование ограничено
 некоммерческими сценариями ([условия EOX](https://cloudless.eox.at/documentation/license),
 [схема WMTS](https://cloudless.eox.at/documentation/usage)). Для обычной карты действуют
@@ -138,10 +144,35 @@ D-049); B сверх бюджета помечена контрфактичес�
 командой `make web` (Node.js нужен только для сборки).
 Для просмотра изменений во время разработки запустите `make app` в одном терминале
 и `cd web && npm install && npm run dev` в другом, затем откройте
-`http://127.0.0.1:5173`. Скриншоты: [Земля](docs/verification/ui-global.png),
-[оптическая подложка](docs/verification/ui-territory-optical.png),
-[вероятность воды](docs/verification/ui-territory-probability.png),
-[анализ](docs/verification/ui-analysis.png).
+`http://127.0.0.1:5173`. Скриншоты текущей сборки (headless Chromium, комплект `Sri-Lanka_713926`):
+[сцена](docs/verification/ui-scene.png), [анализ](docs/verification/ui-analysis.png).
+
+## Основной метод (критерий 3)
+
+Итоговый основной метод — **B: компактный U-Net, ансамбль 5 seed, только по Sentinel-1**
+(D-019; выбор B против кандидата A — пиксельного HGB — и baseline на dev: D-040,
+`docs/verification/method-selection.md`). Код — `src/floodvalue/model/unet/`, веса —
+`models/unet/` (LFS, sha256 в `config.json`).
+
+- **Вход** (`src/floodvalue/model/unet/features.py`, `models/unet/config.json`): только
+  `S1Hand` — VV, VH и VV−VH в dB (данные уже в dB, повторно не логарифмируются), клиппинг
+  VV [−40; 10], VH [−45; 0], VV−VH [−5; 25] dB, нормализация средним/σ по train, плюс канал
+  валидности (1 — оба канала конечны); NaN → 0 после нормализации и валидность 0, поэтому
+  нет данных ≠ «яркий сухой».
+- **Сеть**: U-Net, 4 уровня, базовая ширина 16, dropout 0,1, 1 942 721 параметр; потери —
+  маскированная BCE + 0,5·Dice (−1 и NaN вне потерь); кроп 256, rot90, флип, общий сдвиг
+  ±1 dB; эпоха каждого члена — по IoU@0,5 на dev.
+- **Ансамбль**: p = среднее вероятностей 5 членов (seed 20260925, 1, 2, 3, 4); dev IoU
+  0,584 против baseline 0,391 (`docs/verification/unet-metrics.md`).
+- **Калибровка и порог** (D-029, `models/unet/calibration.json`,
+  `docs/verification/calibration-val.md`): Platt на validation (вид выбран по log-loss вне
+  события), порог **0,37** — максимум IoU калиброванной p на validation; `predict`
+  применяет их автоматически. Validation: IoU 0,685 (`docs/verification/eval-validation.md`).
+- **Неопределённость** (D-039): энтропия калиброванной p (`uncertainty.tif`) и размах
+  членов ансамбля (`flood_probability_range.tif`).
+- **Режим S1-only**: по умолчанию `FLOODVALUE_METHOD=unet`; `predict` читает только
+  `S1Hand` (не `S2Hand`, `JRCWaterHand`, `LabelHand`) — grep и запуск без этих файлов,
+  `docs/verification/transfer-val.md` §4; запуск — раздел ниже.
 
 ## S1-only и выбор метода
 
