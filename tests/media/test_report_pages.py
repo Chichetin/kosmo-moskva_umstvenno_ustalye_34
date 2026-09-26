@@ -45,7 +45,7 @@ def test_safety_texts_stay(app):
 @pytest.mark.parametrize("path", PAGES)
 def test_script_ids_exist_in_page(path):
     html_name, js_name = PAGES[path]
-    html, js = (STATIC / html_name).read_text(), (STATIC / js_name).read_text()
+    html, js = (STATIC / html_name).read_text(encoding="utf-8"), (STATIC / js_name).read_text(encoding="utf-8")
     ids = set(re.findall(r'\$\("([\w-]+)"\)', js))
     fields = re.search(r"const fields = \[([^\]]*)\]", js)
     if fields:
@@ -60,7 +60,7 @@ def test_script_ids_exist_in_page(path):
 
 
 def test_page_fonts_are_served_with_licence(app):
-    css = (STATIC / "report.css").read_text()
+    css = (STATIC / "report.css").read_text(encoding="utf-8")
     fonts = re.findall(r"/media/static/fonts/([\w-]+\.woff2)", css)
     assert fonts
     for name in fonts:
