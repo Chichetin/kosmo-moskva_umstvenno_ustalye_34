@@ -1,4 +1,5 @@
-"""export: run_metadata.proxy_check from docs/verification/eval-<part>-summary.json (#107).
+"""export: run_metadata.proxy_check from docs/verification/eval-<part>-summary.json
+(test: test-eval-summary.json) (#107, #134).
 
 Export only reads the aggregated summary written by eval-test; it never reads labels or rasters.
 The numbers are taken only for the same chip, main method and threshold as the result set.
