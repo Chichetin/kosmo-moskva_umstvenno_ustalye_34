@@ -40,6 +40,7 @@ type Props = {
   onSelectMessage?: (message: SelectedMessage) => void;
   focus?: { lngLat: [number, number]; zoom: number; request: number } | null;
   newsOpen?: boolean;
+  assetLabel?: (asset: Feature) => string;
 };
 const empty: FeatureCollection = { type: "FeatureCollection", features: [] };
 const features = (items: Feature[]): FeatureCollection => ({
@@ -181,6 +182,7 @@ export default function MapPanel(props: Props) {
       uncertainty: !!scene && visibleLayers.uncertainty,
       boundary: !!scene,
       assets: !!scene && visibleLayers.assets,
+      "asset-label": !!scene && visibleLayers.assets,
       "asset-priority": !!scene && visibleLayers.assets,
       "asset-focus": !!scene && visibleLayers.assets,
       "plan-fill": !!scene,
@@ -246,7 +248,7 @@ export default function MapPanel(props: Props) {
   const updateScene = () => {
     const map = mapRef.current;
     if (!map || !map.getLayer("boundary")) return;
-    const { scene, session, plan } = current.current;
+    const { scene, session, plan, assetLabel } = current.current;
     for (const id of ["s1", "probability", "mask", "uncertainty"] as const) {
       if (map.getLayer(id)) map.removeLayer(id);
       if (map.getSource(id)) map.removeSource(id);
@@ -297,8 +299,15 @@ export default function MapPanel(props: Props) {
     (map.getSource("scene-extent") as GeoJSONSource | undefined)?.setData(
       features(outline),
     );
+    // each point is signed «A05 · Клиника»: the operator sees which object it is on the map
     (map.getSource("assets-data") as GeoJSONSource | undefined)?.setData(
-      features(session?.assets.features ?? []),
+      features((session?.assets.features ?? []).map((asset) => ({
+        ...asset,
+        properties: {
+          ...asset.properties,
+          label: `${String(asset.properties.asset_id)} · ${assetLabel ? assetLabel(asset) : String(asset.properties.asset_class)}`,
+        },
+      }))),
     );
     (map.getSource("candidate-data") as GeoJSONSource | undefined)?.setData(
       features(session?.candidates.features ?? []),
@@ -563,6 +572,24 @@ export default function MapPanel(props: Props) {
           "circle-color": "#f5f5f7",
           "circle-stroke-color": "#142439",
           "circle-stroke-width": 2,
+        },
+      });
+      map.addLayer({
+        id: "asset-label",
+        type: "symbol",
+        source: "assets-data",
+        layout: {
+          "text-field": ["get", "label"],
+          "text-font": ["Noto Sans Regular"],
+          "text-size": 12,
+          "text-anchor": "left",
+          "text-offset": [0.9, 0],
+          "text-optional": true,
+        },
+        paint: {
+          "text-color": "#f5f5f7",
+          "text-halo-color": "#0b0f12",
+          "text-halo-width": 1.6,
         },
       });
       map.addLayer({
