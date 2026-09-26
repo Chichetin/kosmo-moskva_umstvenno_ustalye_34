@@ -610,6 +610,17 @@ export default function App() {
             Новости
           </button>
         </nav>
+        {!mapVisible && (
+          // Screen-wide actions of the analysis page: next to the navigation, not in a scene's head.
+          <div className="top-analysis-actions">
+            <button onClick={() => (scene ? navigate("scene", scene.chip_id) : overview())}>
+              <ArrowLeft size={15} /> К карте
+            </button>
+            <button onClick={overview}>
+              <Globe2 size={15} /> Все наблюдения
+            </button>
+          </div>
+        )}
         <span className="top-spacer" />
         {activeSession && (
           <button
@@ -1107,15 +1118,6 @@ export default function App() {
         </div>
           <div className={`analysis-screen ${mapVisible ? "analysis-hidden" : ""}`} aria-hidden={mapVisible} inert={mapVisible}>
             <div className="analysis-shell">
-              {/* Screen-wide navigation: its own column, not part of the selected scene. */}
-              <nav className="analysis-rail" aria-label="Переход с экрана анализа">
-                <button onClick={() => (scene ? navigate("scene", scene.chip_id) : overview())}>
-                  <ArrowLeft size={17} /> К карте
-                </button>
-                <button onClick={overview}>
-                  <Globe2 size={17} /> Все наблюдения
-                </button>
-              </nav>
               <aside className="analysis-locations" aria-label="Локации для анализа">
                 <div className="analysis-locations-head">
                   <h2>Локации</h2>
