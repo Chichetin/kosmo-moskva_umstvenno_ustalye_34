@@ -77,8 +77,11 @@ loopback, сайт без `FLOODVALUE_MEDIA_ANALYST_TOKEN` не запускае
    `models/` — rsync в `.git/lfs/objects/`, затем `git lfs install --local && git lfs checkout`
    (`git status` должен быть чистым: иначе `run_metadata.json` получит `commit_dirty`).
    Обновление — `git bundle create upd.bundle <старый commit>..<ветка>`, `git fetch upd.bundle
-   <ветка> && git merge --ff-only FETCH_HEAD`.
-2. `uv sync --frozen`. Окружение — `~/.config/floodvalue/floodvalue.env` (права 600).
+   <ветка> && git merge --ff-only FETCH_HEAD`. Если менялись `models/`: сначала rsync новых
+   объектов LFS, `GIT_LFS_SKIP_SMUDGE=1` перед `merge`, затем `git lfs checkout`.
+2. `uv sync --frozen`. Окружение — `~/.config/floodvalue/floodvalue.env` (права 600) из
+   `deploy/floodvalue.env.example`; `FLOODVALUE_OUTPUT_DIR` и `FLOODVALUE_DATA_DIR` — абсолютные
+   пути в домашнем каталоге (`EnvironmentFile` не раскрывает `~` и `%h`).
 3. Юниты `deploy/user/*.service` → `~/.config/systemd/user/`, `systemctl --user enable --now
    floodvalue-site floodvalue-media-worker`; нужен `loginctl enable-linger`.
 4. Блоки из `deploy/Caddyfile` — в Caddyfile пользователя (или отдельным файлом через `import`),
@@ -91,22 +94,25 @@ loopback, сайт без `FLOODVALUE_MEDIA_ANALYST_TOKEN` не запускае
 
 - `raw/HandLabeled/S1Hand/*.tif` сцен каталога — train, dev, validation; из test — только
   демо-чип после `eval-test` (D-033);
-- `raw/Sen1Floods11_Metadata.geojson` (дата события для закупки и слоя «вода до события»);
-- `interim/source_manifest_s1.json` и `interim/qc.csv` без строк test (в нём доли воды по
-  разметке).
+- `raw/Sen1Floods11_Metadata.geojson` — слой «вода до события» (запасная копия есть в
+  `docs/sen1floods11/`);
+- `interim/source_manifest_s1.json` — целиком или без строк test, **кроме демо-чипа**: из него
+  берутся дата снимка для закупки и экспорта и превью S1; строки — имена файлов, хеши и даты,
+  разметки в них нет, события test каталог сам пропускает;
+- `interim/qc.csv` — без строк test (в нём доли воды по разметке).
 
 `LabelHand`, `S2Hand`, `JRCWaterHand` интерфейсу и этапам анализа не нужны (`metrics.csv` берётся
 из `docs/verification`). Готовый комплект сцены — те же этапы, что `make all`, без `data`:
 
 ```bash
-P=".venv/bin/python -m"; C=<chip_id>; B=5000
-$P floodvalue predict --chip $C --budget $B
-$P floodvalue.baseline.predict --chip $C --mask-only
-$P floodvalue prewater --chip $C
-$P floodvalue assets --chip $C --budget $B
-$P floodvalue procure --chip $C --budget $B
-$P floodvalue export --chip $C --budget $B
-$P floodvalue validate
+P() { .venv/bin/python -m "$@"; }; C=<chip_id>; B=5000
+P floodvalue predict --chip $C --budget $B
+P floodvalue.baseline.predict --chip $C --mask-only
+P floodvalue prewater --chip $C
+P floodvalue assets --chip $C --budget $B
+P floodvalue procure --chip $C --budget $B
+P floodvalue export --chip $C --budget $B
+P floodvalue validate
 ```
 
 `FLOODVALUE_APP_ALLOW_TEST` на публичном сервере не выставлять.

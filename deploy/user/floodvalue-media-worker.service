@@ -1,4 +1,5 @@
-# systemd --user variant of ../floodvalue-media-worker.service (D-062); install as floodvalue-site.service.
+# systemd --user variant of ../floodvalue-media-worker.service (D-062); install as floodvalue-media-worker.service,
+# the same way as floodvalue-site.service.
 [Unit]
 Description=FloodValue media worker
 After=network-online.target

@@ -10,9 +10,10 @@ flood.example.org {
 	reverse_proxy 127.0.0.1:8000
 }
 
-# Optional second domain for the eyewitness form only (D-062). Same process; everything that is not
-# the form (operator UI, analyst page, analyst API, operator map layer) answers 404 here, and `/`
-# redirects to the form. Replace report.example.org with the real domain or delete this block.
+# Optional second domain for the eyewitness form only (D-062). Same process; the operator UI, the
+# analyst page, the analyst API and the operator map layer answer 404 here, and `/` redirects to the
+# form. /media/static/* also serves the analyst's JS/CSS: static code, no data, public on the first
+# domain anyway. Replace report.example.org with the real domain or delete this block.
 report.example.org {
 	encode zstd gzip
 	request_body {
@@ -33,6 +34,9 @@ report.example.org {
 		reverse_proxy 127.0.0.1:8000
 	}
 	handle / {
+		redir * /report 302
+	}
+	handle /report/ {
 		redir * /report 302
 	}
 	handle {
