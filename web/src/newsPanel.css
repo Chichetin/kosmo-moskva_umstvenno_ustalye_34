@@ -46,5 +46,5 @@
 .news-foot { margin: 0; padding: 12px 22px 16px; border-top: 1px solid #ffffff14; color: #929da2; font-size: 12px; line-height: 1.4; }
 .news-foot a { color: #c9d4d8; }
 @media (max-width: 700px) {
-  .news-panel { top: 64px; right: 8px; left: 8px; bottom: 8px; width: auto; }
+  .news-panel { top: 105px; right: 8px; left: 8px; bottom: 8px; width: auto; }
 }

@@ -1,9 +1,9 @@
 /* MessagePanel.tsx: full content of a «Сообщения» point, in the language of the scene panel. */
 .message-panel {
-  position: absolute;
-  top: 80px;
-  right: 28px;
-  bottom: 92px; /* clear of the bottom switches «Карта / Спутник / Сообщения» */
+  position: fixed;
+  top: 140px;
+  right: 24px;
+  bottom: 92px; /* clear of the bottom «Карта / Спутник» switch */
   z-index: 8;
   width: 400px;
   overflow: auto;
@@ -16,6 +16,18 @@
   line-height: 1.45;
   scrollbar-width: thin;
   scrollbar-color: #ffffff28 transparent;
+}
+
+@media (min-width: 1100px) {
+  .message-panel { top: 150px; }
+}
+
+@media (min-width: 1800px) {
+  .message-panel { top: 165px; }
+}
+
+@media (min-width: 2300px) {
+  .message-panel { top: 182px; }
 }
 
 .mp-head {
@@ -302,12 +314,11 @@ a.mp-title:hover {
 
 @media (max-width: 700px) {
   .message-panel {
-    top: auto;
+    top: 106px;
     left: 12px;
     right: 12px;
     bottom: 12px;
     width: auto;
-    max-height: 62%;
     border-radius: var(--radius-panel);
   }
 }

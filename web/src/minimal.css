@@ -1398,14 +1398,22 @@ tbody tr.selected,
   .topbar-map .top-nav {
     top: 58px;
     left: 50%;
-    gap: 22px;
+    gap: 16px;
   }
   .topbar-analysis .top-nav {
-    margin-left: auto;
-    gap: 12px;
+    position: absolute;
+    top: 58px;
+    left: 50%;
+    margin-left: 0;
+    height: auto;
+    transform: translateX(-50%);
+    gap: 16px;
   }
   .top-nav button {
     font-size: 14px;
+  }
+  .top-nav .nav-count {
+    display: none;
   }
   .top-export {
     display: none;

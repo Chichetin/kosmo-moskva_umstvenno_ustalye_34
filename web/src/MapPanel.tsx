@@ -774,11 +774,23 @@ export default function MapPanel(props: Props) {
       mapRef.current?.getSource("observations") as GeoJSONSource | undefined
     )?.setData(markers(props.scenes));
   }, [props.scenes, ready]);
-  // «Приблизить к месту» from the message panel.
+  // Show the whole globe before travelling to a selected message.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !props.focus) return;
-    map.easeTo({ center: props.focus.lngLat, zoom: props.focus.zoom, duration: reducedMotion() ? 0 : 900 });
+    const { lngLat, zoom } = props.focus;
+    map.stop();
+    map.setPadding(noPadding());
+    if (reducedMotion()) {
+      map.jumpTo({ center: lngLat, zoom });
+      return;
+    }
+    const approach = () => {
+      map.flyTo({ center: lngLat, zoom, duration: 1700, curve: 1.15, essential: true });
+    };
+    map.once("moveend", approach);
+    map.easeTo({ zoom: minimumZoom(), duration: 750, easing: (t) => t * t * (3 - 2 * t) });
+    return () => { map.off("moveend", approach); };
   }, [props.focus?.request]);
   useEffect(() => {
     const map = mapRef.current;
@@ -856,7 +868,7 @@ export default function MapPanel(props: Props) {
   }, [props.active]);
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready || !props.active || props.scene ||
+    if (!map || !ready || !props.active || props.scene || props.focus ||
         (!props.overviewRequest && !lastScene.current)) return;
     lastScene.current = null;
     map.stop();
