@@ -1,4 +1,4 @@
-# Line endings (D-047, #133): LF in the index and in every checkout, including Windows clones
+# Line endings (D-048, #133): LF in the index and in every checkout, including Windows clones
 # with core.autocrlf=true — sha256 of models/unet/*.json in run_metadata.json must match and
 # *.sh / .githooks must not get CRLF. Not redundant with the LFS rules below — do not remove.
 * text=auto eol=lf

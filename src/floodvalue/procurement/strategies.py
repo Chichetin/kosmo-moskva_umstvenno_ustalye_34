@@ -18,10 +18,11 @@ from __future__ import annotations
 import copy
 import json
 from collections.abc import Iterable, Mapping
-from datetime import date
-from decimal import Decimal
+from datetime import date, datetime, timedelta
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
+from floodvalue.procurement import zones
 from floodvalue.procurement.pricing import basket_total, price_basket
 
 RULE_B = ("B: одна позиция W-CHIP (zone_kind=wide, основное предложение S1N — новая SAR 1 м) — "
@@ -249,8 +250,27 @@ def compute_plan(catalog: Mapping[str, Any], cov: Mapping[str, list[str]], eligi
 def with_base_rate(cfg: Mapping[str, Any], factor: Decimal) -> dict[str, Any]:
     new = copy.deepcopy(dict(cfg))
     rate = Decimal(str(cfg["base_rate"]["rub_per_km2"])) * factor
-    new["base_rate"]["rub_per_km2"] = str(rate.quantize(Decimal("0.01")))
+    new["base_rate"]["rub_per_km2"] = str(rate.quantize(Decimal("0.01"), ROUND_HALF_UP))
     return new
+
+
+def coverage_at(catalog: Mapping[str, Any], ok_ids: Iterable[str],
+                deadline: datetime) -> tuple[dict[str, list[str]], set[str]]:
+    """Охват и пригодные позиции при другом сроке решения — без перестройки каталога:
+    ``covers_asset_ids`` позиции (``covers`` при построении) ∩ оценённые объекты, если
+    :func:`zones.exclusion_reason` при этом сроке пуста (event_observation, available_at ≤
+    срока, облачность подтверждена)."""
+    ok = set(ok_ids)
+    cov: dict[str, list[str]] = {}
+    eligible: set[str] = set()
+    for f in catalog["features"]:
+        p = f["properties"]
+        if zones.exclusion_reason(p, deadline) is None:
+            eligible.add(p["candidate_id"])
+            cov[p["candidate_id"]] = sorted(a for a in p["covers_asset_ids"] if a in ok)
+        else:
+            cov[p["candidate_id"]] = []
+    return cov, eligible
 
 
 def sensitivity(catalog: Mapping[str, Any], cov: Mapping[str, list[str]], eligible: set[str],
@@ -258,60 +278,94 @@ def sensitivity(catalog: Mapping[str, Any], cov: Mapping[str, list[str]], eligib
                 as_of: date, budgets: Iterable[Decimal],
                 rate_factors: Iterable[Decimal], *, other_cfg: Mapping[str, Any],
                 required: Iterable[str] = (),
-                social_ids: Iterable[str] = ()) -> list[dict[str, Any]]:
-    """Строки чувствительности плана: C при разных бюджетах; B и C при разной ставке Б;
-    C с включённым социальным ограничением (если заданы ``social_ids``)."""
+                social_ids: Iterable[str] = (),
+                decision_at: datetime | None = None,
+                deadline_hours: Iterable[int] = ()) -> list[dict[str, Any]]:
+    """Строки чувствительности плана (B и C на каждом сценарии): бюджеты ``budgets``;
+    ставка Б × ``rate_factors`` (сценарная); срок решения ``decision_at`` + ``deadline_hours``
+    (пересчёт пригодности позиций, :func:`coverage_at`); социальное ограничение C вкл/выкл.
+    Интерпретация строки — изменение корзины относительно базы (текущие бюджет, ставка, срок),
+    стоимость данных и решения, уникально покрытый EL, статус остаточной неопределённости."""
     kw = {"other_cfg": other_cfg, "required": list(required)}
+    budget = Decimal(str(budget)).quantize(Decimal("0.01"))
     base = compute_plan(catalog, cov, eligible, loss, budget, cfg, as_of, **kw)
-    base_c = base["plans"]["C"]
     rows = []
 
-    def unc_note(c):
-        return (f"остаточная неопределённость {c['uncertainty_status']} "
-                f"{'' if c['residual_uncertainty'] is None else round(c['residual_uncertainty'], 3)}"
-                f" (сценарий: без новых наблюдений фактическое снижение не заявляется)")
+    def unc_note(c, ids):
+        val = '' if c['residual_uncertainty'] is None else round(c['residual_uncertainty'], 3)
+        if not ids:  # nothing bought: the residual is the initial one, as for A
+            return (f"остаточная неопределённость {val}: закупки нет — неопределённость исходная "
+                    f"(как A, baseline) (без новых наблюдений фактическое снижение не заявляется)")
+        return (f"остаточная неопределённость {c['uncertainty_status']} {val}"
+                f" (без новых наблюдений фактическое снижение не заявляется)")
 
-    def row(sid, strategy, changed, res, note):
+    def row(sid, strategy, changed, res, head, tail=""):
         cmp_ = next(r for r in res["comparison"] if r["strategy"] == strategy)
-        ids = res["plans"][strategy]
+        base_cmp = next(r for r in base["comparison"] if r["strategy"] == strategy)
+        ids, base_ids = res["plans"][strategy], base["plans"][strategy]
         feasible = cmp_["budget_feasible"]
         status = ("counterfactual_over_budget" if not feasible
                   else "empty_plan" if not ids else "within_budget")
+        add = [c for c in ids if c not in base_ids]
+        rem = [c for c in base_ids if c not in ids]
+        d_el = cmp_["covered_expected_loss_rub"] - base_cmp["covered_expected_loss_rub"]
+        fit = (f"данные {cmp_['data_cost_rub']} руб. > бюджета {cmp_['budget_rub']} — "
+               f"контрфактическая (сверх бюджета не закупается)" if not feasible else
+               f"данные {cmp_['data_cost_rub']} руб. ≤ бюджета {cmp_['budget_rub']}")
+        text = (f"{head}: {strategy} [{', '.join(ids) or 'пусто'}], относительно базы "
+                f"+[{', '.join(add)}] −[{', '.join(rem)}]; {fit}; decision_cost "
+                f"{cmp_['decision_cost_rub']} руб.; уникально покрытый EL "
+                f"{cmp_['covered_expected_loss_rub']:.2f} руб. ({d_el:+.2f} к базе); "
+                f"{unc_note(cmp_, ids)}{tail}")
         rows.append({"scenario_id": sid, "strategy": strategy,
                      "changed_inputs_json": json.dumps(changed, ensure_ascii=False, sort_keys=True),
                      "decision_cost_rub": cmp_["decision_cost_rub"],
                      "covered_expected_loss_rub": cmp_["covered_expected_loss_rub"],
-                     "result_status": status,
-                     "interpretation": note(ids, cmp_)})
+                     "result_status": status, "interpretation": text})
 
-    def diff(ids):
-        add = [c for c in ids if c not in base_c]
-        rem = [c for c in base_c if c not in ids]
-        return (f"состав C [{', '.join(ids) or 'пусто'}]; относительно базы +[{', '.join(add)}] "
-                f"−[{', '.join(rem)}]")
-
+    same_map = "; p, маска, порог и портфель не менялись"
     for b in budgets:
         b = Decimal(str(b)).quantize(Decimal("0.01"))
         res = compute_plan(catalog, cov, eligible, loss, b, cfg, as_of, **kw)
-        row(f"budget_{b}", "C", {"budget_rub": float(b)}, res,
-            lambda ids, c, b=b: (f"{diff(ids)}; данные {c['data_cost_rub']} руб. ≤ бюджета {b}; "
-                            f"уникальный охват EL {c['covered_expected_loss_rub']:.2f} руб.; "
-                            f"{unc_note(c)}; p, маска, порог и портфель не менялись"))
+        for s in "CB":
+            row(f"budget_{b}", s, {"budget_rub": float(b)}, res,
+                f"бюджет {b} руб." + (" (состав B от бюджета не зависит)" if s == "B" else ""),
+                same_map)
     for f in rate_factors:
         f = Decimal(str(f))
         cfg_f = with_base_rate(cfg, f)
         res = compute_plan(catalog, cov, eligible, loss, budget, cfg_f, as_of, **kw)
-        changed = {"base_rate_rub_km2": float(cfg_f["base_rate"]["rub_per_km2"]),
-                   "base_rate_factor": float(f), "base_rate_status": "scenario"}
-        row(f"rate_x{f}", "C", changed, res,
-            lambda ids, c, f=f: (f"ставка Б × {f}: {diff(ids)}; данные {c['data_cost_rub']} руб. при "
-                            f"бюджете {budget}; охват EL {c['covered_expected_loss_rub']:.2f} руб.; "
-                            f"{unc_note(c)}"))
-        row(f"rate_x{f}", "B", changed, res,
-            lambda ids, c, f=f: (f"ставка Б × {f}: B [{', '.join(ids) or 'пусто'}] стоит "
-                            f"{c['data_cost_rub']} руб. при бюджете {budget} — "
-                            + ("в бюджете" if c["budget_feasible"] else "контрфактическая")
-                            + f"; {unc_note(c)}"))
+        rate = cfg_f["base_rate"]["rub_per_km2"]
+        changed = {"base_rate_rub_km2": float(rate), "base_rate_factor": float(f),
+                   "base_rate_status": "scenario"}
+        for s in "CB":
+            row(f"rate_x{f}", s, changed, res,
+                f"ставка Б × {f} = {rate} руб./км² (сценарная, base_rate_status=scenario; "
+                f"бюджет {budget} руб.)")
+    if decision_at is not None:
+        ok_ids = assessed(loss)
+        for h in deadline_hours:
+            deadline = decision_at + timedelta(hours=int(h))
+            cov_d, elig_d = coverage_at(catalog, ok_ids, deadline)
+            res = compute_plan(catalog, cov_d, elig_d, loss, budget, cfg, as_of, **kw)
+            changed = {"decision_deadline": deadline.isoformat(),
+                       "deadline_hours_after_decision": int(h)}
+            cloudy = sum(zones.exclusion_reason(f["properties"], deadline) == zones.CLOUD_NOTE
+                         for f in catalog["features"])
+            head = (f"срок решения decision_at + {int(h)} ч = {deadline.isoformat()} (сроки "
+                    f"доступности предложений сценарные, D-038 — вывод о сроке следует из этого "
+                    f"допущения): пригодных позиций {len(elig_d)} (available_at ≤ срока"
+                    + (", как в базе" if elig_d == set(eligible) else "")
+                    + (f"; ещё {cloudy} доступны к сроку, но охвата не дают (облачность не "
+                       f"подтверждена)" if cloudy else "") + ")")
+            for s in "CB":
+                extra = ""
+                if s == "B" and not res["plans"]["B"]:
+                    wide = next((f["properties"].get("available_at") for f in catalog["features"]
+                                 if f["properties"]["candidate_id"] == "W-CHIP"), None)
+                    extra = (f"; правило B (W-CHIP) к сроку не исполнимо — W-CHIP доступна "
+                             f"{wide or 'срок не известен'}")
+                row(f"deadline_+{int(h)}h", s, changed, res, head + extra, same_map)
     social_ids = sorted(social_ids)
     if social_ids and not list(required):
         res = compute_plan(catalog, cov, eligible, loss, budget, cfg, as_of,
@@ -319,17 +373,11 @@ def sensitivity(catalog: Mapping[str, Any], cov: Mapping[str, list[str]], eligib
         sc = res["social_constraint"]
         row("social_constraint_on", "C",
             {"social_constraint": True, "social_asset_ids": social_ids}, res,
-            lambda ids, c: (f"социальное ограничение включено (сначала покрыть "
-                            f"{', '.join(social_ids)}): {diff(ids)}; выполнено: "
-                            f"{'да' if sc.get('satisfied') else 'нет'}; данные "
-                            f"{c['data_cost_rub']} руб. при бюджете {budget}; охват EL "
-                            f"{c['covered_expected_loss_rub']:.2f} руб.; {unc_note(c)}"))
+            f"социальное ограничение включено (сначала покрыть {', '.join(social_ids)}; "
+            f"выполнено: {'да' if sc.get('satisfied') else 'нет'})")
     elif list(required):  # constraint enabled in config: show the plan without it
         res = compute_plan(catalog, cov, eligible, loss, budget, cfg, as_of,
                            other_cfg=other_cfg, required=[])
         row("social_constraint_off", "C", {"social_constraint": False}, res,
-            lambda ids, c: (f"социальное ограничение выключено (в конфиге включено): "
-                            f"{diff(ids)}; данные {c['data_cost_rub']} руб. при бюджете "
-                            f"{budget}; охват EL {c['covered_expected_loss_rub']:.2f} руб.; "
-                            f"{unc_note(c)}"))
+            "социальное ограничение выключено (в конфиге включено)")
     return rows
