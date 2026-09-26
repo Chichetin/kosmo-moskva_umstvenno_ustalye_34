@@ -676,7 +676,7 @@ export default function App() {
       {messagesOpen && <MessagesList messages={messages} onClose={() => setMessagesOpen(false)} onSelect={selectMessageFromList} />}
       <main className="workspace">
         <div
-          className={`map-screen ${mapVisible ? "" : "map-hidden"} ${scene ? "scene-mode" : ""} ${baseMap === "optical" ? "optical-mode" : ""}`}
+          className={`map-screen ${mapVisible ? "" : "map-hidden"} ${scene ? "scene-mode" : ""} ${baseMap === "optical" ? "optical-mode" : ""} ${scene && panelOpen && message ? "tiled" : ""}`}
           aria-hidden={!mapVisible}
           inert={!mapVisible}
         >
