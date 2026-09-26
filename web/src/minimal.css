@@ -1,13 +1,14 @@
 @font-face {
-  font-family: "Onest";
-  src: url("/fonts/Onest-Variable.woff2") format("woff2");
+  font-family: "IBM Plex Sans";
+  src: url("/fonts/IBMPlexSans-Variable.woff2") format("woff2");
   font-style: normal;
-  font-weight: 100 900;
+  font-weight: 100 700;
+  font-stretch: 75% 100%;
   font-display: swap;
 }
 
 :root {
-  font-family: "Onest", system-ui, sans-serif;
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
   color: #e9edef;
   background: #08090b;
   font-synthesis: none;
@@ -374,7 +375,7 @@ input:focus-visible,
   gap: 6px;
   margin-top: 5px;
   color: #96a2a8;
-  font: 13px/1.4 "Onest", system-ui, sans-serif;
+  font: 13px/1.4 "IBM Plex Sans", system-ui, sans-serif;
 }
 
 .scene-results small code {
@@ -571,7 +572,7 @@ input:focus-visible,
 
 .context-heading small {
   color: #9eaaaf;
-  font: 13px "Onest", system-ui, sans-serif;
+  font: 13px "IBM Plex Sans", system-ui, sans-serif;
   font-weight: 600;
   letter-spacing: 0.07em;
 }
@@ -743,7 +744,7 @@ input:focus-visible,
 
 .analysis-head span {
   color: #93a0a5;
-  font: 11px "Onest", system-ui, sans-serif;
+  font: 11px "IBM Plex Sans", system-ui, sans-serif;
   font-weight: 600;
   letter-spacing: 0.08em;
 }
@@ -1570,4 +1571,22 @@ tbody tr.selected,
   .context-panel, .basemap-switch, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
     zoom: 1.5;
   }
+}
+
+/* Logo: larger and heavier than the navigation. */
+.brand {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  gap: 12px;
+}
+
+.brand .brand-mark {
+  width: 26px;
+  height: 26px;
+}
+
+@media (max-width: 700px) {
+  .brand { font-size: 19px; }
+  .brand .brand-mark { width: 20px; height: 20px; }
 }
