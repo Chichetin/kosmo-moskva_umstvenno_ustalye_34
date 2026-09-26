@@ -40,8 +40,11 @@ class FakeArchive:
     ArchiveUnavailable = stac.ArchiveUnavailable
     acquisitions = staticmethod(stac.acquisitions)
 
-    def __init__(self, n_passes=6, fail_search=False, fail_reads=0):
+    def __init__(self, n_passes=6, fail_search=False, fail_reads=0, read_error=None,
+                 search_error=None):
         self.n, self.fail_search, self.fail_reads = n_passes, fail_search, fail_reads
+        self.read_error = read_error or stac.ArchiveUnavailable("broken read")
+        self.search_error = search_error
         self.searched = None
 
     def collection_license(self):
@@ -53,6 +56,8 @@ class FakeArchive:
     def search(self, bbox, first, last):
         if self.fail_search:
             raise stac.ArchiveUnavailable("HTTP 429")
+        if self.search_error:
+            raise self.search_error
         self.searched = (bbox, first, last)
         return [{"id": f"S1A_{i}", "properties": {"datetime": f"2017-03-{10 + i:02d}T00:25:00Z",
                                                   "platform": "SENTINEL-1A",
@@ -67,7 +72,7 @@ class FakeArchive:
     def read_vh(self, href, token, transform, shape):
         if self.fail_reads:
             self.fail_reads -= 1
-            raise stac.ArchiveUnavailable("broken read")
+            raise self.read_error
         g = np.full(shape, 0.1, dtype=np.float32)  # -10 dB: dry
         g[:, : shape[1] // 2] = 0.001  # -30 dB: water
         return g
@@ -167,3 +172,26 @@ def test_sas_token_and_license_are_fetched_once_per_process(monkeypatch):
     assert [stac.sas_token() for _ in range(5)] == ["sig=1"] * 5
     assert stac.collection_license() == stac.collection_license() == "CC-BY-4.0"
     assert calls == [stac.SAS_URL, stac.COLLECTION_URL]
+
+
+def test_any_archive_failure_is_unavailable_not_a_crash(data):
+    # not only ArchiveUnavailable: a malformed SAS answer (KeyError) must not break make all
+    meta = pw.build(CHIP, data / "out", archive=FakeArchive(search_error=KeyError("token")))
+    assert meta["status"] == "unavailable" and "KeyError" in meta["warning"]
+
+
+def test_scene_with_gdal_or_value_error_is_skipped(data):
+    meta = pw.build(CHIP, data / "out",
+                    archive=FakeArchive(n_passes=7, fail_reads=1, read_error=ValueError("CPLE")))
+    assert meta["status"] == "ok" and len(meta["failed_scenes"]) == 1
+
+
+def test_deadline_stops_reading_and_reports_it(data):
+    meta = pw.build(CHIP, data / "out", archive=FakeArchive(), deadline_s=-1)
+    assert meta["status"] == "insufficient" and meta["scenes"] == []
+    assert "лимит шага" in meta["warning"]
+
+
+def test_scenes_record_missing_publication_time(data):
+    meta = pw.build(CHIP, data / "out", archive=FakeArchive())
+    assert all(s["published_at"] is None and s["published_at_note"] for s in meta["scenes"])

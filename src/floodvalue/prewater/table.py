@@ -65,7 +65,8 @@ def render_md(groups: dict[str, dict]) -> str:
         f"Слой `pre_event_water` — вода (VH ≤ {core.VH_WATER_DB} dB, D-021) не менее чем в "
         f"{core.MIN_WATER_SHARE:.0%} наблюдений за {core.WINDOW_DAYS} сут, окно кончается за "
         f"{core.GUARD_DAYS} сут до даты S1 события; < {core.N_MIN_SCENES} сцен — `insufficient`. "
-        "Параметры зафиксированы до таблицы и по ней не подбирались. Test не читался.",
+        "Параметры зафиксированы до таблицы и по ней не подбирались. Test не читался; "
+        "dev (USA) в таблицу не входит — по условию #149 только train и validation.",
         "",
         "Команда: `uv run --frozen python -m floodvalue.prewater.table`. "
         "Построчно по чипам — `prewater-chips.csv`, сводка — `prewater-summary.json`.",
@@ -90,7 +91,7 @@ def render_md(groups: dict[str, dict]) -> str:
         "- **IoU с JRC** — только диагностика: JRC набора, вероятно, собран и по данным после "
         "событий 2016–2018 (CLAUDE.md), поэтому он не эталон и не вход.",
         "",
-        "Ограничения слоя — `pre_event_water.json` (`caveats`) и D-051.",
+        "Ограничения слоя — `pre_event_water.json` (`caveats`) и D-053.",
         "",
     ]
     return "\n".join(lines)

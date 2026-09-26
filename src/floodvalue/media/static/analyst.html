@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Сообщения о паводках — FloodValue</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+<link rel="stylesheet" href="/media/static/media.css">
+</head>
+<body>
+<header class="topbar">
+  <span class="brand">FloodValue<small>сообщения о паводках · отдельный модуль до подключения к глобусу</small></span>
+</header>
+
+<section id="login" class="report hidden">
+  <form method="post" action="/media/login" class="done">
+    <p class="m0">Вход аналитика</p>
+    <label for="token">Токен (FLOODVALUE_MEDIA_ANALYST_TOKEN)</label>
+    <input type="password" id="token" name="token" autocomplete="current-password" required>
+    <div class="toolbar"><button class="btn primary" type="submit">Войти</button></div>
+  </form>
+  <p id="login-note" class="muted small"></p>
+</section>
+
+<div id="app" class="layout hidden">
+  <aside class="side">
+    <section class="panel" aria-labelledby="h-sources">
+      <h2 id="h-sources">Источники</h2>
+      <div id="sources"></div>
+      <div class="toolbar">
+        <button class="btn small" id="ingest">Запустить сбор сейчас</button>
+        <label class="checks"><span><input type="checkbox" id="monitoring"> мониторинг по расписанию</span></label>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-reports">
+      <h2 id="h-reports">Новые обращения очевидцев <span id="reports-count" class="tag"></span></h2>
+      <p class="muted small m0">Не опубликованы. Попадают в события только после решения аналитика.</p>
+      <ul class="list" id="reports"></ul>
+    </section>
+
+    <section class="panel" aria-labelledby="h-events">
+      <h2 id="h-events">Сообщения</h2>
+      <div class="filters">
+        <label>Тип источника<select id="f-origin"><option value="">все</option><option value="news">СМИ</option><option value="bulletin">сводки</option><option value="citizen">очевидцы</option></select></label>
+        <label>Тип сообщения<select id="f-type"><option value="">все, кроме исторических</option><option value="occurred">произошло</option><option value="forecast">прогноз</option><option value="warning">предупреждение</option><option value="negation">отрицание</option><option value="historical">исторический</option><option value="unclear">неясно</option></select></label>
+        <label>Состояние<select id="f-state"><option value="">все</option><option value="needs_geo">нужно место</option><option value="ready">готово к проверке</option><option value="reviewed">проверено</option><option value="dismissed">отклонено</option></select></label>
+        <label>С даты<input type="datetime-local" id="f-since"></label>
+      </div>
+      <div class="checks">
+        <label><input type="checkbox" id="f-demo" checked> показывать ДЕМО</label>
+        <label><input type="checkbox" id="layer-reports"> слой «Новые обращения»</label>
+        <label><input type="checkbox" id="layer-scenes" checked> контуры снимков</label>
+      </div>
+      <p class="section-title">На карте</p>
+      <ul class="list" id="events"></ul>
+      <p class="section-title">Без точного места — нужно уточнить</p>
+      <ul class="list" id="events-nogeo"></ul>
+    </section>
+  </aside>
+
+  <main class="main">
+    <div id="map" aria-label="Карта сообщений"></div>
+    <section class="card" id="card" aria-live="polite">
+      <p class="muted">Выберите сообщение в списке или на карте.</p>
+    </section>
+  </main>
+</div>
+<div id="toast" class="toast hidden" role="status"></div>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script src="/media/static/analyst.js"></script>
+</body>
+</html>

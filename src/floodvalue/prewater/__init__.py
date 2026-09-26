@@ -10,5 +10,5 @@ VH <= -23 dB (D-021) in at least half of its observations. The layer
 
 is written next to the run's rasters and only carried into the set by export as optional
 files. It is never an input of p, the mask, thresholds, EL or the procurement plan
-(tests/prewater/test_firewall.py): the product stays a water map (D-007).
+(tests/prewater/test_prewater_firewall.py): the product stays a water map (D-007).
 """

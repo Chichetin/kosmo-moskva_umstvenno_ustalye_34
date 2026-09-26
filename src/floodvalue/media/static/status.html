@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Статус обращения — FloodValue</title>
+<link rel="stylesheet" href="/media/static/media.css">
+</head>
+<body>
+<header class="topbar"><span class="brand">FloodValue<small>статус обращения</small></span></header>
+<main class="report">
+  <section class="done" aria-live="polite">
+    <p id="state" class="muted m0">Загружаем…</p>
+    <p class="num" id="number"></p>
+    <dl class="kv hidden" id="details">
+      <dt>Отправлено</dt><dd id="submitted"></dd>
+      <dt>Статус</dt><dd id="status"></dd>
+    </dl>
+    <p class="muted small">«Принято в работу» значит, что аналитик учтёт сообщение при проверке. Это не подтверждение затопления спутником и не заказ съёмки.</p>
+  </section>
+  <p class="mt18"><a href="/report">Отправить новое сообщение</a></p>
+</main>
+<script src="/media/static/status.js"></script>
+</body>
+</html>

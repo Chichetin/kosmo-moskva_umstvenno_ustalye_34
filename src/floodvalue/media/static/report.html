@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Сообщение о подтоплении — FloodValue</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+<link rel="stylesheet" href="/media/static/media.css">
+</head>
+<body>
+<header class="topbar"><span class="brand">FloodValue<small>сообщение о подтоплении</small></span></header>
+<main class="report">
+  <div class="notice" role="note">
+    <p class="mb6"><strong>Это не вызов экстренных служб.</strong> Если есть угроза жизни — звоните 112.</p>
+    <p class="mb6">Сообщение поступит на проверку аналитику. Отправка не подтверждает событие и не заказывает спутниковую съёмку автоматически.</p>
+    <p class="m0">Не подходите к воде ради фотографии. Регистрация, имя и телефон не нужны.</p>
+  </div>
+
+  <p id="closed" class="notice hidden" role="alert">Приём сообщений через интернет сейчас не открыт.</p>
+
+  <form id="form" novalidate>
+    <fieldset class="step">
+      <legend>1. Что произошло?</legend>
+      <div class="chips" id="categories" role="radiogroup" aria-label="Тип сообщения"></div>
+      <div class="error" id="err-category" aria-live="polite"></div>
+      <label for="description">Опишите, что вы видите</label>
+      <textarea id="description" name="description" maxlength="2000" required
+        placeholder="Например: вода подошла к домам на улице Речной, дорога к мосту залита"></textarea>
+      <div class="error" id="err-description" aria-live="polite"></div>
+    </fieldset>
+
+    <fieldset class="step">
+      <legend>2. Где?</legend>
+      <p class="muted small mt2">Отметьте на карте место, где вы видели воду. Это может быть не там, где вы сейчас.</p>
+      <div id="minimap" class="minimap" role="application" aria-label="Карта: нажмите, чтобы отметить место"></div>
+      <p id="map-fallback" class="muted small hidden">Карта не загрузилась — укажите название места или координаты.</p>
+      <div class="toolbar">
+        <button type="button" class="btn small" id="geolocate">Использовать моё местоположение</button>
+        <button type="button" class="btn small" id="clear-point">Убрать точку</button>
+      </div>
+      <label for="place_text">Название места (населённый пункт, улица, ориентир)</label>
+      <input type="text" id="place_text" name="place_text" maxlength="200" autocomplete="off">
+      <details>
+        <summary class="muted small summary">Ввести координаты вручную</summary>
+        <div class="row">
+          <div><label for="lat">Широта</label><input type="number" id="lat" name="lat" step="any" min="-90" max="90" inputmode="decimal"></div>
+          <div><label for="lon">Долгота</label><input type="number" id="lon" name="lon" step="any" min="-180" max="180" inputmode="decimal"></div>
+        </div>
+      </details>
+      <label for="location_precision">Насколько точно отмечено место</label>
+      <select id="location_precision" name="location_precision">
+        <option value="point">Точно в этой точке</option>
+        <option value="street">Примерно — улица</option>
+        <option value="locality">Примерно — населённый пункт</option>
+        <option value="district">Примерно — район</option>
+        <option value="unknown">Не уверен</option>
+      </select>
+      <div class="error" id="err-place" aria-live="polite"></div>
+    </fieldset>
+
+    <fieldset class="step">
+      <legend>3. Когда заметили?</legend>
+      <label for="observed_local">Дата и время <span id="tz" class="muted"></span></label>
+      <input type="datetime-local" id="observed_local">
+      <label for="observed_precision">Точность</label>
+      <select id="observed_precision" name="observed_precision">
+        <option value="hour">Примерно в это время (± час)</option>
+        <option value="day">В этот день</option>
+        <option value="several_days">В последние несколько дней</option>
+        <option value="unknown">Не помню</option>
+      </select>
+      <div class="error" id="err-time" aria-live="polite"></div>
+    </fieldset>
+
+    <fieldset class="step">
+      <legend>4. Фото <span class="muted small">(необязательно)</span></legend>
+      <input type="file" id="photos" name="photos" accept="image/jpeg,image/png,image/webp" multiple>
+      <p class="muted small" id="photo-hint"></p>
+      <div class="error" id="err-photos" aria-live="polite"></div>
+    </fieldset>
+
+    <div class="actions">
+      <div class="error" id="err-form" role="alert"></div>
+      <button type="submit" class="btn primary" id="submit">Отправить сообщение</button>
+      <p class="muted small m0">Сообщение хранится ограниченный срок и видно только аналитикам. Фото очищаются от метаданных (в том числе геотегов).</p>
+    </div>
+  </form>
+
+  <section id="done" class="done hidden" aria-live="polite" tabindex="-1">
+    <p class="muted m0">Сообщение принято на проверку. Номер обращения:</p>
+    <p class="num" id="done-number"></p>
+    <p>Статус можно посмотреть по личной ссылке — сохраните её, другой возможности её получить нет:</p>
+    <p><a id="done-link" href="#" rel="noopener noreferrer">Открыть статус обращения</a></p>
+    <p class="muted small">Отправка не означает подтверждение события и не заказывает спутниковую съёмку. Аналитик сопоставит сообщение с другими источниками.</p>
+    <button type="button" class="btn" id="another">Отправить ещё одно сообщение</button>
+  </section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script src="/media/static/report.js"></script>
+</body>
+</html>

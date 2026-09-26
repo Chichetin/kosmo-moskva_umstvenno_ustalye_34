@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from datetime import date
 from pathlib import Path
 
@@ -22,7 +23,7 @@ from floodvalue.data.io import layer_path, parse_chip_id, raw_dir
 from floodvalue.data.split import METADATA_NAME
 from floodvalue.paths import REPO_ROOT, output_dir
 from floodvalue.prewater import core, stac
-from floodvalue.prewater.stac import COLLECTION, COLLECTION_URL, ArchiveUnavailable
+from floodvalue.prewater.stac import COLLECTION, COLLECTION_URL
 
 METADATA = "Sen1Floods11_Metadata.geojson"
 METADATA_FALLBACK = REPO_ROOT / "docs" / "sen1floods11" / METADATA
@@ -30,6 +31,9 @@ PERM_FILE = "pre_event_water.tif"
 META_FILE = "pre_event_water.json"
 NEW_WATER_FILE = "new_water_probability.tif"
 P_FILE = "flood_probability.tif"
+# Upper bound of the whole step: the jury runs `make all` itself and a hanging network must not
+# hang it. Past the deadline no more scenes are read; too few scenes -> `unavailable`.
+DEADLINE_S = 300
 
 ROLE = "pre_event_context"
 MEANING = ("вода на снимках Sentinel-1 до события (окно архива до даты S1 чипа); "
@@ -39,7 +43,8 @@ CAVEATS = [
     "дата начала паводка в наборе нет: окно кончается за фиксированный зазор до даты S1 — "
     "паводок, начавшийся раньше зазора, попадёт в «воду до события»",
     "сезонная вода: окно — другой сезон, чем событие; водоём, пересохший к окну, станет «новым»",
-    "сухой песок и пустыни (Pakistan) тоже тёмные в VH — ложная «вода до события»",
+    "сухой песок и аридные равнины тёмные в VH — ложная «вода до события» (Somalia: "
+    "P(метка=1 | до) 0,021 на train, docs/verification/prewater/prewater-table.md)",
     "мало сцен в 2016 г. (один спутник): статус insufficient при < N_min сцен",
     "gamma0 RTC Planetary Computer против sigma0 GRD Sen1Floods11: порог D-021 перенесён без "
     "подбора, разница радиометрии не учтена",
@@ -93,11 +98,13 @@ def source_entry(chip_id: str, scenes: list[dict], license_: str, s1: date, acce
     }
 
 
-def build(chip_id: str, out: Path, *, archive=None, today: date | None = None) -> dict:
+def build(chip_id: str, out: Path, *, archive=None, today: date | None = None,
+          deadline_s: float = DEADLINE_S) -> dict:
     """Compute and write the layer for `chip_id` into `out`; returns the JSON written.
 
     `archive` — the STAC module or a stand-in with the same functions (tests)."""
     archive = archive or stac
+    t_end = time.monotonic() + deadline_s
     event_id, _ = parse_chip_id(chip_id)
     s1 = s1_date_of(event_id)
     first, last = core.pre_event_window(s1)
@@ -124,6 +131,10 @@ def build(chip_id: str, out: Path, *, archive=None, today: date | None = None) -
         token = archive.sas_token()
         stack, scenes, failed = [], [], []
         for group in groups:
+            if time.monotonic() > t_end:  # keep what was read; too few -> insufficient below
+                meta["deadline_hit"] = (f"лимит шага {deadline_s:.0f} с: прочитано сцен "
+                                        f"{len(scenes)} из {len(groups)}")
+                break
             vh = np.full((grid["height"], grid["width"]), np.nan, dtype=np.float32)
             try:
                 for it in group:
@@ -131,7 +142,7 @@ def build(chip_id: str, out: Path, *, archive=None, today: date | None = None) -
                         it["assets"]["vh"]["href"], token, grid["transform"],
                         (grid["height"], grid["width"])))
                     vh = np.where(np.isfinite(vh), vh, part)
-            except ArchiveUnavailable as exc:
+            except Exception as exc:  # noqa: BLE001 — unreadable scene (HTTP, GDAL, decoding)
                 failed.append({"id": [it["id"] for it in group], "error": str(exc)[:300]})
                 continue  # one unreadable scene is a missing observation, not a failed layer
             if not np.isfinite(vh).any():
@@ -142,16 +153,23 @@ def build(chip_id: str, out: Path, *, archive=None, today: date | None = None) -
                            "datetime": p0["datetime"], "platform": p0.get("platform"),
                            "orbit_state": p0.get("sat:orbit_state"),
                            "relative_orbit": p0.get("sat:relative_orbit"),
+                           "orbit_source": p0.get("s1:orbit_source"),
+                           "processing_level": p0.get("s1:processing_level"),
+                           "product_timeliness": p0.get("s1:product_timeliness"),
+                           # the STAC items carry no publication time of the RTC product
+                           "published_at": None,
+                           "published_at_note": "в STAC-объекте нет даты публикации RTC",
                            "license": license_})
-    except ArchiveUnavailable as exc:
-        meta["warning"] = f"архив недоступен: {exc}"
+    except Exception as exc:  # noqa: BLE001 — any archive failure must leave `make all` green
+        meta["warning"] = f"архив недоступен: {type(exc).__name__}: {exc}"[:500]
         _dump(out, meta)
         return meta
     meta["scenes"] = scenes
     meta["failed_scenes"] = failed
     meta["status"] = core.layer_status(len(scenes))
     if meta["status"] != core.STATUS_OK:
-        meta["warning"] = f"{len(scenes)} сцен(ы) в окне < N_min = {core.N_MIN_SCENES}"
+        meta["warning"] = (f"{len(scenes)} сцен(ы) в окне < N_min = {core.N_MIN_SCENES}"
+                           + (f"; {meta['deadline_hit']}" if meta.get("deadline_hit") else ""))
         _dump(out, meta)
         return meta
     perm = core.permanent_water(np.stack(stack))
