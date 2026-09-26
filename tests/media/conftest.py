@@ -26,7 +26,8 @@ def settings(tmp_path, monkeypatch):
     for name in ("FLOODVALUE_MEDIA_ANALYST_TOKEN", "FLOODVALUE_MEDIA_PUBLIC_REPORTS",
                  "FLOODVALUE_MEDIA_GEOCODER", "FLOODVALUE_MEDIA_POLL_INTERVAL_S"):
         monkeypatch.delenv(name, raising=False)
-    return replace(load_settings(), reports_per_hour=1000)
+    return replace(load_settings(), reports_per_hour=1000,
+                   local_hosts=("127.0.0.1", "localhost", "testserver"))
 
 
 @pytest.fixture

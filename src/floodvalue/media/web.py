@@ -55,7 +55,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if not settings.analyst_token:
         # Local-only mode trusts loopback clients: refuse foreign Host headers (DNS rebinding).
         app.add_middleware(TrustedHostMiddleware,
-                           allowed_hosts=["127.0.0.1", "localhost", "[::1]", "testserver"])
+                           allowed_hosts=list(settings.local_hosts))
     ingest_lock = threading.Lock()
     with closing(connect(settings.db_path)) as conn:
         sync_sources(conn, load_sources(settings.sources_yaml))
@@ -249,7 +249,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         with db() as conn, transaction(conn):
             event_id = ev.moderate_report(conn, report_id, decision=str(body.get("decision")),
                                           actor=actor, comment=str(body.get("comment", ""))[:500],
-                                          event_id=int(event_id) if event_id else None)
+                                          event_id=_int(event_id) if event_id else None)
         return {"event_id": event_id}
 
     # --- analyst: events -------------------------------------------------------------------
@@ -307,7 +307,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         actor = analyst_write(request)
         b = await _body(request)
         with db() as conn, transaction(conn):
-            ev.merge_events(conn, int(b["source_id"]), int(b["target_id"]), actor)
+            ev.merge_events(conn, _int(b.get("source_id")), _int(b.get("target_id")), actor)
         return {"ok": True}
 
     @app.post("/api/media/events/{event_id}/split")
@@ -315,7 +315,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         actor = analyst_write(request)
         b = await _body(request)
         with db() as conn, transaction(conn):
-            new_id = ev.split_event(conn, event_id, [int(i) for i in b.get("evidence_ids", [])],
+            new_id = ev.split_event(conn, event_id, [_int(i) for i in b.get("evidence_ids") or []],
                                     actor)
         return {"event_id": new_id}
 
@@ -390,10 +390,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(409, "сбор уже идёт в фоновом процессе")
         return {"runs": result}
 
-    @app.exception_handler(ValueError)
-    async def bad_input(_: Request, exc: ValueError):
-        return JSONResponse({"detail": str(exc) or "неверный запрос"}, status_code=422)
-
     @app.exception_handler(ev.ActionError)
     async def action_error(_: Request, exc: ev.ActionError):
         return JSONResponse({"detail": str(exc)}, status_code=409)
@@ -414,6 +410,13 @@ async def _body(request: Request) -> dict:
 
 def _field_error(field: str, message: str) -> JSONResponse:
     return JSONResponse({"detail": message, "field": field}, status_code=422)
+
+
+def _int(value) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(422, "ожидался номер") from exc
 
 
 def _num(value) -> float | None:

@@ -38,6 +38,7 @@ class Settings:
     geocoder: str
     user_agent: str
     sources_yaml: Path = field(default=SOURCES_YAML)
+    local_hosts: tuple[str, ...] = ("127.0.0.1", "localhost", "[::1]")
 
 
 def load_settings() -> Settings:
