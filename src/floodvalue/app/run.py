@@ -21,18 +21,28 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
+from floodvalue.contracts.files import REQUIRED_FILES
 from floodvalue.data.split import EVENT_PARTS  # exception (D-050): test sealing, as floodvalue.context
 from floodvalue.paths import REPO_ROOT, data_dir, output_dir
 from floodvalue.procurement import plan  # public contract §10
 
 STATIC_DIR = Path(__file__).parent / "static"
-REQUIRED = (
-    "run_metadata.json", "flood_probability.tif", "flood_mask.tif", "assets.geojson",
-    "asset_loss.csv", "candidate_orders.geojson", "strategy_plans.json",
-    "strategy_comparison.csv", "procurement_plan.csv", "sensitivity.csv",
-)
+REQUIRED = REQUIRED_FILES
+REBUILD = "соберите комплект: make all CHIP=<chip_id> BUDGET=<руб>"
 app = FastAPI(title="FloodValue operator")
 TEST_EVENTS = frozenset(EVENT_PARTS["test"])
+
+
+def _missing(path: Path) -> list[str]:
+    return [name for name in REQUIRED if not (path / name).is_file()]
+
+
+def _incomplete_runs() -> list[str]:
+    root = output_dir()
+    if not root.exists():
+        return []
+    return [f"{path.name} (нет {', '.join(_missing(path))})" for path in sorted(root.iterdir())
+            if path.is_dir() and (path / "run_metadata.json").is_file() and _missing(path)]
 
 
 def _sealed(chip_id: str) -> bool:
@@ -47,8 +57,9 @@ def _available_runs() -> list[Path]:
     explicit = os.environ.get("FLOODVALUE_APP_RUN_DIR")
     if explicit:
         path = Path(explicit).resolve()
-        if not path.is_dir() or not all((path / name).is_file() for name in REQUIRED):
-            raise HTTPException(503, f"Неполный комплект: {path}")
+        missing = _missing(path) if path.is_dir() else ["каталога"]
+        if missing:
+            raise HTTPException(503, f"Неполный комплект {path}: нет {', '.join(missing)}; {REBUILD}")
         return [path]
     root = output_dir()
     candidates = [path for path in root.iterdir() if path.is_dir()
@@ -68,7 +79,9 @@ def _run_dir(run_id: str | None = None) -> Path:
     runs = _available_runs()
     if run_id is None:
         if not runs:
-            raise HTTPException(503, "Готового анализа нет. Выберите исходное наблюдение в каталоге.")
+            skipped = _incomplete_runs()
+            raise HTTPException(503, f"Готового комплекта нет в {output_dir()}: {REBUILD}."
+                                + (f" Неполные пропущены: {'; '.join(skipped)}." if skipped else ""))
         return runs[0]
     for path in runs:
         metadata = _json(path / "run_metadata.json")
@@ -227,7 +240,7 @@ def session(run_id: str | None = None):
 def recalculated_plan(budget: float = Query(ge=0, le=1_000_000_000), run_id: str | None = None):
     try:
         return JSONResponse(jsonable_encoder(plan(_run_dir(run_id), budget)))
-    except (ValueError, KeyError) as exc:
+    except (FileNotFoundError, ValueError, KeyError) as exc:
         raise HTTPException(422, str(exc)) from exc
 
 
@@ -360,7 +373,12 @@ def run(args) -> int:
     import uvicorn
 
     if args.out:
-        os.environ["FLOODVALUE_APP_RUN_DIR"] = args.out
+        out = Path(args.out).resolve()
+        missing = _missing(out) if out.is_dir() else ["каталога"]
+        if missing:
+            print(f"app: {out} — неполный комплект, нет {', '.join(missing)}; {REBUILD}")
+            return 1
+        os.environ["FLOODVALUE_APP_RUN_DIR"] = str(out)
     if not STATIC_DIR.exists():
         print("app: собранный React-интерфейс не найден; выполните make web")
         return 2
