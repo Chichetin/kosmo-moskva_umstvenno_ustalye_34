@@ -58,3 +58,5 @@ def test_form_parsing_dependency_is_direct():
     names = [d.split(">")[0].split("<")[0].split("=")[0].strip().lower()
              for d in pyproject["project"]["dependencies"]]
     assert "python-multipart" in names
+    import importlib.util
+    assert importlib.util.find_spec("multipart") or importlib.util.find_spec("python_multipart")
