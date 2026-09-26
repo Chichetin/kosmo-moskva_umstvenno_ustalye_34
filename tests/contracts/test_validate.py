@@ -165,6 +165,79 @@ def test_probability_wrong_nodata_fails(run_dir):
     assert "nodata -1.0, нужен -9999" in " ".join(failing(run_dir)[F.FLOOD_PROBABILITY])
 
 
+# --- baseline_mask.tif (optional, contracts §2, #115) -------------------------------------------
+
+BM = "baseline_mask.tif"
+
+
+def rewrite_bm(run_dir, fn=None, **prof_changes):
+    with rasterio.open(run_dir / BM) as src:
+        prof, m = src.profile, src.read(1)
+    m = fn(m) if fn else m
+    prof.update(prof_changes)
+    with rasterio.open(run_dir / BM, "w", **prof) as dst:
+        dst.write(m.astype(prof["dtype"]), 1)
+
+
+def test_good_fixture_carries_baseline_mask():
+    with rasterio.open(GOOD / BM) as b, rasterio.open(GOOD / F.FLOOD_PROBABILITY) as p:
+        assert b.transform == p.transform and b.shape == p.shape and b.crs == p.crs
+        assert b.dtypes[0] == "uint8" and b.nodata == 255
+        m, pr = b.read(1), p.read(1)
+    assert set(np.unique(m)) == {0, 1, 255}
+    assert np.array_equal(m == 255, pr == F.PROBABILITY_NODATA)
+
+
+def test_missing_baseline_mask_is_not_an_error(run_dir):
+    (run_dir / BM).unlink()
+    assert failing(run_dir) == {}
+
+
+def test_baseline_mask_value_2_fails(run_dir):
+    def two(m):
+        m[40, 40] = 2
+        return m
+    rewrite_bm(run_dir, two)
+    msg = only(failing(run_dir), F.FLOOD_MASK)
+    assert BM in msg and "0/1/255" in msg
+
+
+def test_baseline_mask_other_grid_fails(run_dir):
+    rewrite_bm(run_dir, transform=rasterio.transform.from_origin(80.001, 7.8, 0.0005, 0.0005))
+    msg = only(failing(run_dir), F.FLOOD_MASK)
+    assert BM in msg and "сетка" in msg
+
+
+def test_baseline_mask_other_size_fails(run_dir):
+    with rasterio.open(run_dir / BM) as src:
+        prof, m = src.profile, src.read(1)
+    prof.update(width=m.shape[1] - 1)
+    with rasterio.open(run_dir / BM, "w", **prof) as dst:
+        dst.write(m[:, :-1], 1)
+    assert "сетка" in only(failing(run_dir), F.FLOOD_MASK)
+
+
+def test_baseline_mask_nodata_not_where_s1_has_no_data_fails(run_dir):
+    def shift(m):
+        m[0, 0] = 0  # p is -9999 there (no S1)
+        m[40, 40] = 255  # p is valid there
+        return m
+    rewrite_bm(run_dir, shift)
+    msg = only(failing(run_dir), F.FLOOD_MASK)
+    assert BM in msg and "255" in msg and "2 пикселях" in msg
+
+
+def test_baseline_mask_wrong_type_and_nodata_fail(run_dir):
+    rewrite_bm(run_dir, dtype="int16", nodata=-1)
+    msg = only(failing(run_dir), F.FLOOD_MASK)
+    assert "int16" in msg and "nodata -1" in msg
+
+
+def test_baseline_mask_unreadable_fails(run_dir):
+    (run_dir / BM).write_bytes(b"not a tiff")
+    assert BM in only(failing(run_dir), F.FLOOD_MASK)
+
+
 # --- assets ------------------------------------------------------------------------------------
 
 def test_duplicate_asset_id_fails(run_dir):
