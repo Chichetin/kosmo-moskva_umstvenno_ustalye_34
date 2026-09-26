@@ -8,6 +8,7 @@ only raster bounds are read, never labels). External: Copernicus Data Space ODat
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
@@ -19,6 +20,7 @@ from floodvalue.media.config import split_parts
 from floodvalue.media.geo import geometry_bbox
 from floodvalue.media.netfetch import Fetcher
 from floodvalue.media.store import dumps, get_kv, loads, now_iso, set_kv
+from floodvalue.paths import REPO_ROOT
 
 EARLY_TOLERANCE = timedelta(days=1)
 LATE_TOLERANCE = timedelta(days=7)
@@ -78,7 +80,9 @@ def local_catalog(conn: sqlite3.Connection, data_dir: Path) -> list[dict]:
     manifest_path = data_dir / "interim" / "source_manifest_s1.json"
     if not manifest_path.exists():
         return []
-    key = f"local_catalog_v1:{manifest_path.stat().st_mtime_ns}"
+    split_file = REPO_ROOT / "splits" / "split_v1.json"
+    split_sha = hashlib.sha256(split_file.read_bytes()).hexdigest()[:16]
+    key = f"local_catalog_v1:{manifest_path.stat().st_mtime_ns}:{split_sha}"
     cached = get_kv(conn, key)
     if cached:
         return json.loads(cached)

@@ -107,7 +107,7 @@ def recount(conn, event_id: int) -> None:
 
 
 def find_similar(conn, report_type: str, geometry: dict | None, time: dict | None,
-                 exclude: int | None = None) -> int | None:
+                 exclude: int | None = None, is_demo: bool = False) -> int | None:
     """Level 3 of the spec: same type, place within SAME_PLACE_KM, overlapping time. Only
     resolved places; a missing place never merges automatically (doubt → separate events)."""
     point = representative_point(geometry)
@@ -119,7 +119,8 @@ def find_similar(conn, report_type: str, geometry: dict | None, time: dict | Non
     for row in conn.execute(
             "SELECT * FROM events WHERE report_type = ? AND geo_status = 'resolved' "
             "AND review_state IN ('new','needs_geo','ready','under_review','reviewed') "
-            "AND event_id IS NOT ? ORDER BY event_id", (report_type, exclude)):
+            "AND event_id IS NOT ? AND is_demo = ? ORDER BY event_id",
+            (report_type, exclude, int(is_demo))):
         other = representative_point(loads(row["geometry_json"]))
         a, b = _window(row)
         if other and haversine_km(point, other) <= SAME_PLACE_KM and a <= hi and lo <= b:
@@ -127,12 +128,13 @@ def find_similar(conn, report_type: str, geometry: dict | None, time: dict | Non
     return None
 
 
-def find_negation_target(conn, geometry: dict | None, label: str | None) -> int | None:
+def find_negation_target(conn, geometry: dict | None, label: str | None,
+                         is_demo: bool = False) -> int | None:
     point = representative_point(geometry)
     since = datetime.now(UTC) - NEGATION_WINDOW
     for row in conn.execute("SELECT * FROM events WHERE report_type = 'occurred' AND "
                             "review_state IN ('new','needs_geo','ready','under_review','reviewed')"
-                            " ORDER BY event_id DESC"):
+                            " AND is_demo = ? ORDER BY event_id DESC", (int(is_demo),)):
         if _ts(row["first_detected_at"]) < since:
             continue
         other = representative_point(loads(row["geometry_json"]))
@@ -151,6 +153,8 @@ def merge_events(conn, source_id: int, target_id: int, actor: str) -> None:
     src, dst = event_snapshot(conn, source_id), event_snapshot(conn, target_id)
     if src["review_state"] == "merged" or dst["review_state"] == "merged":
         raise ActionError("одно из событий уже объединено")
+    if src["is_demo"] != dst["is_demo"]:
+        raise ActionError("ДЕМО-событие нельзя объединять с реальным")
     for ev in conn.execute("SELECT * FROM evidence WHERE event_id = ?", (source_id,)).fetchall():
         link(conn, target_id, origin=ev["origin"], is_original=bool(ev["is_original"]),
              link_kind="manual_merge", actor=actor, publication_id=ev["publication_id"],
@@ -283,8 +287,11 @@ def moderate_report(conn, report_id: str, *, decision: str, actor: str, comment:
     if decision == "accept":
         report_type = REPORT_TYPE_BY_CATEGORY.get(rep["category"], "unclear")
         if event_id is not None:
-            if event_snapshot(conn, event_id)["review_state"] in ("merged", "dismissed"):
+            target_row = event_snapshot(conn, event_id)
+            if target_row["review_state"] in ("merged", "dismissed"):
                 raise ActionError("событие закрыто, выберите другое")
+            if target_row["is_demo"] != rep["is_demo"]:
+                raise ActionError("ДЕМО и реальные данные не смешиваются")
             target = event_id
         else:
             if rep["lat"] is not None:
@@ -297,7 +304,8 @@ def moderate_report(conn, report_id: str, *, decision: str, actor: str, comment:
                          "status": "missing", "candidates": None}
             time = ({"start": rep["observed_at"], "end": rep["observed_at"],
                      "precision": rep["observed_precision"]} if rep["observed_at"] else None)
-            target = find_similar(conn, report_type, place["geometry"], time)
+            target = find_similar(conn, report_type, place["geometry"], time,
+                                  is_demo=bool(rep["is_demo"]))
             if target is None:
                 target = create_event(conn, title=f"Очевидец: {rep['description'][:80]}",
                                       report_type=report_type, place=place, time=time,

@@ -148,3 +148,31 @@ def test_sources_status_reported(app):
     assert states["example_rss"] == "disabled" and states["gdacs_floods"] == "never"
     r = call(app, "POST", "/api/media/sources/example_rss/enabled", json_body={"enabled": True}, headers=W)
     assert r.status == 409  # terms not checked
+
+
+def test_login_attempts_are_limited(token_app):
+    codes = [call(token_app, "POST", "/media/login", data={"token": f"guess{i}"}).status for i in range(11)]
+    assert codes[:10] == [401] * 10 and codes[10] == 429
+    right = call(token_app, "POST", "/media/login", data={"token": "s3cret-token-for-tests"})  # secret-scan: allow — test value
+    assert right.status == 429  # the limit holds even for the right token until the window passes
+
+
+def test_malformed_requests_are_4xx(app):
+    assert call(app, "POST", "/api/media/monitoring", json_body=[1, 2], headers=W).status == 422
+    assert call(app, "POST", "/api/media/events/merge", json_body={"source_id": "x", "target_id": 1},
+                headers=W).status == 422
+    assert call(app, "POST", "/api/media/reports", data=FORM, headers={"content-length": "abc"}).status == 413
+
+
+def test_local_mode_refuses_foreign_host(app):
+    assert call(app, "GET", "/api/media/events", headers={"host": "evil.example"}).status == 400
+    assert call(app, "GET", "/api/media/events", headers={"host": "127.0.0.1:8765"}).status == 200
+
+
+def test_tooltips_never_get_html_strings():
+    import re
+    from pathlib import Path
+    js = (Path(__file__).resolve().parents[2] / "src/floodvalue/media/static/analyst.js").read_text()
+    assert ".innerHTML" not in js and "insertAdjacentHTML" not in js
+    for call_args in re.findall(r"\.bind(?:Tooltip|Popup)\(([^)]{0,40})", js):
+        assert call_args.startswith("tipNode("), call_args

@@ -1,4 +1,4 @@
-"""Settings from the server environment and configs/media_sources.yaml. No secrets in code."""
+"""Settings from the server environment and src/floodvalue/media/sources.yaml. No secrets in code."""
 
 from __future__ import annotations
 

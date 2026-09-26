@@ -47,7 +47,7 @@ class Response:
 def call(app, method: str, path: str, *, json_body=None, data=None, files=None, headers=None,
          client=LOCAL, cookies: str | None = None) -> Response:
     """One HTTP request straight into the ASGI app."""
-    hdrs = {k.lower(): v for k, v in (headers or {}).items()}
+    hdrs = {"host": "testserver", **{k.lower(): v for k, v in (headers or {}).items()}}
     body = b""
     if json_body is not None:
         body = json.dumps(json_body).encode()

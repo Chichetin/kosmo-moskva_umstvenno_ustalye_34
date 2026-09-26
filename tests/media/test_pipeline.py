@@ -164,3 +164,17 @@ def test_data_survives_restart(settings):
     with closing(connect(settings.db_path)) as c:
         assert c.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 1
         assert c.execute("SELECT COUNT(*) FROM publications").fetchone()[0] == 1
+
+
+def test_real_news_never_attaches_to_demo_events(conn, settings):
+    from floodvalue.media.demo import load_demo, remove_demo
+    load_demo(conn, settings)
+    ingest(conn, news("r1", "Reports of flooding in Batticaloa town denied by officials", domain="real.example"),
+           geocoder=type("G", (), {"lookup": lambda self, q: [{"label": q, "lon": 81.662, "lat": 7.75,
+                                                                "precision": "locality", "bbox": None}]})())
+    ingest(conn, news("r2", "ДЕМО: Floods hit Batticaloa, hundreds evacuated", domain="real.example"))
+    real_links = conn.execute("SELECT e.is_demo FROM evidence x JOIN events e USING(event_id) "
+                              "JOIN publications p USING(publication_id) WHERE p.is_demo = 0").fetchall()
+    assert real_links and all(r["is_demo"] == 0 for r in real_links)
+    remove_demo(conn, settings)
+    assert conn.execute("SELECT COUNT(*) FROM publications WHERE is_demo = 0").fetchone()[0] == 2

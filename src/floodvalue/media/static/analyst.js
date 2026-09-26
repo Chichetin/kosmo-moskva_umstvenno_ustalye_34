@@ -37,6 +37,8 @@
     children.flat().forEach((c) => { if (c !== null && c !== undefined && c !== false) el.append(c.nodeType ? c : String(c)); });
     return el;
   }
+  // Leaflet inserts string tooltips as HTML: pass a text-only node instead.
+  const tipNode = (text) => h("div", { class: "tip", text });
   const tag = (text, cls) => h("span", { class: "tag " + (cls || ""), text });
   const fmt = (iso) => (iso ? new Date(iso).toLocaleString("ru-RU", { timeZone: "UTC" }) + " UTC" : "—");
   const toast = (text) => { const t = $("toast"); t.textContent = text; t.classList.remove("hidden"); setTimeout(() => t.classList.add("hidden"), 4000); };
@@ -123,7 +125,7 @@
         h("button", { class: "btn small", text: "Спам", onclick: () => act(`/api/media/reports/${r.report_id}/moderate`, { decision: "spam" }, "Помечено как спам") }));
       if (reportLayer && $("layer-reports").checked && r.lat !== null) {
         L.circleMarker([r.lat, r.lon], { radius: 6, color: "#d9b36c", weight: 1.5, dashArray: "3 3", fillOpacity: 0 })
-          .bindTooltip(`Непроверенное обращение ${r.report_id}`).addTo(reportLayer);
+          .bindTooltip(tipNode(`Непроверенное обращение ${r.report_id}`)).addTo(reportLayer);
       }
       return h("li", { tabindex: "0" },
         h("div", {}, r.is_demo ? tag("ДЕМО", "demo") : null, tag(r.category_label), h("span", { class: "muted small", text: r.report_id })),
@@ -177,7 +179,7 @@
     } else {
       layer = L.geoJSON(f.geometry, { style: { color, weight: 1.5, dashArray: "6 6", fill: false } });
     }
-    layer.bindTooltip(tip).on("click", () => openCard(p.event_id, true)).addTo(eventLayer);
+    layer.bindTooltip(tipNode(tip)).on("click", () => openCard(p.event_id, true)).addTo(eventLayer);
   }
 
   function zoomTo(geometry, precision) {
@@ -196,7 +198,7 @@
     card.observations.forEach((m) => {
       if (!m.footprint) return;
       L.geoJSON(m.footprint, { style: { color: "#6f8f9f", weight: 1, dashArray: "2 4", fill: false } })
-        .bindTooltip(`Спутниковый снимок (не сообщение): ${m.observation_ref}\n${m.observation_start ? fmt(m.observation_start) : ""} · ${T.suitability[m.suitability]}`)
+        .bindTooltip(tipNode(`Спутниковый снимок (не сообщение): ${m.observation_ref}\n${m.observation_start ? fmt(m.observation_start) : ""} · ${T.suitability[m.suitability]}`))
         .addTo(sceneLayer);
     });
   }

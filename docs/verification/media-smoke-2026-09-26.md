@@ -7,7 +7,7 @@
 ## 1. Автотесты
 
 ```bash
-uv run pytest tests/media -q -p no:warnings     # 102 passed
+uv run pytest tests/media -q -p no:warnings     # 107 passed (после замечаний reviewer #171)
 uv run ruff check src/floodvalue/media tests/media   # All checks passed!
 ```
 

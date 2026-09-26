@@ -56,7 +56,10 @@ def main(argv: list[str] | None = None) -> int:
         import uvicorn
 
         from floodvalue.media.web import create_app
-        local = args.host == "localhost" or ipaddress.ip_address(args.host).is_loopback
+        try:
+            local = args.host == "localhost" or ipaddress.ip_address(args.host).is_loopback
+        except ValueError:
+            local = False  # a hostname: treat as non-local
         if not local and not settings.analyst_token:
             print("Отказ: слушать не-локальный адрес без FLOODVALUE_MEDIA_ANALYST_TOKEN нельзя "
                   "(операторские действия остались бы без защиты).", file=sys.stderr)

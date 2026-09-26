@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import ValidationError
 
@@ -51,6 +52,10 @@ STATUS_LIMIT = (60, 3600)
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or load_settings()
     app = FastAPI(title="FloodValue media", docs_url=None, redoc_url=None, openapi_url=None)
+    if not settings.analyst_token:
+        # Local-only mode trusts loopback clients: refuse foreign Host headers (DNS rebinding).
+        app.add_middleware(TrustedHostMiddleware,
+                           allowed_hosts=["127.0.0.1", "localhost", "[::1]", "testserver"])
     ingest_lock = threading.Lock()
     with closing(connect(settings.db_path)) as conn:
         sync_sources(conn, load_sources(settings.sources_yaml))
@@ -135,7 +140,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         length = request.headers.get("content-length")
         if length is None:
             raise HTTPException(411, "нужен заголовок Content-Length")
-        if int(length) > MAX_BODY:
+        if not length.isdigit() or int(length) > MAX_BODY:
             raise HTTPException(413, "слишком большой запрос")
         with db() as conn:
             if rate_limited(conn, client_bucket(request, "report"), settings.reports_per_hour,
@@ -172,7 +177,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         with db() as conn:
             if rate_limited(conn, client_bucket(request, "status"), *STATUS_LIMIT):
                 raise HTTPException(429, "слишком много запросов")
-            body = await request.json()
+            body = await _body(request)
             token = str(body.get("token", ""))[:80]
             status = public_status(conn, token) if len(token) == 40 else None
         if status is None:
@@ -189,11 +194,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def login(request: Request):
         if not settings.analyst_token:
             raise HTTPException(400, "токен аналитика не настроен — вход только локальный")
+        with db() as conn:  # every attempt counts, checked before comparing
+            if rate_limited(conn, client_bucket(request, "login"), 10, 600):
+                raise HTTPException(429, "слишком много попыток входа, подождите 10 минут")
         form = await request.form(max_files=0, max_fields=2)
         token = str(form.get("token", ""))
         if not hmac.compare_digest(token, settings.analyst_token):
-            with db() as conn:
-                rate_limited(conn, client_bucket(request, "login"), 10, 600)
             raise HTTPException(401, "неверный токен")
         resp = RedirectResponse("/media/analyst", status_code=303)
         resp.set_cookie(COOKIE, session_value(), httponly=True, samesite="strict",
@@ -238,7 +244,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/media/reports/{report_id}/moderate")
     async def moderate(request: Request, report_id: str):
         actor = analyst_write(request)
-        body = await request.json()
+        body = await _body(request)
         event_id = body.get("event_id")
         with db() as conn, transaction(conn):
             event_id = ev.moderate_report(conn, report_id, decision=str(body.get("decision")),
@@ -268,7 +274,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/media/events/{event_id}/review")
     async def review(request: Request, event_id: int):
         actor = analyst_write(request)
-        b = await request.json()
+        b = await _body(request)
         with db() as conn, transaction(conn):
             ev.review_event(conn, event_id, verification_result=str(b.get("verification_result")),
                             follow_up=str(b.get("follow_up", "none")),
@@ -279,7 +285,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/media/events/{event_id}/place")
     async def place(request: Request, event_id: int):
         actor = analyst_write(request)
-        b = await request.json()
+        b = await _body(request)
         with db() as conn, transaction(conn):
             ev.set_place(conn, event_id, label=str(b.get("label", ""))[:200],
                          lon=_num(b.get("lon")), lat=_num(b.get("lat")),
@@ -289,7 +295,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/media/events/{event_id}/time")
     async def set_time(request: Request, event_id: int):
         actor = analyst_write(request)
-        b = await request.json()
+        b = await _body(request)
         with db() as conn, transaction(conn):
             ev.set_time(conn, event_id, start=_iso_or_none(b.get("start")),
                         end=_iso_or_none(b.get("end")),
@@ -299,7 +305,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/media/events/merge")
     async def merge(request: Request):
         actor = analyst_write(request)
-        b = await request.json()
+        b = await _body(request)
         with db() as conn, transaction(conn):
             ev.merge_events(conn, int(b["source_id"]), int(b["target_id"]), actor)
         return {"ok": True}
@@ -307,7 +313,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/media/events/{event_id}/split")
     async def split(request: Request, event_id: int):
         actor = analyst_write(request)
-        b = await request.json()
+        b = await _body(request)
         with db() as conn, transaction(conn):
             new_id = ev.split_event(conn, event_id, [int(i) for i in b.get("evidence_ids", [])],
                                     actor)
@@ -316,7 +322,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/media/events/{event_id}/observations")
     async def find_observations(request: Request, event_id: int):
         analyst_write(request)
-        b = await request.json()
+        b = await _body(request)
         errors = []
         with db() as conn:
             event = conn.execute("SELECT * FROM events WHERE event_id=?", (event_id,)).fetchone()
@@ -348,7 +354,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/media/sources/{source_id}/enabled")
     async def toggle_source(request: Request, source_id: str):
         analyst_write(request)
-        b = await request.json()
+        b = await _body(request)
         with db() as conn:
             row = conn.execute("SELECT terms_status FROM sources WHERE source_id=?",
                                (source_id,)).fetchone()
@@ -363,7 +369,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/media/monitoring")
     async def monitoring(request: Request):
         analyst_write(request)
-        b = await request.json()
+        b = await _body(request)
         with db() as conn:
             set_kv(conn, "monitoring_enabled", "1" if b.get("enabled") else "0")
         return {"ok": True}
@@ -372,7 +378,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def ingest_now(request: Request):
         """Manual collection for checking. Same lock as the worker: never two at once."""
         analyst_write(request)
-        b = await request.json()
+        b = await _body(request)
         from floodvalue.media.worker import run_cycle  # the worker owns the cycle lock
         if not ingest_lock.acquire(blocking=False):
             raise HTTPException(409, "сбор уже идёт")
@@ -384,11 +390,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(409, "сбор уже идёт в фоновом процессе")
         return {"runs": result}
 
+    @app.exception_handler(ValueError)
+    async def bad_input(_: Request, exc: ValueError):
+        return JSONResponse({"detail": str(exc) or "неверный запрос"}, status_code=422)
+
     @app.exception_handler(ev.ActionError)
     async def action_error(_: Request, exc: ev.ActionError):
         return JSONResponse({"detail": str(exc)}, status_code=409)
 
     return app
+
+
+async def _body(request: Request) -> dict:
+    """JSON object body or 422 — never a 500 on a malformed request."""
+    try:
+        body = await request.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        raise HTTPException(422, "ожидался JSON-объект")
+    return body
 
 
 def _field_error(field: str, message: str) -> JSONResponse:

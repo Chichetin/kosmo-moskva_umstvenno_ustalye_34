@@ -162,7 +162,7 @@ def ingest_item(conn, source, item: dict, *, geocoder=None, llm=None, llm_left: 
     if not extraction.relevant:
         return "irrelevant"
     counters["items_relevant"] = counters.get("items_relevant", 0) + 1
-    if _link_reprint(conn, source, pub_id, canon, item["title"], extraction):
+    if _link_reprint(conn, source, pub_id, canon, item["title"], extraction, is_demo):
         return outcome
     _link_news(conn, source, pub_id, item, extraction, geocoder, is_demo)
     return outcome
@@ -207,7 +207,7 @@ def _link_bulletin(conn, source, pub_id, s: dict, is_demo: bool) -> None:
          facts={k: s.get(k) for k in ("alert_level", "provider", "glide")})
 
 
-def _link_reprint(conn, source, pub_id, canon, title, extraction) -> bool:
+def _link_reprint(conn, source, pub_id, canon, title, extraction, is_demo: bool) -> bool:
     """Same URL from another source, or the same headline: link to the original's events as
     a reprint (is_original=0) — it is not an independent confirmation."""
     key = title_key(title)
@@ -217,7 +217,8 @@ def _link_reprint(conn, source, pub_id, canon, title, extraction) -> bool:
     if len(key.split()) >= MIN_REPRINT_WORDS:
         sql += " OR p.title_key = ?"
         params.insert(1, key)
-    sql += ") AND p.publication_id != ?"
+    sql += ") AND p.publication_id != ? AND p.is_demo = ?"
+    params.append(int(is_demo))
     events = [r["event_id"] for r in conn.execute(sql, params)]
     for event_id in events:
         link(conn, event_id, origin=source["kind"], is_original=False, link_kind="auto",
@@ -236,9 +237,10 @@ def _link_news(conn, source, pub_id, item, extraction: Extraction, geocoder, is_
                  "method": extraction.method, "reasons": extraction.reasons}
         actor = f"system:{source['source_id']}"
         if extraction.report_type == "negation":
-            target = find_negation_target(conn, place["geometry"], mention)
+            target = find_negation_target(conn, place["geometry"], mention, is_demo)
         else:
-            target = find_similar(conn, extraction.report_type, place["geometry"], time)
+            target = find_similar(conn, extraction.report_type, place["geometry"], time,
+                                  is_demo=is_demo)
         if target is None:
             target = create_event(conn, title=item["title"], report_type=extraction.report_type,
                                   place=place, time=time, actor=actor, is_demo=is_demo)
