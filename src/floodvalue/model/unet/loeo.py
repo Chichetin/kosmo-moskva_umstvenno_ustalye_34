@@ -146,6 +146,22 @@ def predict_probs_tta(model, x: torch.Tensor, device: str) -> np.ndarray:
     return acc / 8.0
 
 
+def chip_median_norm(read: Reader) -> Reader:
+    """Reader whose S1 has each band shifted by its own chip median over finite pixels (dB):
+    removes the absolute backscatter level of the scene, keeps contrast. make_features then
+    derives VV−VH from the shifted bands. Labels and the raw reader's arrays are untouched.
+    If adopted for the shipped model, predict must apply the same shift before the features."""
+    def wrapped(chip_id: str):
+        s1, lab = read(chip_id)
+        s1 = s1.copy()
+        for b in range(s1.shape[0]):
+            finite = np.isfinite(s1[b])
+            if finite.any():
+                s1[b] -= np.median(s1[b][finite])
+        return s1, lab
+    return wrapped
+
+
 def fold_stats(ids: list[str], read: Reader, channels: list[str]) -> tuple[list, list]:
     """Normalization mean/std over the given (fold training) chips only."""
     return channel_stats([read(c)[0] for c in ids], channels)
@@ -339,9 +355,11 @@ def run_fold(fold: dict, cfg: dict, read: Reader = read_chip, baseline_t: float 
         raise ValueError("fold train and held-out chips overlap")
     channels = cfg["channels"]
     t0 = time.time()
-    mean, std = fold_stats(fold["train"], read, channels)
+    # Network input may use per-chip median normalization; the baseline always sees raw dB.
+    feat = chip_median_norm(read) if cfg.get("chip_norm") else read
+    mean, std = fold_stats(fold["train"], feat, channels)
     t_fold, t_fold_iou = fit_vh_threshold([read(c) for c in fold["train"]])
-    x, y, m = build_tensors(fold["train"], read, channels, mean, std)
+    x, y, m = build_tensors(fold["train"], feat, channels, mean, std)
     n_weak = 0
     if cfg.get("weak_weight") is not None:
         wids = weak_chip_ids({D.event_of(c) for c in fold["train"]})
@@ -350,7 +368,8 @@ def run_fold(fold: dict, cfg: dict, read: Reader = read_chip, baseline_t: float 
         if weak_events & held_events or not weak_events <= set(WEAK_EVENTS):
             raise ValueError(f"weak events {sorted(weak_events)} overlap held-out "
                              f"{sorted(held_events)} or leave {WEAK_EVENTS}")
-        xw, yw, mw = build_tensors(wids, read_weak_chip, channels, mean, std)
+        weak_read = chip_median_norm(read_weak_chip) if cfg.get("chip_norm") else read_weak_chip
+        xw, yw, mw = build_tensors(wids, weak_read, channels, mean, std)
         x, y, m = torch.cat([x, xw]), torch.cat([y, yw]), torch.cat([m * 2, mw])
         n_weak = len(wids)
         del xw, yw, mw
@@ -359,7 +378,7 @@ def run_fold(fold: dict, cfg: dict, read: Reader = read_chip, baseline_t: float 
         f"VH t {t_fold} dB; loaded {time.time() - t0:.0f}s")
     model, states, steps = train_fold(x, y, m, cfg | {"std": std}, eval_epochs, device, log)
     del x, y, m
-    xh, yh, mh = build_tensors(fold["held_out"], read, channels, mean, std)
+    xh, yh, mh = build_tensors(fold["held_out"], feat, channels, mean, std)
     probs = {}
     for epoch, state in states.items():
         model.load_state_dict(state)
@@ -470,6 +489,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--weak-weight", type=float, default=None,
                    help=f"add weakly-labeled chips ({WEAK_LABEL}) of the fold's training events "
                         f"among {', '.join(WEAK_EVENTS)} with this loss weight (hand = 1)")
+    p.add_argument("--chip-norm", action="store_true",
+                   help="network input: subtract each chip's own median dB per band (baseline stays raw)")
     p.add_argument("--hand-frac", type=float, default=None,
                    help="with --weak-weight: fraction of each batch drawn from hand-labeled chips")
     p.add_argument("--finetune-epochs", type=int, default=0,
@@ -540,7 +561,7 @@ def main(argv: list[str] | None = None) -> int:
     cfg |= {"epochs": args.epochs, "crop": args.crop, "seed": args.seed,
             "steps_mult": args.steps_mult, "tta": args.tta, "weak_weight": args.weak_weight,
             "finetune_epochs": args.finetune_epochs, "finetune_lr_mult": args.finetune_lr_mult,
-            "hand_frac": args.hand_frac}
+            "hand_frac": args.hand_frac, "chip_norm": args.chip_norm}
     shipped = shipped_baseline_rule()
     only = {e.strip() for e in args.events.split(",") if e.strip()}
     command = replay_command(args)

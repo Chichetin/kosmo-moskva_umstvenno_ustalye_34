@@ -106,3 +106,13 @@ def test_replay_command_round_trips_weak_zero_and_flags():
     assert "--weak-weight 0.0" in cmd and "--tta" in cmd and "--tta True" not in cmd
     again = L.parse_args(cmd.split()[3:] + ["--out-dir", "x"])
     assert vars(again) == vars(args)
+
+
+def test_chip_median_norm_shifts_each_band_and_keeps_nan_and_label():
+    s1 = np.array([[[-10.0, -12.0], [np.nan, -14.0]], [[-20.0, -22.0], [-24.0, np.nan]]], np.float32)
+    lab = np.array([[1, 0], [-1, 0]], np.int16)
+    out, lab2 = L.chip_median_norm(lambda c: (s1, lab))("X_1")
+    assert np.nanmedian(out[0]) == 0 and np.nanmedian(out[1]) == 0
+    assert np.isnan(out[0, 1, 0]) and np.isnan(out[1, 1, 1]) and lab2 is lab
+    assert np.allclose(out[0] - np.nanmedian(s1[0]) * 0, s1[0] - np.nanmedian(s1[0]), equal_nan=True)
+    assert not np.shares_memory(out, s1)  # the raw reader's array (baseline) is not modified
