@@ -159,9 +159,10 @@ def test_stale_catalog_file_is_not_used(tmp_path):
         for r, (lon, lat) in zip(rows, coords, strict=True):
             w.writerow({**r, "longitude": lon, "latitude": lat})
     res = procurement.plan(tmp_path, 2500)
-    assert res["plans"]["C"][0] in ("Z-A09", "Z-A10")  # зоны у A10 (max EL) и соседей
+    # max R = V·q·min(p, 1−p) — у A05 (p = 0,5, D-049): зона у нового места A05 и соседей
+    assert res["plans"]["C"][0] in ("Z-A04", "Z-A05", "Z-A06")
     c = next(r for r in res["comparison"] if r["strategy"] == "C")
-    assert "A10" in c["covered_asset_ids"].split()
+    assert "A05" in c["covered_asset_ids"].split()
 
 
 def test_zones_inside_chip_except_asset_buffers(tmp_path):
@@ -275,3 +276,29 @@ def test_coverage_at_base_deadline_matches_context(tmp_path):
     ok = {r["asset_id"] for r in ctx["loss"] if r["status"] == "ok"}
     cov, elig = strategies.coverage_at(ctx["catalog"], ok, ctx["deadline"])
     assert cov == ctx["cov"] and elig == ctx["eligible"]
+
+
+def test_low_value_of_information_reason_and_risk_columns(tmp_path):
+    """D-049: A01, A02 с p = 1 — R = 0: Z-A01 (покрывает только их) не покупается с причиной
+    «низкая ценность информации»; strategy_comparison.csv несёт столбцы цены ошибки решения."""
+    _write_run_dir(tmp_path)
+    with open(tmp_path / "asset_loss.csv", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    for r in rows[:2]:
+        r["p_flood"], r["expected_loss_rub"] = "1.0", "500000.0"
+    with open(tmp_path / "asset_loss.csv", "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w.writeheader()
+        w.writerows(rows)
+    res = procurement.plan(tmp_path, 2500)
+    assert "Z-A01" not in res["plans"]["C"]
+    why = res["reasons"]["not_selected_C"]["Z-A01"]
+    assert why.startswith("низкая ценность информации") and "A01, A02" in why
+    prun.write_outputs(tmp_path, 5000)
+    with open(tmp_path / "strategy_comparison.csv", encoding="utf-8") as f:
+        comp = list(csv.DictReader(f))
+    assert {"addressed_decision_risk_rub", "decision_risk_share"} <= set(comp[0])
+    a = next(r for r in comp if r["strategy"] == "A")
+    assert float(a["addressed_decision_risk_rub"]) == 0
+    meta = json.loads((tmp_path / "procurement_metadata.json").read_text(encoding="utf-8"))
+    assert "min(p, 1−p)" in meta["rule_C"] and meta["decision_risk"]["status"] == "scenario"
