@@ -205,6 +205,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def analyst_page():
         return page("analyst.html")
 
+    @app.get("/media/pipeline")
+    def pipeline_page():
+        """How the monitor reads the media, step by step (for the operator and the jury)."""
+        if not (STATIC / "pipeline.html").is_file():
+            raise HTTPException(404)
+        return page("pipeline.html")
+
     @app.post("/media/login")
     async def login(request: Request):
         if not settings.analyst_token:
@@ -265,6 +272,67 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 out.append({**item, "category_label": CATEGORIES.get(r["category"]),
                             "photos": photos})
         return {"reports": out}
+
+    @app.get("/api/media/reports/{report_id}")
+    def report_detail(request: Request, report_id: str):
+        """One eyewitness report with its full text and photos — for the operator's card."""
+        analyst(request)
+        with db() as conn:
+            r = conn.execute("SELECT * FROM citizen_reports WHERE report_id=?",
+                             (report_id,)).fetchone()
+            if r is None:
+                raise HTTPException(404, "обращение не найдено")
+            photos = [a["attachment_id"] for a in conn.execute(
+                "SELECT attachment_id FROM attachments WHERE report_id=? ORDER BY created_at",
+                (report_id,))]
+        item = {k: r[k] for k in r.keys() if k not in ("status_token_hash",  # noqa: SIM118
+                                                       "idempotency_key")}
+        return {**item, "category_label": CATEGORIES.get(r["category"]), "photos": photos}
+
+    @app.get("/api/media/publications")
+    def publications(request: Request, limit: int = 50, source: str | None = None,
+                     status: str | None = None, include_demo: bool = True):
+        """What each source brought and how it was read: the text as stored, the filter
+        decision, the extracted type/place/time with the quotes that justify them, the
+        geocoding hint and the events it went into. Text is data, never instructions."""
+        analyst(request)
+        statuses = [x for x in (status or "").split(",") if x]
+        if any(x not in ("pending", "ok", "needs_review", "invalid", "irrelevant") for x in statuses):
+            raise HTTPException(422, "неизвестный статус извлечения")
+        sql = ("SELECT p.*, s.name AS source_name, s.kind AS source_kind, s.attribution "
+               "FROM publications p JOIN sources s USING(source_id) WHERE 1=1")
+        params: list = []
+        if source:
+            sql += " AND p.source_id = ?"
+            params.append(source)
+        if statuses:
+            sql += f" AND p.extraction_status IN ({','.join('?' * len(statuses))})"
+            params.extend(statuses)
+        if not include_demo:
+            sql += " AND p.is_demo = 0"
+        sql += " ORDER BY p.fetched_at DESC, p.publication_id DESC LIMIT ?"
+        params.append(max(1, min(int(limit), 200)))
+        with db() as conn:
+            out = []
+            for r in conn.execute(sql, params).fetchall():
+                item = {k: r[k] for k in r.keys()  # noqa: SIM118 — sqlite3.Row
+                        if k not in ("extraction_json", "place_hint_json", "time_hint_json",
+                                     "content_hash", "title_key")}
+                item["extraction"] = loads(r["extraction_json"])
+                item["place_hint"] = loads(r["place_hint_json"])
+                item["time_hint"] = loads(r["time_hint_json"])
+                linked = conn.execute(
+                    "SELECT e.event_id, ev.independent_origin_count FROM evidence e JOIN events ev "
+                    "USING(event_id) WHERE e.publication_id=? ORDER BY e.event_id",
+                    (r["publication_id"],)).fetchall()
+                item["event_ids"] = [x["event_id"] for x in linked]
+                item["event_id"] = linked[0]["event_id"] if linked else None
+                item["event_sources"] = linked[0]["independent_origin_count"] if linked else None
+                out.append(item)
+            runs = [dict(x) for x in conn.execute(
+                "SELECT run_id, source_id, started_at, finished_at, status, items_seen, items_new, "
+                "items_relevant, error FROM ingestion_runs ORDER BY run_id DESC LIMIT 20")]
+        return {"publications": out, "runs": runs}
 
     @app.get("/api/media/attachments/{attachment_id}")
     def attachment(request: Request, attachment_id: str):
