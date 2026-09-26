@@ -192,6 +192,7 @@ def test_fonts_are_served_only_as_woff2_from_their_dir(app, tmp_path, monkeypatc
     assert r.status == 200 and r.body == b"wOF2 test"
     assert r.headers["content-type"] == "font/woff2"
     assert r.headers["x-content-type-options"] == "nosniff"
-    for bad in ("Face-OFL.txt", "..%2Fsecret.woff2", "missing.woff2"):
+    (fonts / "Link.woff2").symlink_to(tmp_path / "secret.woff2")  # resolves outside the dir
+    for bad in ("Face-OFL.txt", "Link.woff2", "missing.woff2"):
         assert call(app, "GET", f"/media/static/fonts/{bad}").status == 404
     assert "font-src 'self'" in call(app, "GET", "/report").headers["content-security-policy"]
