@@ -31,8 +31,9 @@ PERM_FILE = "pre_event_water.tif"
 META_FILE = "pre_event_water.json"
 NEW_WATER_FILE = "new_water_probability.tif"
 P_FILE = "flood_probability.tif"
-# Upper bound of the whole step: the jury runs `make all` itself and a hanging network must not
-# hang it. Past the deadline no more scenes are read; too few scenes -> `unavailable`.
+# Soft limit of the step: the jury runs `make all` itself and a slow network must not stall it.
+# Checked between scenes (a single request can still take its own retries, ~4 min at most):
+# past it no more scenes are read and the ones read are used; too few -> `insufficient`.
 DEADLINE_S = 300
 
 ROLE = "pre_event_context"
