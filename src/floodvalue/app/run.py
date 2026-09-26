@@ -169,6 +169,7 @@ def scenes():
             if _sealed(chip_id):
                 continue
             info = _raster_info(path)
+            empty = _s1_empty(chip_id)
             result.append({"run_id": None, "chip_id": chip_id,
                            "fixture": False,
                            "territory": source.get("event_id") or chip_id,
@@ -176,8 +177,8 @@ def scenes():
                            "position": _scene_position(path), "bounds": info["bounds"],
                            "corners": info["corners"], "status": "observation_only",
                            "preview_url": f"/api/observations/{chip_id}/preview.png",
-                           "analyzable": not _s1_empty(chip_id),
-                           "not_analyzable_reason": S1_EMPTY_REASON if _s1_empty(chip_id) else None})
+                           "analyzable": not empty,
+                           "not_analyzable_reason": S1_EMPTY_REASON if empty else None})
     return sorted(result, key=lambda item: (item["status"] != "analyzed", item["territory"], item["chip_id"]))
 
 
