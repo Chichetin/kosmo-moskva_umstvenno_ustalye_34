@@ -11,6 +11,8 @@ import json
 import sys
 from pathlib import Path
 
+sys.stdout.reconfigure(encoding="utf-8")  # prints «≥»: not in cp1251 (#158)
+
 
 def fmt(x: float) -> str:
     return f"{x:.3f}".replace(".", ",")
