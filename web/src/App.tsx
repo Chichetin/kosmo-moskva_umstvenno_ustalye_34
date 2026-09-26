@@ -16,6 +16,8 @@ import { WorldLocator } from "./WorldLocator";
 import MessagePanel, { type SelectedMessage } from "./MessagePanel";
 import MessagesList from "./MessagesList";
 import SensitivityPanel from "./SensitivityPanel";
+import RiskMatrix from "./RiskMatrix";
+import { finiteNumber, riskAsset } from "./riskAssets";
 import NewsPanel from "./NewsPanel";
 import PlanZones from "./PlanZones";
 import { pointInZone } from "./geometry";
@@ -94,11 +96,12 @@ const countryMatches = (territory: string, query: string) => {
 const assetName = (feature: Feature) =>
   labels[String(feature.properties.asset_class)] ??
   String(feature.properties.asset_class).replaceAll("_", " ");
-type AssetSort = "name" | "probability" | "loss" | "uncertainty";
+type AssetSort = "inspection" | "name" | "probability" | "loss" | "uncertainty";
 const assetSortValue = (feature: Feature, key: AssetSort): number | string | null => {
   if (key === "name") return assetName(feature);
+  if (key === "inspection") return finiteNumber(feature.properties.rank);
   const raw = feature.properties[key === "probability" ? "p_flood" : key === "loss" ? "expected_loss_rub" : "uncertainty"];
-  return raw == null || raw === "" || feature.properties.status === "no_data" ? null : Number(raw);
+  return feature.properties.status !== "ok" ? null : finiteNumber(raw);
 };
 const parseRoute = () => {
   const match = /^#\/(earth|scene|analysis)(?:\/([^/]+))?/.exec(location.hash);
@@ -217,7 +220,7 @@ export default function App() {
   const messageCount =
     (messages?.events.features.length ?? 0) + (messages?.reports.features.length ?? 0);
   const [zoneView, setZoneView] = useState<"plan" | "all">("plan");
-  const [assetSort, setAssetSort] = useState<{ key: AssetSort; descending: boolean }>({ key: "loss", descending: true });
+  const [assetSort, setAssetSort] = useState<{ key: AssetSort; descending: boolean }>({ key: "inspection", descending: false });
   const scene = scenes.find((item) => item.chip_id === route.chipId) ?? null;
   const locatorPosition = scene?.bounds
     ? { lon: (scene.bounds[0] + scene.bounds[2]) / 2, lat: (scene.bounds[1] + scene.bounds[3]) / 2 }
@@ -445,16 +448,23 @@ export default function App() {
       ),
     [activeSession],
   );
+  const inspectionPriority = activeSession?.metadata.expected_loss?.inspection_priority;
+  const inspection = useMemo(() => new Map((inspectionPriority?.order ?? []).map(row => [row.asset_id, row])), [inspectionPriority]);
+  const unassessed = assets.filter(item => !riskAsset(item));
+  const entropy = /^(entropy_p|binary_entropy_bits)(?:$|[\s(])/.test(String(activeSession?.metadata.uncertainty?.method ?? ""));
+  const selectRiskAsset = (id: string) => { setAssetId(id); setZoneId(null); };
   const sortedAssets = useMemo(() => [...assets].sort((left, right) => {
-    const a = assetSortValue(left, assetSort.key);
-    const b = assetSortValue(right, assetSort.key);
+    const value = (item: Feature) => assetSort.key === "inspection" && inspection.size
+      ? inspection.get(String(item.properties.asset_id))?.inspection_order ?? null : assetSortValue(item, assetSort.key);
+    const a = value(left);
+    const b = value(right);
     if (a == null || (typeof a === "number" && !Number.isFinite(a))) return b == null ? 0 : 1;
     if (b == null || (typeof b === "number" && !Number.isFinite(b))) return -1;
     const comparison = typeof a === "string" && typeof b === "string"
       ? a.localeCompare(b, "ru") : Number(a) - Number(b);
     return (assetSort.descending ? -comparison : comparison) ||
       String(left.properties.asset_id).localeCompare(String(right.properties.asset_id), "ru");
-  }), [assets, assetSort]);
+  }), [assets, assetSort, inspection]);
   const toggleAssetSort = (key: AssetSort) => setAssetSort((current) => ({
     key, descending: current.key === key ? !current.descending : key !== "name",
   }));
@@ -563,10 +573,10 @@ export default function App() {
   const zoneAssets = activeZone
     ? assets.filter((item) => pointInZone(item, activeZone))
     : [];
-  const totalLoss = assets.reduce(
-    (sum, item) => sum + Number(item.properties.expected_loss_rub || 0),
+  const totalLoss = assets.some(item => riskAsset(item)) ? assets.reduce(
+    (sum, item) => sum + (riskAsset(item) ? finiteNumber(item.properties.expected_loss_rub) ?? 0 : 0),
     0,
-  );
+  ) : null;
   const planRowsC = new Map((currentPlan?.plan_rows ?? [])
     .filter((row) => row.strategy === "C")
     .map((row) => [String(row.candidate_id), row]));
@@ -1244,15 +1254,25 @@ export default function App() {
                   assetName={assetName}
                   observationDate={date(scene?.observation_date ?? activeSession.observation_date)}
                 />
+                <div className="operator-context">
+                  <strong>Учебный портфель · {assets.length} объектов</strong>
+                  <p>Стоимость и уязвимость заданы сценарием. Карта показывает воду, включая постоянную; ожидаемый ущерб не является подтверждёнными потерями.</p>
+                  <p>Срок решения: <strong>{dateTimeUtc(activeSession.metadata.budget.decision_deadline)}</strong>. Цены и сроки получения дополнительных снимков сценарные.</p>
+                </div>
+                {unassessed.length > 0 && <div className="risk-missing" role="status">
+                  <strong>Требуют проверки: недостаточно данных · {unassessed.length}</strong>
+                  <p>Состояние неизвестно. Эти объекты не входят в оценённый ущерб и сценарные суммы; проверьте их осмотром или дополнительным снимком.</p>
+                  <div>{unassessed.map(item => <button key={String(item.properties.asset_id)} onClick={() => selectRiskAsset(String(item.properties.asset_id))}>{assetName(item)} · {String(item.properties.asset_id)}{item.properties.status === "partial" ? " · неполные данные" : " · нет оценки"}</button>)}</div>
+                </div>}
                 <div className="analysis-columns">
                   <section className="analysis-card">
                     <div className="card-title">
                       <h2>Приоритет осмотра</h2>
-                      <span>{assets.length} объектов · ожидаемый ущерб {formatRub(totalLoss)}</span>
+                      <span>{assets.length - unassessed.length} из {assets.length} оценено · ущерб {formatRub(totalLoss)}</span>
                     </div>
                     <details className="analysis-explain">
                       <summary>Что означает неопределённость карты?</summary>
-                      {String(activeSession.metadata.uncertainty?.method ?? "").startsWith("entropy_p") ? (<>
+                      {entropy ? (<>
                       <p>
                         Насколько модель сомневается, есть ли вода в точке объекта. Считается по
                         вероятности воды p (энтропия, в битах от 0 до 1): 0 — модель уверена
@@ -1273,6 +1293,9 @@ export default function App() {
                         {activeSession.metadata.uncertainty?.units && <p>Единицы: {activeSession.metadata.uncertainty.units}.</p>}
                       </>)}
                     </details>
+                    <div className="inspection-controls">
+                      {inspection.size > 0 ? <><button className={assetSort.key === "inspection" ? "active" : ""} onClick={() => setAssetSort({ key: "inspection", descending: false })}>По очередности осмотра</button><details><summary>Правило осмотра</summary><p>{inspectionPriority?.rule}</p></details></> : <p>Рекомендации осмотра не сохранены в этом комплекте. Для сравнения доступны сортировки по ущербу и вероятности; это не готовое решение о выезде.</p>}
+                    </div>
                     <div className="table-scroll">
                       <table>
                         <thead>
@@ -1320,21 +1343,23 @@ export default function App() {
                                 <strong>{assetName(item)}</strong>
                                 <small>
                                   {String(item.properties.asset_id)}
-                                  {item.properties.status === "no_data" && " · нет данных"}
+                                  {!riskAsset(item) && " · нет оценки"}
+                                  {inspection.get(String(item.properties.asset_id)) && ` · осмотр № ${inspection.get(String(item.properties.asset_id))!.inspection_order}`}
                                 </small>
+                                <small className="asset-action">{!riskAsset(item) ? "Проверить на месте или дополнительным снимком" : inspection.get(String(item.properties.asset_id))?.action}</small>
                               </td>
                               <td>
-                                {item.properties.status === "no_data"
+                                {!riskAsset(item)
                                   ? "—"
                                   : <span title={`Точное p: ${formatExactProbability(item.properties.p_flood)}`}>
                                       {formatProbability(item.properties.p_flood)}
                                     </span>}
                               </td>
                               <td>
-                                {formatRub(item.properties.expected_loss_rub)}
+                                {riskAsset(item) ? formatRub(item.properties.expected_loss_rub) : "—"}
                               </td>
                               <td>
-                                {item.properties.uncertainty == null ||
+                                {!riskAsset(item) || item.properties.uncertainty == null ||
                                 item.properties.uncertainty === ""
                                   ? "—"
                                   : Number(item.properties.uncertainty).toFixed(
@@ -1349,7 +1374,9 @@ export default function App() {
                     {activeAsset && (
                       <div className="card-foot asset-detail">
                         <div><strong>{assetName(activeAsset)} · {String(activeAsset.properties.asset_id)}</strong>
-                          <span>Стоимость {formatRub(activeAsset.properties.asset_value_rub)} · уязвимость {money(activeAsset.properties.vulnerability_coef)} · точное p {formatExactProbability(activeAsset.properties.p_flood)}</span>
+                          <span>Стоимость {formatRub(activeAsset.properties.asset_value_rub)} · уязвимость {money(activeAsset.properties.vulnerability_coef, 2)} · точное p {riskAsset(activeAsset) ? formatExactProbability(activeAsset.properties.p_flood) : "нет оценки"}</span>
+                          <span>{!riskAsset(activeAsset) ? "Недостаточно данных — нужен осмотр или дополнительный снимок." : inspection.get(String(activeAsset.properties.asset_id))?.action ?? "Рекомендация отсутствует в комплекте."}</span>
+                          {riskAsset(activeAsset) && inspection.get(String(activeAsset.properties.asset_id))?.reason && <details><summary>Почему такой приоритет</summary><p>{inspection.get(String(activeAsset.properties.asset_id))?.reason}</p></details>}
                         </div>
                         <button onClick={() => {
                           setLayers((current) => ({ ...current, assets: true }));
@@ -1358,6 +1385,7 @@ export default function App() {
                         }}>Показать на карте</button>
                       </div>
                     )}
+                    <RiskMatrix assets={assets} selected={assetId} onSelect={selectRiskAsset} name={assetName} entropy={entropy} />
                   </section>
                   <div className="analysis-stack">
                     <section className="analysis-card">
@@ -1415,8 +1443,15 @@ export default function App() {
                             </strong>
                             <div className="strategy-values">
                               <span>Данные <strong>{formatRub(row.data_cost_rub)}</strong></span>
+                              <span>Полная стоимость <strong>{formatRub(row.decision_cost_rub)}</strong></span>
                               <span>Охват <strong>{pct(row.coverage_share)}</strong></span>
                               <span>Доля R <strong>{pct(row.decision_risk_share)}</strong></span>
+                            </div>
+                            <small>{row.budget_feasible ? "В бюджете данных" : "Превышен бюджет данных"}</small>
+                            <div className="strategy-uncertainty">
+                              <span>Остаточная неопределённость <strong>{row.residual_uncertainty == null ? "—" : `${money(row.residual_uncertainty, 3)} ${entropy ? "бит · сумма по объектам" : activeSession.metadata.uncertainty?.units ?? "ед. показателя"}`}</strong></span>
+                              <small>{({ baseline: "Исходная оценка", scenario: "Сценарий · не измеренное улучшение", measured: "Измерено", not_estimated: "Не оценена" } as Record<string, string>)[row.uncertainty_status] ?? "Статус не указан"}</small>
+                              {row.uncertainty_basis && <details><summary>Основание оценки</summary><p>{row.uncertainty_basis}</p></details>}
                             </div>
                             {row.strategy === "B" && !row.budget_feasible && (
                               <small>
@@ -1428,10 +1463,11 @@ export default function App() {
                       ))}
                       <div className="card-foot">
                         <p>Охват — доля ожидаемого ущерба объектов в зонах, а не предотвращённый ущерб.</p>
-                        <p>Цены рассчитаны по сценарной ставке {money(activeSession.metadata.pricing?.base_rate_rub_km2)} ₽/км²; это не тариф.</p>
+                        <p>Цены рассчитаны по сценарной ставке {money(activeSession.metadata.pricing?.base_rate_rub_km2, 2)} ₽/км²; это не тариф.</p>
                         <details>
                           <summary>Методика расчёта</summary>
                           <p>Сценарная цена ошибки решения R = V·q·min(p, 1−p). Показана доля R объектов в зонах от R всех оценённых объектов; снижение фактических потерь не заявляется.</p>
+                          <p>Допущения R: одинаковая цена двух типов ошибок и идеальное уточнение снимком. Реальные стоимость выезда, цена пропуска и качество нового снимка здесь не моделируются; это не подтверждённая экономия.</p>
                           <p>План C не покупает новые данные ради объектов, для которых исход по карте почти определён: их осмотр планируется по исходным данным.</p>
                         </details>
                         <details>
@@ -1484,12 +1520,12 @@ export default function App() {
                               <span>
                                 <b>{String(item.properties.candidate_id)}</b>
                                 <small>
-                                  {money(item.properties.area_km2)} км² ·{" "}
+                                  {money(item.properties.area_km2, 3)} км² ·{" "}
                                   {String(
                                     item.properties.sensor_type,
                                   ).toUpperCase()}{" "}
                                   · доступна{" "}
-                                  {date(
+                                  {dateTimeUtc(
                                     String(item.properties.available_at ?? ""),
                                   )}
                                 </small>
