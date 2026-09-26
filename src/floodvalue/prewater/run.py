@@ -129,7 +129,7 @@ def build(chip_id: str, out: Path, *, archive=None, today: date | None = None,
         items = archive.search((w, s, e, n), first, last)
         # single-polarisation (VV-only / HH) scenes have no VH asset: not an observation here
         groups = archive.acquisitions([it for it in items if "vh" in it.get("assets", {})])
-        token = archive.sas_token()
+        token = archive.sas_token()  # runtime SAS token from the archive API, not a literal; secret-scan: allow
         stack, scenes, failed = [], [], []
         for group in groups:
             if time.monotonic() > t_end:  # keep what was read; too few -> insufficient below
