@@ -16,6 +16,10 @@ Sentinel-1 чипу Sen1Floods11 строит вероятностную кар�
 
 Новый участник команды — `docs/onboarding-prompt.md`.
 
+Запланировано, **не реализовано** (развитие после сдачи, вне 20 критериев): мониторинг СМИ
+и проверка сообщений о паводках — спецификация `docs/features/media-monitoring.md`, план
+`docs/plans/media-monitoring-mvp.md`.
+
 ## Установка
 
 ```bash
