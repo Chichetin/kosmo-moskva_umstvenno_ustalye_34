@@ -2,24 +2,51 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="referrer" content="no-referrer">
-<title>Статус обращения — FloodValue</title>
-<link rel="stylesheet" href="/media/static/media.css">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f7fafc" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#060e15" media="(prefers-color-scheme: dark)">
+<title>Статус обращения — Митрандир</title>
+<link rel="preload" href="/media/static/fonts/Unbounded-Variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/media/static/fonts/Onest-Variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/media/static/report.css">
 </head>
 <body>
-<header class="topbar"><span class="brand">FloodValue<small>статус обращения</small></span></header>
-<main class="report">
-  <section class="done" aria-live="polite">
-    <p id="state" class="muted m0">Загружаем…</p>
-    <p class="num" id="number"></p>
-    <dl class="kv hidden" id="details">
-      <dt>Отправлено</dt><dd id="submitted"></dd>
-      <dt>Статус</dt><dd id="status"></dd>
-    </dl>
-    <p class="muted small">«Принято в работу» значит, что аналитик учтёт сообщение при проверке. Это не подтверждение затопления спутником и не заказ съёмки.</p>
+<div class="scene" aria-hidden="true">
+  <svg class="wave wave-back" viewBox="0 0 2880 130" preserveAspectRatio="none" focusable="false"><path d="M0 44Q360 18 720 44T1440 44T2160 44T2880 44V130H0Z"/></svg>
+  <svg class="wave wave-mid" viewBox="0 0 2880 104" preserveAspectRatio="none" focusable="false"><path d="M0 38Q180 20 360 38T720 38T1080 38T1440 38T1800 38T2160 38T2520 38T2880 38V104H0Z"/></svg>
+  <svg class="wave wave-front" viewBox="0 0 2880 78" preserveAspectRatio="none" focusable="false"><path d="M0 30Q120 16 240 30T480 30T720 30T960 30T1200 30T1440 30T1680 30T1920 30T2160 30T2400 30T2640 30T2880 30V78H0Z"/></svg>
+  <div class="water"></div>
+</div>
+
+<header class="top">
+  <a class="brand" href="/report">
+    <svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true" focusable="false"><circle class="ring" cx="14" cy="14" r="12.2"/><path class="w" d="M6.5 15.5q1.9-1.6 3.75 0t3.75 0 3.75 0 3.75 0"/><path class="w" d="M8.5 19.2q1.4-1.2 2.75 0t2.75 0 2.75 0 2.75 0"/></svg>
+    Митрандир
+  </a>
+</header>
+
+<main class="page">
+  <section class="hero" aria-labelledby="title">
+    <p class="eyebrow rise">По личной ссылке</p>
+    <h1 id="title" class="rise d1">Статус <span class="ink">обращения</span></h1>
+    <p class="lead rise d2">Ход проверки вашего сообщения. Ссылка личная: по&nbsp;ней видны только номер и&nbsp;статус.</p>
   </section>
-  <p class="mt18"><a href="/report">Отправить новое сообщение</a></p>
+
+  <div class="flow">
+    <section class="card done rise d2" aria-live="polite">
+      <p id="state" class="muted m0">Загружаем…</p>
+      <p class="num" id="number"></p>
+      <ol class="track hidden" id="track" aria-label="Ход проверки"></ol>
+      <dl class="kv hidden" id="details">
+        <dt>Отправлено</dt><dd id="submitted"></dd>
+        <dt>Статус</dt><dd id="status"></dd>
+      </dl>
+      <p class="muted small">«Принято в работу» значит, что аналитик учтёт сообщение при проверке. Это не подтверждение затопления спутником и не заказ съёмки.</p>
+      <p class="back m0"><a class="btn" href="/report">Отправить новое сообщение</a></p>
+    </section>
+  </div>
 </main>
 <script src="/media/static/status.js"></script>
 </body>

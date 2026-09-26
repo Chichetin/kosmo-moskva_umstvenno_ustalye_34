@@ -30,7 +30,7 @@ def model_dir(tmp_path_factory):
     joblib.dump(_toy_model(), d / "model.joblib")
     cfg = {"method": "pixel_hgb", "features": NAMES, "clip_db": CLIP, "threshold": 0.5,
            "model_file": "model.joblib", "model_sha256": predict.sha256_file(d / "model.joblib")}
-    (d / "config.json").write_text(json.dumps(cfg))
+    (d / "config.json").write_text(json.dumps(cfg), encoding="utf-8")
     return d
 
 

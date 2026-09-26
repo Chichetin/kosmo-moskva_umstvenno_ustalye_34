@@ -11,10 +11,12 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "scripts" / "sync-gitverse.sh"
 TEXT = SCRIPT.read_text(encoding="utf-8")
+# PATH lookup, not CreateProcess: on Windows a bare "bash" hits System32\bash.exe (WSL) first.
+BASH = shutil.which("bash") or "bash"
 
 
 def test_bash_syntax() -> None:
-    subprocess.run(["bash", "-n", str(SCRIPT)], check=True)
+    subprocess.run([BASH, "-n", str(SCRIPT)], check=True)
 
 
 @pytest.fixture
@@ -28,8 +30,8 @@ def bare_repo(tmp_path: Path) -> Path:
 
 def _run(repo: Path, *args: str) -> subprocess.CompletedProcess:
     env = {k: v for k, v in os.environ.items() if not k.startswith("GITVERSE_")}
-    return subprocess.run(["bash", "scripts/sync-gitverse.sh", *args], cwd=repo, env=env,
-                          capture_output=True, text=True, timeout=30)
+    return subprocess.run([BASH, "scripts/sync-gitverse.sh", *args], cwd=repo, env=env,
+                          capture_output=True, text=True, encoding="utf-8", timeout=30)
 
 
 def test_unknown_argument_rejected(bare_repo: Path) -> None:
@@ -91,8 +93,8 @@ def _run_api_down(repo: Path, gitverse_url: str) -> subprocess.CompletedProcess:
     env.update(GITVERSE_TOKEN="fake-token-for-test", GITVERSE_USER="tester",  # secret-scan: allow
                GITVERSE_URL=gitverse_url, GITVERSE_API_RETRY_DELAY="0",
                GITVERSE_API=f"http://127.0.0.1:{_closed_port()}/repos/x")
-    return subprocess.run(["bash", "scripts/sync-gitverse.sh", "--verify"], cwd=repo, env=env,
-                          capture_output=True, text=True, timeout=60)
+    return subprocess.run([BASH, "scripts/sync-gitverse.sh", "--verify"], cwd=repo, env=env,
+                          capture_output=True, text=True, encoding="utf-8", timeout=60)
 
 
 def test_api_down_falls_back_to_symref(bare_repo: Path, tmp_path: Path) -> None:

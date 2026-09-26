@@ -9,6 +9,7 @@ from rasterio.transform import from_origin
 
 from floodvalue.assets import run as assets_run
 from floodvalue.assets.portfolio import PROB_NODATA
+from floodvalue.contracts import load_run_config
 
 H = W = 32
 TRANSFORM = from_origin(81.0, 7.0, 8.983152841195215e-05, 8.983152841195215e-05)
@@ -81,6 +82,41 @@ def test_run_writes_three_files_by_contract(setup):
         assert float(r["expected_loss_rub"]) == pytest.approx(0.4 * v * q, rel=1e-6)
     meta = json.loads((out / "assets_metadata.json").read_text(encoding="utf-8"))
     assert {"seed", "placement_rule", "p_extraction_rule", "uncertainty", "status_rule"} <= set(meta)
+
+
+def test_run_writes_el_to_the_kopeck(setup):
+    args, out, _ = setup
+    with rasterio.open(out / "flood_probability.tif") as src:
+        prob = src.read(1)
+    prob[prob != PROB_NODATA] = 0.017799117  # p*V*q has float noise beyond the kopeck
+    write_prob(out / "flood_probability.tif", prob)
+    assert assets_run.run(args) == 0
+    for r in read_csv(out / "asset_loss.csv"):
+        whole, _, frac = r["expected_loss_rub"].partition(".")
+        assert whole.isdigit() and len(frac) <= 2, r["expected_loss_rub"]
+        for k in ("el_low_rub", "el_high_rub"):
+            assert r[k] == ""  # no range raster in this setup
+
+
+def test_run_takes_portfolio_seed_from_run_yaml(setup):
+    args, out, _ = setup
+    assert assets_run.run(args) == 0
+    meta = json.loads((out / "assets_metadata.json").read_text(encoding="utf-8"))
+    assert meta["seed"] == load_run_config().portfolio_seed
+    assert meta["seed_source"] == "configs/run.yaml: portfolio_seed"
+    assert "not yet available" not in json.dumps(meta)
+    first = read_csv(out / "assets.csv")
+    # another portfolio_seed in run.yaml -> another placement, seed recorded as used
+    monkeypatch = pytest.MonkeyPatch()
+    other = load_run_config().model_copy(update={"portfolio_seed": 7})
+    monkeypatch.setattr(assets_run, "load_run_config", lambda: other)
+    try:
+        assert assets_run.run(args) == 0
+    finally:
+        monkeypatch.undo()
+    meta = json.loads((out / "assets_metadata.json").read_text(encoding="utf-8"))
+    assert meta["seed"] == 7
+    assert read_csv(out / "assets.csv") != first
 
 
 def test_run_no_data_asset_has_empty_fields(setup):

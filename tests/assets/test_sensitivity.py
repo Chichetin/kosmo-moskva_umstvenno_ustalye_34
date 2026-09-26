@@ -9,7 +9,14 @@ import rasterio
 from rasterio.transform import from_origin
 
 from floodvalue.assets import run as assets_run
-from floodvalue.assets.portfolio import PROB_NODATA, Asset, assess_assets, expected_loss, extract_p
+from floodvalue.assets.portfolio import (
+    PROB_NODATA,
+    Asset,
+    assess_assets,
+    expected_loss,
+    extract_p,
+    load_asset_types,
+)
 from floodvalue.assets.sensitivity import (
     REQUIRED_KEY,
     SENSITIVITY_FIELDS,
@@ -367,3 +374,20 @@ def test_run_writes_assets_sensitivity_csv(tmp_path, monkeypatch):
     meta = json.loads((out / "assets_metadata.json").read_text(encoding="utf-8"))
     assert {"p_rule", "v_rule", "q_rule", "n_scenarios"} <= set(meta["sensitivity"])
     assert meta["sensitivity"]["n_scenarios"] == len(rows)
+
+
+def test_portfolio_totals_are_exact_kopeck_sums():
+    # #127: per-asset EL are to the kopeck; the Sri-Lanka_713926 portfolio summed as floats gives
+    # 16842208.290000003 -- the totals in changed_inputs_json must be the exact kopeck sum
+    types = load_asset_types()
+    ps = [0.97015727, 0.9781378, 0.07560912, 0.017799122, 0.07981384, 0.032464832,
+          0.041003343, 0.37545076, 0.010859022, 0.99697155]
+    assets = [Asset(f"A{i:02d}", t.asset_class, t.asset_value_rub, t.vulnerability_coef, 0, i - 1,
+                    0.0, 0.0) for i, t in enumerate(types, start=1)]
+    rows = assess_assets(assets, np.array([ps], dtype="float32"))
+    assert sum(r["expected_loss_rub"] for r in rows) != 16842208.29  # the float noise at stake
+    for r in el_sensitivity(assets, rows):
+        c = changed(r)
+        assert c["baseline_expected_loss_rub"] == 16842208.29
+        _, _, frac = repr(c["portfolio_expected_loss_rub"]).partition(".")
+        assert len(frac) <= 2, (r["scenario_id"], c["portfolio_expected_loss_rub"])

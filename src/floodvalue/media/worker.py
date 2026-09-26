@@ -5,8 +5,8 @@ clean stop on SIGTERM/SIGINT between items — every item is committed as it is 
 
 from __future__ import annotations
 
-import fcntl
 import signal
+import sys
 import time
 from contextlib import closing, contextmanager
 from datetime import UTC, datetime
@@ -16,6 +16,32 @@ from floodvalue.media.netfetch import Budget
 from floodvalue.media.pipeline import make_geocoder, recover_interrupted, run_source
 from floodvalue.media.reports import purge_expired
 from floodvalue.media.store import connect, get_kv, sync_sources, transaction
+
+if sys.platform == "win32":  # no fcntl on Windows (#133): lock byte 0 of the lock file
+    import msvcrt
+
+    def _try_lock(f) -> bool:
+        try:
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            return False
+        return True
+
+    def _unlock(f) -> None:
+        f.seek(0)
+        msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+else:
+    import fcntl
+
+    def _try_lock(f) -> bool:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+        return True
+
+    def _unlock(f) -> None:
+        fcntl.flock(f, fcntl.LOCK_UN)
 
 _stop = False
 
@@ -30,15 +56,13 @@ def cycle_lock(settings: Settings):
     path = settings.db_path.with_suffix(".lock")
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
-        try:
-            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
+        if not _try_lock(f):
             yield False
             return
         try:
             yield True
         finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
+            _unlock(f)
 
 
 def _due(source, now: datetime, override: int | None) -> bool:

@@ -22,7 +22,7 @@ with rasterio.open(f"{kit}/flood_probability.tif") as r:
     p = r.read(1); b = r.bounds; t = r.transform; nod = r.nodata
 with rasterio.open(f"{kit}/flood_mask.tif") as r:
     m = r.read(1)
-meta = json.load(open(f"{kit}/run_metadata.json"))
+meta = json.load(open(f"{kit}/run_metadata.json", encoding="utf-8"))
 
 rb = sess["raster"]["bounds"]
 check(np.allclose(rb, [b.left, b.bottom, b.right, b.top], atol=1e-9), f"границы в API = границы tif {[round(v, 6) for v in rb]}")
@@ -30,7 +30,7 @@ c = sess["raster"]["corners"]
 check(c == [[rb[0], rb[3]], [rb[2], rb[3]], [rb[2], rb[1]], [rb[0], rb[1]]], "углы наложения: СЗ, СВ, ЮВ, ЮЗ (порядок MapLibre)")
 check(float(sess["metadata"]["threshold"]) == float(meta["threshold"]), f"порог в API = порог комплекта ({meta['threshold']})")
 
-loss = {row["asset_id"]: row for row in csv.DictReader(open(f"{kit}/asset_loss.csv"))}
+loss = {row["asset_id"]: row for row in csv.DictReader(open(f"{kit}/asset_loss.csv", encoding="utf-8"))}
 feats = sess["assets"]["features"]
 check(len(feats) == 10, f"объектов в API: {len(feats)}")
 for f in feats:

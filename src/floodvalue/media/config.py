@@ -29,6 +29,7 @@ class Settings:
     photo_dir: Path
     analyst_token: str | None
     public_reports: bool
+    operator_map_public: bool  # /api/media/map without analyst login while the operator UI is public
     poll_interval_s: int | None  # overrides every source's poll_interval_s when set
     max_items_per_cycle: int
     max_requests_per_cycle: int
@@ -48,6 +49,7 @@ def load_settings() -> Settings:
         photo_dir=root / "photos",
         analyst_token=os.environ.get("FLOODVALUE_MEDIA_ANALYST_TOKEN") or None,
         public_reports=os.environ.get("FLOODVALUE_MEDIA_PUBLIC_REPORTS") == "1",
+        operator_map_public=os.environ.get("FLOODVALUE_MEDIA_OPERATOR_MAP_PUBLIC") == "1",
         poll_interval_s=_int("FLOODVALUE_MEDIA_POLL_INTERVAL_S", 0) or None,
         max_items_per_cycle=_int("FLOODVALUE_MEDIA_MAX_ITEMS_PER_CYCLE", 200),
         max_requests_per_cycle=_int("FLOODVALUE_MEDIA_MAX_REQUESTS_PER_CYCLE", 20),

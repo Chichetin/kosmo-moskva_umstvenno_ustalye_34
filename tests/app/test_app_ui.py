@@ -21,7 +21,7 @@ def _synthetic_s1_manifest(tmp_path, monkeypatch):
     interim.mkdir(exist_ok=True)
     (interim / "source_manifest_s1.json").write_text(json.dumps({"sources": [{
         "chip_id": "Synthetic_000001", "observation_date": "2017-05-30",
-    }]}))
+    }]}), encoding="utf-8")
     monkeypatch.setenv("FLOODVALUE_DATA_DIR", str(tmp_path))
 
 
@@ -64,17 +64,17 @@ def test_scene_catalog_and_selected_run_stay_consistent(tmp_path, monkeypatch):
         target = tmp_path / f"scene-{index}"
         shutil.copytree(fixture, target)
         metadata_path = target / "run_metadata.json"
-        metadata = json.loads(metadata_path.read_text())
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         metadata.update(run_id=f"scene-{index}", chip_id=f"chip-{index}", event_id=f"Area-{index}")
-        metadata_path.write_text(json.dumps(metadata))
+        metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
     later = tmp_path / "scene-3"
     shutil.copytree(fixture, later)
-    metadata = json.loads((later / "run_metadata.json").read_text())
+    metadata = json.loads((later / "run_metadata.json").read_text(encoding="utf-8"))
     metadata.update(run_id="scene-3", chip_id="chip-1", event_id="Area-1")
-    (later / "run_metadata.json").write_text(json.dumps(metadata))
+    (later / "run_metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
     (later / "source_manifest.json").write_text(json.dumps({"sources": [{
         "source_id": "test:S1:chip-1", "chip_id": "chip-1", "observation_date": "2018-04-09",
-    }]}))
+    }]}), encoding="utf-8")
     catalog = run.scenes()
     assert {item["run_id"] for item in catalog} == {"scene-1", "scene-2", "scene-3"}
     assert all(item["position"] is not None for item in catalog)
@@ -125,7 +125,8 @@ def test_raw_observation_catalog_never_borrows_another_scenes_analysis(tmp_path,
     manifest = tmp_path / "interim" / "source_manifest_s1.json"
     manifest.parent.mkdir()
     manifest.write_text(json.dumps({"sources": [{"chip_id": "Test_1", "file": path.name,
-                                                  "event_id": "Test", "observation_date": "2017-05-30"}]}))
+                                                  "event_id": "Test", "observation_date": "2017-05-30"}]}),
+                                                      encoding="utf-8")
     catalog = run.scenes()
     assert len(catalog) == 1
     assert catalog[0]["status"] == "observation_only"
@@ -195,7 +196,7 @@ def test_test_chips_stay_sealed_in_the_raw_catalog(tmp_path, monkeypatch):
                         "event_id": chip_id.split("_")[0], "observation_date": "2017-05-30"})
     manifest = tmp_path / "interim" / "source_manifest_s1.json"
     manifest.parent.mkdir()
-    manifest.write_text(json.dumps({"sources": sources}))
+    manifest.write_text(json.dumps({"sources": sources}), encoding="utf-8")
 
     assert [item["chip_id"] for item in run.scenes()] == ["Nigeria_1"]
     for endpoint in (run.observation_preview, run.observation_s1):

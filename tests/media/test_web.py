@@ -172,7 +172,27 @@ def test_local_mode_refuses_foreign_host(app):
 def test_tooltips_never_get_html_strings():
     import re
     from pathlib import Path
-    js = (Path(__file__).resolve().parents[2] / "src/floodvalue/media/static/analyst.js").read_text()
+    js_path = Path(__file__).resolve().parents[2] / "src/floodvalue/media/static/analyst.js"
+    js = js_path.read_text(encoding="utf-8")
     assert ".innerHTML" not in js and "insertAdjacentHTML" not in js
     for call_args in re.findall(r"\.bind(?:Tooltip|Popup)\(([^)]{0,40})", js):
         assert call_args.startswith("tipNode("), call_args
+
+
+def test_fonts_are_served_only_as_woff2_from_their_dir(app, tmp_path, monkeypatch):
+    """Self-hosted fonts for /report (#174): woff2 from static/fonts only, nothing else leaks."""
+    from floodvalue.media import web
+    fonts = tmp_path / "fonts"
+    fonts.mkdir()
+    (fonts / "Face.woff2").write_bytes(b"wOF2 test")
+    (fonts / "Face-OFL.txt").write_text("license")
+    (tmp_path / "secret.woff2").write_bytes(b"outside")
+    monkeypatch.setattr(web, "FONTS", fonts)
+    r = call(app, "GET", "/media/static/fonts/Face.woff2")
+    assert r.status == 200 and r.body == b"wOF2 test"
+    assert r.headers["content-type"] == "font/woff2"
+    assert r.headers["x-content-type-options"] == "nosniff"
+    (fonts / "Link.woff2").symlink_to(tmp_path / "secret.woff2")  # resolves outside the dir
+    for bad in ("Face-OFL.txt", "Link.woff2", "missing.woff2"):
+        assert call(app, "GET", f"/media/static/fonts/{bad}").status == 404
+    assert "font-src 'self'" in call(app, "GET", "/report").headers["content-security-policy"]

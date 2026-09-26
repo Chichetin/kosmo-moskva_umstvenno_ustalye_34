@@ -17,6 +17,7 @@ from rasterio.transform import from_origin
 from floodvalue.assets import run as assets_run
 from floodvalue.baseline import predict as baseline_predict
 from floodvalue.contracts import files as F
+from floodvalue.contracts import load_run_config
 from floodvalue.export import assemble
 from floodvalue.export import run as export_run
 from floodvalue.export.validate import validate_run
@@ -37,6 +38,31 @@ def test_run_id_follows_contract():
     assert assemble.budget_label(2500.5) == "2500.5"
     assert assemble.budget_label(0.0) == "0"
     assert assemble.budget_label(1_000_000.0) == "1000000"
+
+
+def test_reproduce_follows_makefile_and_has_no_stale_fallback():
+    out = "${FLOODVALUE_OUTPUT_DIR:-outputs}/Sri-Lanka_713926_5000_abc123"
+    cmds = assemble.reproduce_commands("abc123", "Sri-Lanka_713926", "5000", out, "unet")
+    text = " ".join(cmds)
+    assert cmds[0] == "git checkout abc123"
+    assert "FLOODVALUE_METHOD=unet make all CHIP=Sri-Lanka_713926 BUDGET=5000" in cmds
+    assert "FLOODVALUE_METHOD=unet make predict CHIP=Sri-Lanka_713926" in text
+    assert "--mask-only" in text  # baseline_mask.tif, as in make all (#115)
+    assert "пока нет" not in text and "floodvalue.model.predict" not in text
+    # the legacy D-009 method name is not an env value: no FLOODVALUE_METHOD then
+    legacy = assemble.reproduce_commands("abc", "X_1", "5000", "o",
+                                         "baseline_sigmoid (temporary main method, D-009)")
+    assert "make all CHIP=X_1 BUDGET=5000" in legacy
+    assert "FLOODVALUE_METHOD" not in " ".join(legacy)
+
+
+def test_perturbed_el_is_rounded_half_up_to_the_kopeck_like_assets():
+    # #127: the scenario EL must equal what assets writes (exact decimal p*V*q, ROUND_HALF_UP);
+    # the float product 28481.58499.. would give 28481.58 and break the ΣEL match of C_fixed rows
+    assets = {"A01": {"asset_value_rub": "8000000", "vulnerability_coef": "0.2"}}
+    loss = {"A01": {"p_flood": "0.017800990625"}}
+    el = assemble.perturbed_el(assets, loss, {"p_flood": {"factor": 1.0}, "scope": "portfolio"})
+    assert el == {"A01": 28481.59}
 
 
 def test_split_hash_matches_frozen_split():
@@ -320,6 +346,12 @@ def test_all_stages_to_valid_result_set(env):
     assert meta["event_date"] == "2017-05-30" and meta["event_id"] == "Fixture"
     assert meta["split"]["chip_split"] == "none"
     assert meta["proxy_check"]["status"] == "planned"
+    # #127: reproducible commands without the local path, seed from configs/run.yaml
+    assert f"make validate OUT=${{FLOODVALUE_OUTPUT_DIR:-outputs}}/{dest.name}" in meta["reproduce"]
+    assert not any(str(env) in c for c in meta["reproduce"])  # no machine-specific path
+    assert meta["portfolio"]["seed_source"] == "configs/run.yaml: portfolio_seed"
+    assert meta["portfolio"]["seed"] == load_run_config().portfolio_seed
+    assert "not yet available" not in json.dumps(meta, ensure_ascii=False)
     assets_meta = json.loads((work / "assets_metadata.json").read_text(encoding="utf-8"))
     assert meta["expected_loss"]["inspection_priority"] == assets_meta["inspection_priority"]
     assert any("D-009" in w for w in meta["warnings"])
