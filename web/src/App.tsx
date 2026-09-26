@@ -5,7 +5,6 @@ import {
   BarChart3,
   ChevronDown,
   Layers3,
-  MessageSquareWarning,
   Search,
   X,
 } from "lucide-react";
@@ -30,6 +29,30 @@ const dateTimeUtc = (value: string | null | undefined) =>
     : "—";
 const pct = (value: number | null | undefined) =>
   value == null ? "—" : `${Math.round(value * 100)}%`;
+function useCountUp(value: number | null | undefined, enabled: boolean) {
+  const [shown, setShown] = useState<number | null>(value ?? null);
+  useEffect(() => {
+    if (value == null) {
+      setShown(null);
+      return;
+    }
+    if (!enabled || window.matchMedia("(prefers-reduced-motion: reduce)").matches || value === 0) {
+      setShown(value);
+      return;
+    }
+    let frame = 0;
+    const start = performance.now();
+    setShown(0);
+    const tick = (now: number) => {
+      const progress = Math.min((now - start) / 850, 1);
+      setShown(value * (1 - Math.pow(1 - progress, 3)));
+      if (progress < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [value, enabled]);
+  return shown;
+}
 const date = (value: string | null | undefined) =>
   value
     ? new Intl.DateTimeFormat("ru-RU", {
@@ -318,6 +341,9 @@ export default function App() {
     (sum, item) => sum + Number(item.properties.expected_loss_rub || 0),
     0,
   );
+  const shownLoss = useCountUp(totalLoss, !mapActive && !!activeSession);
+  const shownCost = useCountUp(chosen?.data_cost_rub, !mapActive && !!activeSession);
+  const shownCoverage = useCountUp(chosen?.coverage_share, !mapActive && !!activeSession);
   const exportUrl = activeSession
     ? `/api/download?run_id=${encodeURIComponent(activeSession.run_id)}`
     : null;
@@ -368,6 +394,8 @@ export default function App() {
       <main className="workspace">
         <div
           className={`map-screen ${mapActive ? "" : "map-hidden"} ${scene ? "scene-mode" : ""} ${baseMap === "optical" ? "optical-mode" : ""}`}
+          aria-hidden={!mapActive}
+          inert={!mapActive}
         >
           <MapPanel
             scenes={scenes}
@@ -446,9 +474,10 @@ export default function App() {
                         : "Нет доступных наблюдений. Добавьте исходные данные или готовый комплект."}
                     </p>
                   )}
-                  {filtered.map((item) => (
+                  {filtered.map((item, index) => (
                     <button
                       key={item.chip_id}
+                      style={{ animationDelay: `${Math.min(index, 8) * 42 + 80}ms` }}
                       role="option"
                       aria-selected={scene?.chip_id === item.chip_id}
                       onClick={() => selectScene(item)}
@@ -460,13 +489,9 @@ export default function App() {
                           <code>{item.chip_id}</code>
                         </small>
                       </span>
-                      <em>
-                        {item.fixture
-                          ? "Тест"
-                          : item.status === "analyzed"
-                            ? "Анализ"
-                            : ""}
-                      </em>
+                      {(item.fixture || item.status === "analyzed") && (
+                        <em>{item.fixture ? "Тест" : "Анализ"}</em>
+                      )}
                     </button>
                   ))}
                   {!filtered.length && scenes.length > 0 && (
@@ -505,9 +530,8 @@ export default function App() {
                   aria-pressed={showMessages}
                   title={`События из СМИ и обращения очевидцев: ${messages.events.features.length} событий, ${messages.reports.features.length} обращений ждут модерации. Повод проверить территорию — не входит в p, ущерб и план.`}
                 >
-                  <MessageSquareWarning size={15} />
                   Сообщения
-                  <span className="media-count">{messageCount}</span>
+                  <span className="media-count">· {messageCount}</span>
                 </button>
               </div>
             )}
@@ -780,8 +804,7 @@ export default function App() {
             </div>
           )}
         </div>
-        {!mapActive && (
-          <div className="analysis-screen">
+          <div className={`analysis-screen ${mapActive ? "analysis-hidden" : ""}`} aria-hidden={mapActive} inert={mapActive}>
             <div className="analysis-head">
               <button
                 onClick={() =>
@@ -821,15 +844,15 @@ export default function App() {
                   </div>
                   <div>
                     <span>Ожидаемый ущерб</span>
-                    <strong>{money(totalLoss)} ₽</strong>
+                    <strong>{money(shownLoss)} ₽</strong>
                   </div>
                   <div>
                     <span>План C · данные</span>
-                    <strong>{money(chosen?.data_cost_rub)} ₽</strong>
+                    <strong>{money(shownCost)} ₽</strong>
                   </div>
                   <div>
                     <span>Охват ущерба</span>
-                    <strong>{pct(chosen?.coverage_share)}</strong>
+                    <strong>{pct(shownCoverage)}</strong>
                   </div>
                   <div>
                     <span>Цена ошибки решения · сценарий</span>
@@ -1103,7 +1126,6 @@ export default function App() {
               </div>
             )}
           </div>
-        )}
       </main>
     </div>
   );

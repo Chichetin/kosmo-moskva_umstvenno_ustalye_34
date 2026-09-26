@@ -134,6 +134,15 @@ const reducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const minimumZoom = () => (window.innerWidth < 700 ? 0.9 : 1.15);
 const overviewZoom = () => (window.innerWidth < 700 ? 1.15 : 2.05);
+const overviewPadding = () => ({
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: window.innerWidth < 700
+    ? 0
+    : Math.round(Math.min(58, Math.max(30, window.innerWidth * 0.036)) + 286),
+});
+const noPadding = () => ({ top: 0, right: 0, bottom: 0, left: 0 });
 
 export default function MapPanel(props: Props) {
   const host = useRef<HTMLDivElement>(null);
@@ -325,7 +334,8 @@ export default function MapPanel(props: Props) {
       return;
     }
     mapRef.current = map;
-    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-left");
+    map.setPadding(props.scene ? noPadding() : overviewPadding());
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
     const attribution = host.current.querySelector<HTMLDetailsElement>(
       ".maplibregl-ctrl-attrib",
     );
@@ -719,6 +729,7 @@ export default function MapPanel(props: Props) {
     const observer = new ResizeObserver(() => {
       map.setMinZoom(minimumZoom());
       map.resize();
+      map.setPadding(current.current.scene ? noPadding() : overviewPadding());
     });
     observer.observe(host.current);
     return () => {
@@ -754,6 +765,7 @@ export default function MapPanel(props: Props) {
     lastScene.current = props.scene.chip_id;
     popup.current?.remove();
     map.stop();
+    map.setPadding(noPadding());
     const [west, south, east, north] = props.scene.bounds;
     map.fitBounds(
       [
@@ -824,6 +836,7 @@ export default function MapPanel(props: Props) {
         (!props.overviewRequest && !lastScene.current)) return;
     lastScene.current = null;
     map.stop();
+    map.setPadding(overviewPadding());
     map.easeTo({
       center: [39, 13],
       zoom: overviewZoom(),
