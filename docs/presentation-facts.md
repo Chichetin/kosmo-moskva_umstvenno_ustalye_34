@@ -5,15 +5,14 @@
 `8a7ee46`). Единственный источник чисел для слайдов и ответов жюри:
 каждое число ниже — ссылка на файл в репозитории (`docs/verification/*`,
 `docs/decisions.md` D-…, `configs/*`, `tests/*`). Числа не пересчитаны «на глаз» и
-не выдуманы; где числа ещё нет — прямо написано «нет артефакта» или «появится
-после `eval-test` (#32)».
+не выдуманы; где числа ещё нет — прямо написано «нет артефакта».
 
-**Обновить после `eval-test` (#32) и финального `make all`**: на момент этой сборки
-`docs/verification/test-log.md` пуст — ни один запуск `eval-test` ещё не состоялся,
-поэтому весь раздел 4 «Test» и часть раздела 8 — заглушки. После заморозки
-конфигурации и `eval-test --part test` этот документ обязан получить новый PR с
-реальными числами по демо-чипу `Spain_7370579` (числа A/B/C ниже — по validation-чипу
-`Sri-Lanka_713926` и после смены демо-чипа устареют, D-033). Также обновить, если
+**`eval-test` выполнен** (#32): один запуск замороженной конфигурации 26.09 17:32 UTC,
+commit `e7a78e7`, sha256 конфигурации `e8fa3dae…` — строка в
+`docs/verification/test-log.md`; числа test — §4.6 (источник
+`docs/verification/test-eval.md`). Числа A/B/C ниже — по validation-чипу
+`Sri-Lanka_713926`; после смены демо-чипа на `Spain_7370579` (D-033) их нужно брать из
+комплекта этого чипа. Также обновить, если
 интерфейс (критерий 19; issue #83, черновой PR #120) будет влит в `main` — на
 `90bf679` его там нет.
 
@@ -37,10 +36,10 @@
 | Данные Sen1Floods11 (S1 VV/VH dB, `LabelHand`) | `make data && make data-qc` | `interim/qc.csv`, `interim/source_manifest_s1.json`, `docs/verification/data-qc.md` | ✅ критерий 1 (446/446 формат, 371/446 пиксельный QC, test — только заголовки/хеши) |
 | Split по событиям | `make split` | `splits/split_v1.json`, sha256 `0098346e0f87297501409a1a8522afab6209e35f56e8cf1b68996909c8b63c75` (D-016) | ✅ критерий 6 |
 | Пороговый baseline | `make baseline` | `models/baseline/config.json`, `docs/verification/baseline-val.md` | ✅ критерий 2 (validation IoU 0,580) |
-| Основной метод — выбор B против A и baseline | (внутри `make train`, выбор — D-040) | `docs/verification/method-selection.md` | 🟡 критерий 3: метод выбран (D-040), веса и калибровка влиты; test — после `eval-test` |
+| Основной метод — выбор B против A и baseline | (внутри `make train`, выбор — D-040) | `docs/verification/method-selection.md` | 🟡 критерий 3: метод выбран (D-040), веса и калибровка влиты; test — IoU 0,725 против baseline 0,677 (`test-eval.md` §1) |
 | Основной метод (U-Net, ансамбль 5 seed, S1-only) | `make train` (обучение — только Colab/GPU, не локально) | `models/unet/` (5 весов LFS), `docs/verification/unet-metrics.md` | 🟡 критерий 3 (см. строку выше); dev IoU 0,584; кандидат A (`models/pixel/`) остаётся как `FLOODVALUE_METHOD=pixel` для сравнения |
-| Вероятностная карта (в т. ч. на произвольном S1-файле вне HandLabeled, #87) | `make predict CHIP=…` / `predict --s1 <path>` | `flood_probability.tif`, `prediction.json` | 🟡 критерий 5: p и маска на validation-чипах; на test — после `eval-test` |
-| Калибровка и порог | `make calibrate` | `models/unet/calibration.json`, `flood_mask.tif`, `docs/verification/calibration-val.md` | 🟡 критерии 5 и 9: на validation готово (порог 0,37); на test — после `eval-test` |
+| Вероятностная карта (в т. ч. на произвольном S1-файле вне HandLabeled, #87) | `make predict CHIP=…` / `predict --s1 <path>` | `flood_probability.tif`, `prediction.json` | 🟡 критерий 5: p и маска на validation-чипах; на test — растры те же, что пишет `make predict`, порог 0,37 (`test-eval.md`, шапка) |
+| Калибровка и порог | `make calibrate` | `models/unet/calibration.json`, `flood_mask.tif`, `docs/verification/calibration-val.md` | 🟡 критерии 5 и 9: на validation готово (порог 0,37, ECE 0,0100); на test ECE 0,0436 [0,0304; 0,0559] (`test-eval.md` §3) |
 | Неопределённость | (внутри `predict`) | `uncertainty.tif`, `flood_probability_range.tif`, `docs/verification/uncertainty-val.md` | 🟡 критерий 10 (AUROC 0,902 на validation; с D-049 — прямой фактор выбора съёмки C) |
 | Ущерб портфеля 10 объектов | `make assets CHIP=…` | `assets.geojson/csv`, `asset_loss.csv` | 🟡 критерий 13 (код и тесты готовы, EL = p·V·q) |
 | Приоритеты и очерёдность осмотра | (внутри `assets`) | `run_metadata.expected_loss.inspection_priority` | 🟡 критерий 14 |
@@ -48,8 +47,8 @@
 | Чувствительность плана (бюджет, ставка Б, срок решения) | внутри `make export` | `sensitivity.csv`, `docs/verification/procurement-sensitivity.md` | D-047 |
 | Сборка комплекта | `make export` | `run_metadata.json`, `sensitivity.csv` | ✅ критерий 12 (12/12 на реальном комплекте) |
 | Валидатор | `make validate` | код 0 при 12/12 | ✅ критерий 12 |
-| Перенос до заморозки (4 официальных чипа dev/validation) | `make all CHIP=<chip> BUDGET=5000` | `docs/verification/transfer-val.md` | 🟡 критерии 7 и 11: 12/12 на всех 4 чипах; независимый перенос — только test (`eval-test`) |
-| Итоговая независимая оценка | `python -m floodvalue eval-test --part test` (или `make eval-test` — `--part test` по умолчанию) | `docs/verification/test-eval.md`, `docs/verification/test-log.md` | ⬜ ещё не запускался (заморозка не наступила) |
+| Перенос до заморозки (4 официальных чипа dev/validation) | `make all CHIP=<chip> BUDGET=5000` | `docs/verification/transfer-val.md` | 🟡 критерии 7 и 11: 12/12 на всех 4 чипах; независимый перенос — test, §4.6 (`test-eval.md` §7) |
+| Итоговая независимая оценка | `FLOODVALUE_EVAL_TEST_CONFIRM=<sha256> make eval-test` (часть test по умолчанию; то же — `python -m floodvalue eval-test --part test`) | `docs/verification/test-eval.md`, `docs/verification/test-log.md` | ✅ один запуск 26.09 17:32 UTC, commit `e7a78e7`, 75 чипов; IoU 0,725 против 0,677 |
 | Интерфейс оператора | `make app` | `src/floodvalue/app/` | ⬜ критерий 19 — на `90bf679` в `main` только `src/floodvalue/app/__init__.py`, `python -m floodvalue app` отвечает «stage 'app' not implemented yet» (`docs/tz-compliance.md`, критерий 19; issue #83 открыт, PR #120 — черновик, не влит) |
 | Сквозной путь целиком | `make all CHIP=… BUDGET=…` | весь комплект `outputs/<chip>_<budget>_<commit>/` | 🟡 критерий 11: чистый клон GitVerse `6d8e99d`, прогон 3 (`docs/verification/clean-clone-gitverse.md`); прогона из чистого клона на текущем `main` (после D-049) ещё нет — запланирован на 27.09 00:00 |
 
@@ -63,7 +62,7 @@
 | train | Ghana, India, Pakistan, Paraguay, Somalia | 237 | 8,9 % | обучение | `docs/decisions.md` D-016; `docs/verification/data-qc.md` |
 | dev | USA | 69 | 4,6 % | выбор модели/чекпойнта/варианта | D-012, D-016 |
 | validation | Sri-Lanka, Nigeria | 60 | 15,2 % | калибровка и порог | D-012, D-016 |
-| test | Spain, Mekong, Bolivia | 75 | не читалась (запечатана) | одна независимая оценка, `eval-test` | D-010, D-016 |
+| test | Spain, Mekong, Bolivia | 75 | прочитана один раз `eval-test` (26.09, commit `e7a78e7`) | одна независимая оценка, `eval-test` | D-010, D-016 |
 | excluded | 5 чипов Ghana целиком −1 | 5 | — | не используются | D-016 |
 
 - Split заморожен один раз: `splits/split_v1.json`, sha256 канонического JSON
@@ -151,10 +150,10 @@ Sri-Lanka превосходство над baseline статистически 
 Надёжность вероятностей (критерий 9): ECE 0,0398 → 0,0100, Brier 0,0477 → 0,0406,
 log-loss 0,1693 → 0,1462 на validation после калибровки Platt
 (`docs/verification/calibration-val.md`, ECE по 15 бинам). В `eval-test --part` ECE
-считается по 10 равным корзинам: validation 0,007, Brier 0,041
-(`docs/verification/eval-validation.md` §3); dev 0,051, Brier 0,029 — на dev пиксели с
-p 0,9–1,0 оказались водой в 79 % случаев (`docs/verification/eval-dev.md` §3,
-`docs/team-brief.md`). На dev (не участвовал в выборе)
+считается в тех же 15 корзинах: validation 0,0100, Brier 0,0406
+(`docs/verification/eval-validation.md` §3); dev 0,0510, Brier 0,0289 — на dev пиксели с
+p 0,933–1,0 (в среднем 0,986) оказались водой в 81,8 % случаев (`docs/verification/eval-dev.md` §3);
+test 0,0436, Brier 0,0425 (`docs/verification/test-eval.md` §3). На dev (не участвовал в выборе)
 калибровка ухудшает: IoU 0,584 → 0,467 — калибратор переносит долю воды validation
 (15,2 %) на событие с 4,6 % воды (D-029, `docs/limitations.md` §8).
 
@@ -227,10 +226,30 @@ U-Net значимо лучше порога VH того же фолда в 4 ф
 
 ### 4.6 Test
 
-`docs/verification/test-log.md` не содержит ни одной строки запуска (только заголовок
-таблицы) — `eval-test --part test` на `90bf679` не запускался, чисел test в репозитории
-нет. Все числа критериев 2, 4, 5, 7,
-9, 10, 14 на test — «появится после `eval-test` (#32)».
+Один запуск замороженной конфигурации: `FLOODVALUE_EVAL_TEST_CONFIRM=<sha256> make
+eval-test`, 26.09 17:32 UTC, commit `e7a78e7`, sha256 конфигурации `e8fa3dae…`
+(`docs/verification/test-log.md`). События Bolivia, Mekong, Spain — 75 чипов, в
+обучении, калибровке и выборе порога не участвовали. Все числа — `docs/verification/test-eval.md`
+(§ в скобках), идентичные валидные пиксели обоих методов.
+
+| событие | IoU основного | IoU baseline | ΔIoU [95 % CI] (§1) | ECE [95 % CI] (§3) | AUROC неопределённости (§4) |
+|---|---|---|---|---|---|
+| Bolivia | 0,688 | 0,581 | 0,107 [0,078; 0,131] | 0,0263 [0,0164; 0,0476] | 0,879 |
+| Mekong | 0,823 | 0,766 | 0,057 [−0,021; 0,112] | 0,0273 [0,0156; 0,0493] | 0,928 |
+| Spain | 0,613 | 0,597 | 0,017 [−0,010; 0,048] | 0,0788 [0,0675; 0,0897] | 0,878 |
+| **ALL** | **0,725** | **0,677** | **0,047 [0,012; 0,079]** | 0,0436 [0,0304; 0,0559] | 0,897 |
+
+- Критерий 4: выигрыш значим на ALL и Bolivia; на Mekong и Spain CI содержит 0.
+  Основной метод меняет пропуски на ложные срабатывания: FN/(TP+FN) 0,070 против 0,225,
+  FP/(TP+FP) 0,234 против 0,157 (§2).
+- Критерий 9: на test калибровка хуже, чем на validation (ECE 0,0436 против 0,0100);
+  на ALL калиброванная p хуже сырой — ECE 0,0436 против 0,0217 (§3a).
+- Критерий 7: доля воды < 1 % — IoU 0,065 (16 чипов), 1–10 % — 0,343 (30 чипов);
+  Spain (Csa, климат не виден в train) — 0,613 против 0,794 у Bolivia+Mekong (Am), §7, §7a.
+- Критерий 14 (прокси, не фактические потери, §5): демо-чип `Spain_7370579` — MAE
+  468 044 руб. на 10 точках; все чипы — MAE 345 305 руб. на 693 точках из 750.
+- Интервалы — бутстрэп по чипам; для ALL без стратификации по событиям
+  (`docs/limitations.md` §13 п. 7).
 
 ## 5. Экономика
 
@@ -389,9 +408,10 @@ p 0,978 и 0,997: по карте там почти наверняка вода,
 | `docs/verification/transfer-water-share-iou.png` | Перенос: IoU по группам доли воды в чипе (dev/validation) |
 | `docs/verification/presentation/method-comparison-iou.png` | **Новый график этого PR** — IoU baseline / pixel / U-Net сырой / U-Net калиброванный на dev и validation (сгенерирован `scripts/presentation_figures.py` из уже лежащих CSV, детерминированно) |
 
-Чего не хватает (без генерации тяжёлых вещей — либо ждёт `eval-test`, либо issue #83):
+Чего не хватает (без генерации тяжёлых вещей):
 
-- Карта ошибок и reliability на **test** — только после `eval-test --part test`.
+- Карта ошибок на **test** уже есть — `docs/verification/test-eval-errors.png`
+  (reliability — таблица `test-eval.md` §3, `test-eval-reliability.csv`; картинки нет).
 - Скриншот интерфейса оператора — только после вливания интерфейса (#83, PR #120) в `main`.
 - Иллюстрация плана C на нескольких бюджетах (карта зон с подписанной ценой) — текстом
   есть в `docs/verification/procurement-catalog.md`, картинки нет; не критично для
@@ -514,13 +534,12 @@ commit `6d8e99d`, до 91 коммита слияний — часть вопр�
 
 ### (7) eval-test и test
 
-13. **Test так и не проверен ни разу — на чём основано сравнение методов по
-    критерию 4?**
-    На validation (настроечная выборка, не независимая) — прямо помечено везде,
-    где встречаются эти числа. Инструмент `eval-test --part test` готов и
-    корректно запечатан (реальный отказ без confirm-хеша, код 2,
-    `docs/limitations.md` §8), но сам прогон ещё не выполнен —
-    `docs/verification/test-log.md` пуст.
+13. **На чём основано сравнение методов по критерию 4 и сколько раз открывали test?**
+    На test, один раз, замороженной конфигурацией (commit `e7a78e7`, 26.09 17:32 UTC,
+    единственная строка `docs/verification/test-log.md`): IoU 0,725 против 0,677,
+    ΔIoU 0,047 [0,012; 0,079] на идентичных валидных пикселях (`test-eval.md` §1, §4.6
+    этого документа). Без `FLOODVALUE_EVAL_TEST_CONFIRM` команда отказывает (код 2,
+    `docs/limitations.md` §8). Validation — настроечная выборка, её числа помечены так везде.
 
 ### (8) Прочее
 
@@ -548,5 +567,5 @@ set -a; . ./.env; set +a
 uv run --frozen python scripts/presentation_figures.py   # docs/verification/presentation/method-comparison-iou.png
 uv run --frozen pytest tests/assets/test_portfolio.py tests/procurement/test_pricing.py tests/procurement/test_geometry.py
 grep -n "1 703,46\|946,37\|567,82\|0,9996" task.md
-grep -c "^|" docs/verification/test-log.md   # 1 — только заголовок таблицы, запусков ещё нет
+grep -c "^| 2026" docs/verification/test-log.md   # 1 — один запуск eval-test на test
 ```
