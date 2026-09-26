@@ -8,14 +8,17 @@ import json
 import math
 import os
 import queue
+import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
 import zipfile
 from functools import lru_cache
 from pathlib import Path
+from typing import Annotated
 
 import numpy as np
 import rasterio
@@ -226,7 +229,22 @@ def session(run_id: str | None = None):
         "assets": assets,
         "candidates": candidates,
         "sensitivity": _csv(run_dir / "sensitivity.csv"),
+        "plan_c_saturation_rub": _plan_c_saturation(run_dir),
     }
+
+
+UNLIMITED_BUDGET_RUB = 1_000_000_000
+
+
+def _plan_c_saturation(run_dir: Path) -> float | None:
+    """Data cost of plan C with an unlimited budget: above it the composition of C no longer
+    changes (for the budget slider). The same public procurement.plan, no contract change."""
+    try:
+        result = plan(run_dir, UNLIMITED_BUDGET_RUB)
+    except (ValueError, KeyError, OSError):
+        return None
+    row = next((item for item in result.get("comparison", []) if item.get("strategy") == "C"), None)
+    return float(row["data_cost_rub"]) if row and row.get("data_cost_rub") is not None else None
 
 
 @app.get("/api/plan")
@@ -346,16 +364,55 @@ def raster_layer(layer: str, run_id: str | None = None):
     return Response(_png(layer, path, band), media_type="image/png")
 
 
-@app.get("/api/download")
-def download(run_id: str | None = None):
-    run_dir = _run_dir(run_id)
+_rebudget_lock = threading.Lock()  # one re-budgeted export at a time (the UI may be public)
+REBUDGET_STEPS = ("procure", "export", "validate")
+
+
+def _zip_bundle(run_dir: Path, name: str) -> Response:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(run_dir.iterdir()):
             if path.is_file() and path.suffix in {".csv", ".json", ".geojson", ".tif"}:
                 archive.write(path, path.name)
     return Response(buffer.getvalue(), media_type="application/zip",
-                    headers={"Content-Disposition": f'attachment; filename="{run_dir.name}.zip"'})
+                    headers={"Content-Disposition": f'attachment; filename="{name}.zip"'})
+
+
+@app.get("/api/download")
+def download(run_id: str | None = None,
+             budget: Annotated[float | None, Query(ge=0, le=UNLIMITED_BUDGET_RUB)] = None):
+    """The bundle of the scene; with another budget, procure → export → validate are rerun on a
+    copy (as `make procure/export BUDGET=…`): p, mask and threshold stay byte for byte."""
+    run_dir = _run_dir(run_id)
+    metadata = _json(run_dir / "run_metadata.json")
+    bundle_budget = float(metadata.get("budget", {}).get("budget_rub", -1))
+    if budget is None or abs(budget - bundle_budget) < 0.005:
+        return _zip_bundle(run_dir, run_dir.name)
+    if not _rebudget_lock.acquire(blocking=False):
+        raise HTTPException(429, "Выгрузка под другой бюджет уже готовится, повторите через минуту")
+    work = Path(tempfile.mkdtemp(prefix="floodvalue-budget-"))
+    try:
+        for path in run_dir.iterdir():
+            if path.is_file():
+                shutil.copy2(path, work / path.name)
+        chip = ["--chip", str(metadata.get("chip_id"))]
+        for step in REBUDGET_STEPS:
+            command = [sys.executable, "-m", "floodvalue", step,
+                       *(chip + ["--budget", f"{budget:.2f}"] if step != "validate" else []),
+                       "--out", str(work)]
+            done = subprocess.run(command, cwd=REPO_ROOT, capture_output=True, text=True,
+                                  timeout=ANALYSIS_STEP_TIMEOUT_S)
+            if done.returncode != 0:
+                output = (done.stderr or done.stdout or "").strip().replace(str(work), "<bundle>")
+                detail = _server_paths_hidden(output)
+                raise HTTPException(422, f"Пересчёт под бюджет не прошёл ({step}): {detail}")
+        rebudgeted = _json(work / "run_metadata.json")
+        return _zip_bundle(work, str(rebudgeted.get("run_id", f"{run_dir.name}_{budget:.0f}")))
+    except subprocess.TimeoutExpired as exc:
+        raise HTTPException(504, "Пересчёт под бюджет не уложился во время") from exc
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+        _rebudget_lock.release()
 
 
 # --- Analysis of a raw observation from the catalog ------------------------------------------
