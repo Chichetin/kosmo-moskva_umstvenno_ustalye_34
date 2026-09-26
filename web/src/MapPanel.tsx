@@ -17,7 +17,6 @@ type LayerFlags = {
   mask: boolean;
   uncertainty: boolean;
   assets: boolean;
-  zones: boolean;
 };
 type Props = {
   scenes: SceneSummary[];
@@ -30,6 +29,7 @@ type Props = {
   showMessages: boolean;
   overlayOpacity: number;
   selectedAsset: string | null;
+  priorityAssetIds: string[];
   selectedZone: string | null;
   active: boolean;
   overviewRequest: number;
@@ -80,6 +80,10 @@ const markers = (scenes: SceneSummary[]): FeatureCollection<Point> => ({
   ),
 });
 // «Сообщения» layer (/api/media/map): a reason to look at a territory, never an input to p or EL.
+const NEWS_COLOR = "#39ff88";  // news: events from bulletins and media (neon green)
+const REPORT_COLOR = "#f0b85a";  // eyewitness messages (amber)
+// An event known only from eyewitnesses is a message (amber); any news/bulletin source makes it news.
+const EVENT_COLOR = ["case", ["==", ["get", "source_kinds"], "citizen"], REPORT_COLOR, NEWS_COLOR] as unknown as string;
 const mediaFeatures = (items: Feature[]): FeatureCollection => ({
   type: "FeatureCollection",
   features: items.flatMap((item) =>
@@ -112,7 +116,7 @@ const messageCard = (props: Record<string, unknown>, kind: "event" | "report") =
     if (props.place_label) line(String(props.place_label));
     const coarse = props.geo_precision === "coarsened";
     line(`${when(props.event_time_start ?? props.first_detected_at, props.event_time_start ? props.time_precision : "hour", coarse)} · ${REVIEW_STATE[String(props.review_state)] ?? ""}`);
-    if (coarse) line("место показано с точностью ≈ 1 км, время — до часа; подробности — у аналитика", "small");
+    if (coarse) line("место показано с точностью ≈ 1 км, время — до часа; точные данные — после входа", "small");
   }
   line("Сообщение не проверено по снимкам и не входит в p, ущерб и план.", "small");
   return node;
@@ -134,6 +138,11 @@ const overviewPadding = () => {
   };
 };
 const noPadding = () => ({ top: 0, right: 0, bottom: 0, left: 0 });
+// Panel sizes are in rem (1rem = 16px × the interface scale step): px for the camera padding.
+const rem = (value: number) =>
+  value * parseFloat(getComputedStyle(document.documentElement).fontSize || "16");
+// The message card: 25rem wide, 1.5rem from the right edge.
+const messageCardInset = () => (window.innerWidth > 700 ? Math.round(rem(26.5)) : 0);
 
 export default function MapPanel(props: Props) {
   const host = useRef<HTMLDivElement>(null);
@@ -155,6 +164,7 @@ export default function MapPanel(props: Props) {
       visibleLayers,
       overlayOpacity,
       selectedAsset,
+      priorityAssetIds,
       selectedZone,
       messages,
       showMessages,
@@ -171,14 +181,16 @@ export default function MapPanel(props: Props) {
       uncertainty: !!scene && visibleLayers.uncertainty,
       boundary: !!scene,
       assets: !!scene && visibleLayers.assets,
+      "asset-priority": !!scene && visibleLayers.assets,
       "asset-focus": !!scene && visibleLayers.assets,
-      candidates: !!scene && visibleLayers.zones,
-      "candidate-hit": !!scene && visibleLayers.zones,
-      "plan-fill": !!scene && visibleLayers.zones,
-      "plan-line": !!scene && visibleLayers.zones,
-      "zone-focus": !!scene && visibleLayers.zones,
+      "plan-fill": !!scene,
+      "plan-glow": !!scene,
+      "plan-line": !!scene,
+      "zone-focus": !!scene && !!selectedZone,
       "media-area": showMessages && !!messages,
+      "media-event-glow": showMessages && !!messages,
       "media-event": showMessages && !!messages,
+      "media-report-glow": showMessages && !!messages,
       "media-report": showMessages && !!messages,
     };
     for (const [id, visible] of Object.entries(show)) {
@@ -216,6 +228,13 @@ export default function MapPanel(props: Props) {
         ["get", "asset_id"],
         selectedAsset ?? "",
       ]);
+    if (map.getLayer("asset-priority"))
+      map.setFilter("asset-priority", ["in", ["get", "asset_id"], ["literal", priorityAssetIds]]);
+    if (map.getLayer("asset-focus")) {
+      const focusColor = selectedAsset && priorityAssetIds.includes(selectedAsset) ? "#c4f477" : "#4D9FFF";
+      map.setPaintProperty("asset-focus", "circle-color", focusColor);
+      map.setPaintProperty("asset-focus", "circle-stroke-color", focusColor);
+    }
     if (map.getLayer("zone-focus"))
       map.setFilter("zone-focus", [
         "==",
@@ -503,41 +522,36 @@ export default function MapPanel(props: Props) {
         },
       });
       map.addSource("candidate-data", { type: "geojson", data: empty });
-      map.addLayer({
-        id: "candidate-hit",
-        type: "fill",
-        source: "candidate-data",
-        paint: { "fill-color": "#4D9FFF", "fill-opacity": 0.01 },
-      });
-      map.addLayer({
-        id: "candidates",
-        type: "line",
-        source: "candidate-data",
-        paint: {
-          "line-color": "#d9e3ed",
-          "line-opacity": 0.7,
-          "line-width": 1.4,
-        },
-      });
       map.addSource("plan-data", { type: "geojson", data: empty });
       map.addLayer({
         id: "plan-fill",
         type: "fill",
         source: "plan-data",
-        paint: { "fill-color": "#4D9FFF", "fill-opacity": 0.19 },
+        paint: { "fill-color": "#a6df54", "fill-opacity": 0.28 },
+      });
+      map.addLayer({
+        id: "plan-glow",
+        type: "line",
+        source: "plan-data",
+        paint: {
+          "line-color": "#a8ed58",
+          "line-opacity": 0.55,
+          "line-width": 6,
+          "line-blur": 4,
+        },
       });
       map.addLayer({
         id: "plan-line",
         type: "line",
         source: "plan-data",
-        paint: { "line-color": "#8bc2ff", "line-width": 2.4 },
+        paint: { "line-color": "#c4f477", "line-width": 2.4 },
       });
       map.addLayer({
         id: "zone-focus",
         type: "line",
         source: "candidate-data",
         filter: ["==", ["get", "candidate_id"], ""],
-        paint: { "line-color": "#fff", "line-width": 3.5 },
+        paint: { "line-color": "#e0ffac", "line-width": 3.5 },
       });
       map.addSource("assets-data", { type: "geojson", data: empty });
       map.addLayer({
@@ -549,6 +563,19 @@ export default function MapPanel(props: Props) {
           "circle-color": "#f5f5f7",
           "circle-stroke-color": "#142439",
           "circle-stroke-width": 2,
+        },
+      });
+      map.addLayer({
+        id: "asset-priority",
+        type: "circle",
+        source: "assets-data",
+        filter: ["==", ["get", "asset_id"], ""],
+        paint: {
+          "circle-radius": 11,
+          "circle-color": "#c4f477",
+          "circle-opacity": 0.15,
+          "circle-stroke-color": "#c4f477",
+          "circle-stroke-width": 2.5,
         },
       });
       map.addLayer({
@@ -574,12 +601,20 @@ export default function MapPanel(props: Props) {
         data: mediaFeatures(media?.reports.features ?? []),
       });
       // Calm markers on top of rasters and zones: an outline for areas, no fill, no pulsing.
+      // News (events from bulletins and media) are neon green, eyewitness reports amber.
       map.addLayer({
         id: "media-area",
         type: "line",
         source: "media-events",
         filter: ["!=", ["geometry-type"], "Point"],
-        paint: { "line-color": "#f0b85a", "line-width": 1.4, "line-opacity": 0.75, "line-dasharray": [2, 2] },
+        paint: { "line-color": EVENT_COLOR, "line-width": 1.4, "line-opacity": 0.8, "line-dasharray": [2, 2] },
+      });
+      map.addLayer({
+        id: "media-event-glow",
+        type: "circle",
+        source: "media-events",
+        filter: ["==", ["geometry-type"], "Point"],
+        paint: { "circle-radius": 15, "circle-color": EVENT_COLOR, "circle-opacity": 0.4, "circle-blur": 0.8 },
       });
       map.addLayer({
         id: "media-event",
@@ -587,23 +622,30 @@ export default function MapPanel(props: Props) {
         source: "media-events",
         filter: ["==", ["geometry-type"], "Point"],
         paint: {
-          "circle-radius": 6,
-          "circle-color": "#f0b85a",
-          "circle-opacity": ["case", ["==", ["get", "review_state"], "reviewed"], 0.95, 0.7],
-          "circle-stroke-color": "#1a1408",
-          "circle-stroke-width": 1.5,
+          "circle-radius": 7,
+          "circle-color": EVENT_COLOR,
+          "circle-opacity": ["case", ["==", ["get", "review_state"], "reviewed"], 1, 0.9],
+          // light outline: readable over dark forest on the «Спутник» basemap too
+          "circle-stroke-color": "#f2fff6",
+          "circle-stroke-width": 1.8,
         },
+      });
+      map.addLayer({
+        id: "media-report-glow",
+        type: "circle",
+        source: "media-reports",
+        paint: { "circle-radius": 15, "circle-color": REPORT_COLOR, "circle-opacity": 0.4, "circle-blur": 0.8 },
       });
       map.addLayer({
         id: "media-report",
         type: "circle",
         source: "media-reports",
         paint: {
-          "circle-radius": 6,
-          "circle-color": "#f0b85a",
-          "circle-opacity": 0.12,
-          "circle-stroke-color": "#f0b85a",
-          "circle-stroke-width": 2,
+          "circle-radius": 7,
+          "circle-color": REPORT_COLOR,
+          "circle-opacity": 0.95,
+          "circle-stroke-color": "#fff6e3",
+          "circle-stroke-width": 1.8,
         },
       });
       updateScene();
@@ -734,6 +776,12 @@ export default function MapPanel(props: Props) {
         ? [feature.geometry.coordinates[0], feature.geometry.coordinates[1]]
         : [event.lngLat.lng, event.lngLat.lat];
       current.current.onSelectMessage?.({ kind, id: String(id), lngLat, props });
+      const zoom = kind === "report" ? 10 : 9;  // as selectMessageFromList in App
+      if (map.getZoom() >= zoom - 0.5) return;
+      const padding = { ...overviewPadding(), right: messageCardInset() };
+      map.stop();
+      if (reducedMotion()) map.jumpTo({ center: lngLat, zoom, padding });
+      else map.flyTo({ center: lngLat, zoom, padding, duration: 1500, curve: 1.15, essential: true });
     };
     map.on("click", "media-event", openMessage("event"));
     map.on("click", "media-area", openMessage("event"));
@@ -752,7 +800,7 @@ export default function MapPanel(props: Props) {
       const id = event.features?.[0]?.properties?.asset_id;
       if (typeof id === "string") current.current.onSelectAsset(id);
     });
-    map.on("click", "candidate-hit", (event) => {
+    map.on("click", "plan-fill", (event) => {
       if (onMessage(event.point) ||
           map.queryRenderedFeatures(event.point, { layers: ["assets"] }).length)
         return;
@@ -780,18 +828,31 @@ export default function MapPanel(props: Props) {
       mapRef.current?.getSource("observations") as GeoJSONSource | undefined
     )?.setData(markers(props.scenes));
   }, [props.scenes, ready]);
-  // «Приблизить к месту» from the message panel.
+  // Show the whole globe before travelling to a selected message.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !props.focus) return;
-    // From the «Новости» panel: keep the place between the scene list and the panel.
-    const news = window.innerWidth > 700 ? document.querySelector(".news-panel")?.getBoundingClientRect() : null;
-    map.easeTo({
-      center: props.focus.lngLat,
-      zoom: props.focus.zoom,
-      duration: reducedMotion() ? 0 : 900,
-      ...(news ? { padding: { ...overviewPadding(), right: Math.max(0, Math.round(window.innerWidth - news.left)) } } : {}),
-    });
+    const { lngLat, zoom } = props.focus;
+    const news = props.newsOpen && window.innerWidth > 700
+      ? document.querySelector(".news-panel")?.getBoundingClientRect()
+      : null;
+    // The place lands on the grid axis between the scene list and the right-hand panel (the news
+    // panel, or the message card that opens with it: fixed, 400 + 24 px).
+    const destinationPadding = news
+      ? { ...overviewPadding(), right: Math.max(0, Math.round(window.innerWidth - news.left)) }
+      : { ...overviewPadding(), right: messageCardInset() };
+    map.stop();
+    map.setPadding(noPadding());
+    if (reducedMotion()) {
+      map.jumpTo({ center: lngLat, zoom, padding: destinationPadding });
+      return;
+    }
+    const approach = () => {
+      map.flyTo({ center: lngLat, zoom, padding: destinationPadding, duration: 1700, curve: 1.15, essential: true });
+    };
+    map.once("moveend", approach);
+    map.easeTo({ zoom: minimumZoom(), duration: 750, easing: (t) => t * t * (3 - 2 * t) });
+    return () => { map.off("moveend", approach); };
   }, [props.focus?.request]);
   // The «Новости» panel closed: give the camera its overview padding back (no offset left behind).
   useEffect(() => {
@@ -821,7 +882,7 @@ export default function MapPanel(props: Props) {
         padding:
           window.innerWidth < 700
             ? { top: 70, right: 22, bottom: 255, left: 22 }
-            : { top: 80, right: 420, bottom: 90, left: 340 },
+            : { top: rem(5), right: rem(26.25), bottom: rem(5.625), left: rem(21.25) },
         maxZoom: 12.5,
         duration: reducedMotion() ? 0 : 850,
       },
@@ -845,6 +906,7 @@ export default function MapPanel(props: Props) {
     props.visibleLayers,
     props.overlayOpacity,
     props.selectedAsset,
+    props.priorityAssetIds,
     props.selectedZone,
     props.scene?.chip_id,
     ready,
@@ -882,7 +944,7 @@ export default function MapPanel(props: Props) {
     const requested = props.overviewRequest !== lastOverview.current;
     lastOverview.current = props.overviewRequest;
     lastScene.current = null;
-    if (!requested) return;
+    if (!requested || props.focus) return;
     map.stop();
     map.setPadding(overviewPadding());
     map.easeTo({

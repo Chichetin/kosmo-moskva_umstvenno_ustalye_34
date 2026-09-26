@@ -23,6 +23,12 @@ export type Session = {
       decision_deadline: string;
     };
     pricing?: { base_rate_status?: string; base_rate_rub_km2?: number };
+    expected_loss?: {
+      inspection_priority?: {
+        rule: string;
+        order: Array<{ asset_id: string; inspection_order: number; group: string; action: string; reason: string }>;
+      } | null;
+    };
     uncertainty?: { meaning?: string; units?: string; method?: string };
     [key: string]: unknown;
   };
@@ -94,10 +100,19 @@ export type Comparison = {
   decision_risk_share: number | null;
   residual_uncertainty: number | null;
   uncertainty_status: string;
+  uncertainty_basis?: string;
   covered_asset_ids: string;
 };
 
 export type Plan = {
+  priority?: {
+    asset_ids: string[];
+    covered_asset_ids: string[];
+    reasons: Record<string, string>;
+    baseline_candidate_ids: string[];
+    baseline_data_cost_rub: number;
+    baseline_coverage_share: number | null;
+  };
   plans: Record<"A" | "B" | "C", string[]>;
   plan_rows: Array<Record<string, string | number>>;
   comparison: Comparison[];

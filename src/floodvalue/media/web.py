@@ -238,18 +238,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # --- operator map ----------------------------------------------------------------------
 
+    def operator_exact(request: Request) -> bool:
+        """Operator read access (map layer, news, event card). The operator and the analyst are one
+        person (D-065): logged in — exact data; FLOODVALUE_MEDIA_OPERATOR_MAP_PUBLIC=1 without
+        login — coarse points and hours, no eyewitness data; otherwise the login is required."""
+        if not settings.operator_map_public:
+            analyst(request)
+            return True
+        try:
+            analyst(request)
+        except HTTPException:
+            return False
+        return True
+
     @app.get("/api/media/map")
     def operator_map(request: Request, include_demo: bool = True):
         """Events and not-yet-moderated eyewitness reports for the operator's «Сообщения» layer.
         Accepted reports are already inside events; rejected and spam are never shown."""
-        exact = True
-        if not settings.operator_map_public:
-            analyst(request)
-        else:
-            try:
-                analyst(request)
-            except HTTPException:
-                exact = False
+        exact = operator_exact(request)
         with db() as conn:
             events = _event_features(conn, None, None, None, None, None, False, include_demo)
             reports = _report_features(conn, include_demo, exact)
@@ -264,14 +270,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         """The operator's «Новости» panel: publications of the sources (news, bulletins, demo),
         newest first, each with a place to jump to and the satellite observations found for its
         event. Same access as /api/media/map; eyewitness reports never appear here."""
-        exact = True
-        if not settings.operator_map_public:
-            analyst(request)
-        else:
-            try:
-                analyst(request)
-            except HTTPException:
-                exact = False
+        exact = operator_exact(request)
         with db() as conn:
             items = _news_items(conn, max(1, min(int(limit), 200)), include_demo, exact)
             polled = conn.execute(
@@ -396,9 +395,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/media/events/{event_id}")
     def event_card(request: Request, event_id: int):
-        analyst(request)
+        """Event card; the same access as the map. Without login on the public stand — what the
+        sources published (see _public_card)."""
+        exact = operator_exact(request)
         with db() as conn:
-            return _card(conn, event_id)
+            card = _card(conn, event_id)
+        return {**card, "exact_locations": True} if exact else _public_card(card)
 
     @app.post("/api/media/events/{event_id}/review")
     async def review(request: Request, event_id: int):
@@ -666,6 +668,26 @@ def _public_event(feature: dict) -> dict:
     return {**feature, "geometry": geometry,
             "properties": {**props, **times, "title": title, "place_label": None,
                            "geo_precision": "coarsened"}}
+
+
+def _public_card(card: dict) -> dict:
+    """The event card on the public stand without login: publications of the sources with the
+    event's coarse point and hour (as _public_event). No eyewitness evidence (text, photos,
+    contacts), no geocoder candidates of the place text, no moderation history or reviewers.
+    An event known only from eyewitnesses stays behind the login."""
+    evidence = [{k: v for k, v in item.items() if k != "linked_by"}
+                for item in card["evidence"]
+                if not item.get("report_id") and item.get("origin") != "citizen"]
+    if not evidence:
+        raise HTTPException(401, "событие известно только по обращениям очевидцев — нужен вход")
+    event = card["event"]
+    feature = _public_event({"type": "Feature", "geometry": event.get("geometry"),
+                             "properties": event})
+    return {"event": {**feature["properties"], "geometry": feature["geometry"],
+                      "geo_candidates": []},
+            "evidence": evidence, "observations": card["observations"], "history": [],
+            "reviews": [], "possible_duplicates": [], "missing": card["missing"],
+            "exact_locations": False}
 
 
 def _report_features(conn, include_demo: bool, exact: bool) -> list[dict]:

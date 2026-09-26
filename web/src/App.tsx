@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   ArrowDownToLine,
   ArrowLeft,
@@ -14,7 +14,10 @@ import Backdrop from "./Backdrop";
 import MapPanel from "./MapPanel";
 import { WorldLocator } from "./WorldLocator";
 import MessagePanel, { type SelectedMessage } from "./MessagePanel";
+import MessagesList from "./MessagesList";
 import SensitivityPanel from "./SensitivityPanel";
+import RiskMatrix from "./RiskMatrix";
+import { finiteNumber, riskAsset } from "./riskAssets";
 import NewsPanel from "./NewsPanel";
 import Hint, { HINTS } from "./Hint";
 import PlanZones from "./PlanZones";
@@ -47,6 +50,12 @@ const date = (value: string | null | undefined) =>
         timeZone: "UTC",
       }).format(new Date(value))
     : "Дата неизвестна";
+// Budget scale before a run: plan C's saturation is not known yet; 50 000 ₽ is above full
+// coverage B of the known scenes (37–42 thousand).
+const PRE_RUN_BUDGET_MAX = 50_000;
+const ruPlural = new Intl.PluralRules("ru");
+const countLabel = (count: number, one: string, few: string, many: string) =>
+  `${count} ${ruPlural.select(count) === "one" ? one : ruPlural.select(count) === "few" ? few : many}`;
 const labels: Record<string, string> = {
   warehouse: "Склад",
   substation: "Подстанция",
@@ -88,11 +97,12 @@ const countryMatches = (territory: string, query: string) => {
 const assetName = (feature: Feature) =>
   labels[String(feature.properties.asset_class)] ??
   String(feature.properties.asset_class).replaceAll("_", " ");
-type AssetSort = "name" | "probability" | "loss" | "uncertainty";
+type AssetSort = "inspection" | "name" | "probability" | "loss" | "uncertainty";
 const assetSortValue = (feature: Feature, key: AssetSort): number | string | null => {
   if (key === "name") return assetName(feature);
+  if (key === "inspection") return finiteNumber(feature.properties.rank);
   const raw = feature.properties[key === "probability" ? "p_flood" : key === "loss" ? "expected_loss_rub" : "uncertainty"];
-  return raw == null || raw === "" || feature.properties.status === "no_data" ? null : Number(raw);
+  return feature.properties.status !== "ok" ? null : finiteNumber(raw);
 };
 const parseRoute = () => {
   const match = /^#\/(earth|scene|analysis)(?:\/([^/]+))?/.exec(location.hash);
@@ -129,7 +139,6 @@ type LayerFlags = {
   mask: boolean;
   uncertainty: boolean;
   assets: boolean;
-  zones: boolean;
 };
 type AnalysisJob = {
   job_id: string | null;
@@ -148,7 +157,6 @@ const defaults: LayerFlags = {
   mask: false,
   uncertainty: false,
   assets: true,
-  zones: true,
 };
 
 export default function App() {
@@ -162,7 +170,7 @@ export default function App() {
   const cache = useRef<Record<string, Session>>({});
   const budgets = useRef<Record<string, number>>({});
   const [plan, setPlan] = useState<Plan | null>(null);
-  const [planFor, setPlanFor] = useState<{ runId: string; budget: number } | null>(null);
+  const [planFor, setPlanFor] = useState<{ runId: string; budget: number; priorityKey: string } | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
   const [budget, setBudget] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -171,6 +179,11 @@ export default function App() {
   const [layers, setLayers] = useState<LayerFlags>(defaults);
   const [opacity, setOpacity] = useState(0.76);
   const [assetId, setAssetId] = useState<string | null>(null);
+  const selectedObjectRef = useRef<HTMLElement | null>(null);
+  const [priorityAssetIds, setPriorityAssetIds] = useState<string[]>([]);
+  const priorityKey = priorityAssetIds.join("|");
+  const togglePriority = (id: string) => setPriorityAssetIds((current) =>
+    current.includes(id) ? current.filter((item) => item !== id) : [...current, id].sort());
   const [zoneId, setZoneId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [analysisQuery, setAnalysisQuery] = useState("");
@@ -185,18 +198,15 @@ export default function App() {
   const [searchOpen, setSearchOpen] = useState(() => window.innerWidth >= 700);
   const [panelOpen, setPanelOpen] = useState(true);
   const [newsOpen, setNewsOpen] = useState(false);
+  const [messagesOpen, setMessagesOpen] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [overviewRequest, setOverviewRequest] = useState(0);
   const [mapIssue, setMapIssue] = useState<string | null>(null);
   // «Сообщения» (/api/media/map): null — the layer is unavailable here (media not served,
   // or closed to this viewer); the toggle is then hidden rather than shown broken.
   const [messages, setMessages] = useState<MediaMap | null>(null);
-  const [showMessages, setShowMessages] = useState(true);
   const [message, setMessage] = useState<SelectedMessage | null>(null);
   const [messageFocus, setMessageFocus] = useState<{ lngLat: [number, number]; zoom: number; request: number } | null>(null);
-  useEffect(() => {
-    if (!showMessages) setMessage(null);
-  }, [showMessages]);
   useEffect(() => {
     let stopped = false;
     const load = () =>
@@ -216,7 +226,7 @@ export default function App() {
   const messageCount =
     (messages?.events.features.length ?? 0) + (messages?.reports.features.length ?? 0);
   const [zoneView, setZoneView] = useState<"plan" | "all">("plan");
-  const [assetSort, setAssetSort] = useState<{ key: AssetSort; descending: boolean }>({ key: "loss", descending: true });
+  const [assetSort, setAssetSort] = useState<{ key: AssetSort; descending: boolean }>({ key: "inspection", descending: false });
   const scene = scenes.find((item) => item.chip_id === route.chipId) ?? null;
   const locatorPosition = scene?.bounds
     ? { lon: (scene.bounds[0] + scene.bounds[2]) / 2, lat: (scene.bounds[1] + scene.bounds[3]) / 2 }
@@ -250,6 +260,7 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!scene?.run_id) {
+      setPriorityAssetIds([]);
       setSession(null);
       setPlan(null);
       setPlanFor(null);
@@ -258,6 +269,7 @@ export default function App() {
       return;
     }
     const runId = scene.run_id;
+    setPriorityAssetIds([]);
     const cached = cache.current[runId];
     if (cached) {
       setSession(cached);
@@ -302,13 +314,13 @@ export default function App() {
     const controller = new AbortController();
     const timer = setTimeout(() => {
       json<Plan>(
-        `/api/plan?budget=${budget}&run_id=${encodeURIComponent(runId)}`,
+        `/api/plan?budget=${budget}&run_id=${encodeURIComponent(runId)}${priorityAssetIds.map((id) => `&priority_asset_id=${encodeURIComponent(id)}`).join("")}`,
         controller.signal,
       )
         .then((result) => {
           if (!controller.signal.aborted) {
             setPlan(result);
-            setPlanFor({ runId, budget });
+            setPlanFor({ runId, budget, priorityKey });
             setPlanError(null);
           }
         })
@@ -320,7 +332,7 @@ export default function App() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [activeSession?.run_id, budget]);
+  }, [activeSession?.run_id, budget, priorityKey]);
   useEffect(() => setExportError(null), [activeSession?.run_id, budget]);
   const openFinishedAnalysis = useCallback(async (finished: AnalysisJob) => {
     const updated = await json<SceneSummary[]>("/api/scenes");
@@ -418,9 +430,21 @@ export default function App() {
     navigate("earth");
   };
   const overview = () => {
+    setMessageFocus(null);
     navigate("earth");
     setSearchOpen(true);
     setOverviewRequest((value) => value + 1);
+  };
+  const selectMessageFromList = (selected: SelectedMessage) => {
+    setNewsOpen(false);
+    setMessagesOpen(false);
+    setMessage(selected);
+    setMessageFocus((previous) => ({
+      lngLat: selected.lngLat,
+      zoom: selected.kind === "report" ? 10 : 9,
+      request: (previous?.request ?? 0) + 1,
+    }));
+    if (!mapActive || scene) navigate("earth");
   };
   const toggle = (key: keyof LayerFlags) =>
     setLayers((value) => ({ ...value, [key]: !value[key] }));
@@ -432,26 +456,35 @@ export default function App() {
       ),
     [activeSession],
   );
+  const inspectionPriority = activeSession?.metadata.expected_loss?.inspection_priority;
+  const inspection = useMemo(() => new Map((inspectionPriority?.order ?? []).map(row => [row.asset_id, row])), [inspectionPriority]);
+  const unassessed = assets.filter(item => !riskAsset(item));
+  const entropy = /^(entropy_p|binary_entropy_bits)(?:$|[\s(])/.test(String(activeSession?.metadata.uncertainty?.method ?? ""));
+  const selectRiskAsset = (id: string) => { setAssetId(id); setZoneId(null); };
   const sortedAssets = useMemo(() => [...assets].sort((left, right) => {
-    const a = assetSortValue(left, assetSort.key);
-    const b = assetSortValue(right, assetSort.key);
+    const value = (item: Feature) => assetSort.key === "inspection" && inspection.size
+      ? inspection.get(String(item.properties.asset_id))?.inspection_order ?? null : assetSortValue(item, assetSort.key);
+    const a = value(left);
+    const b = value(right);
     if (a == null || (typeof a === "number" && !Number.isFinite(a))) return b == null ? 0 : 1;
     if (b == null || (typeof b === "number" && !Number.isFinite(b))) return -1;
     const comparison = typeof a === "string" && typeof b === "string"
       ? a.localeCompare(b, "ru") : Number(a) - Number(b);
     return (assetSort.descending ? -comparison : comparison) ||
       String(left.properties.asset_id).localeCompare(String(right.properties.asset_id), "ru");
-  }), [assets, assetSort]);
+  }), [assets, assetSort, inspection]);
   const toggleAssetSort = (key: AssetSort) => setAssetSort((current) => ({
     key, descending: current.key === key ? !current.descending : key !== "name",
   }));
   const zones = activeSession?.candidates.features ?? [];
-  const currentPlan = planFor && planFor.runId === activeSession?.run_id && planFor.budget === budget ? plan : null;
+  const currentPlan = planFor && planFor.runId === activeSession?.run_id && planFor.budget === budget && planFor.priorityKey === priorityKey ? plan : null;
   const chosen = currentPlan?.comparison.find((row) => row.strategy === "C");
   const chosenZoneIds = new Set(currentPlan?.plans.C ?? []);
-  const sliderMax = Math.min(1_000_000_000, Math.ceil(
-    Math.max(activeSession?.plan_c_saturation_rub ?? 0, budget ?? 0, 5_000) * 1.1 / 1_000,
-  ) * 1_000);
+  // Slider scale: fixed for the scene (does not move while typing), ending at the point where
+  // plan C stops changing, rounded up to a thousand (15 940 → 16 000).
+  const sliderMax = Math.min(1_000_000_000, Math.ceil(Math.max(
+    activeSession?.plan_c_saturation_rub ?? 0, activeSession?.metadata.budget.budget_rub ?? 0,
+    1_000) / 1_000) * 1_000);
   // The operator knows the country, not a Sen1Floods11 chip id: search by country only,
   // in English (as in the catalog) or Russian.
   const matchingScenes = scenes.filter((item) => countryMatches(item.territory, query));
@@ -501,6 +534,16 @@ export default function App() {
                 setAnalysisBudget(Math.min(1_000_000_000, Math.max(0, Number(event.target.value) || 0)))
               }
             />
+            <input
+              type="range"
+              min="0"
+              max={PRE_RUN_BUDGET_MAX}
+              step="100"
+              value={Math.min(analysisBudget, PRE_RUN_BUDGET_MAX)}
+              disabled={analysisStarting === target.chip_id}
+              onChange={(event) => setAnalysisBudget(Number(event.target.value))}
+              aria-label="Бюджет на дополнительную съёмку"
+            />
             <small>
               Карта воды и ущерб считаются по уже полученному снимку S1 — за него не платим.
               Бюджет ограничивает только дозаказ снимков: под него строится план C. После
@@ -532,21 +575,47 @@ export default function App() {
   const activeAsset = assets.find(
     (item) => item.properties.asset_id === assetId,
   );
+  const priorityAssets = priorityAssetIds.map((id) => ({
+    id, feature: assets.find((item) => String(item.properties.asset_id) === id),
+  }));
+  const renderPriorityList = () => priorityAssetIds.length > 0 && (
+    <div className="priority-summary" aria-label="Приоритетные объекты">
+      <div className="priority-heading">
+        <strong>Приоритетные объекты · {priorityAssetIds.length}</strong>
+        <button onClick={() => setPriorityAssetIds([])}>Сбросить все</button>
+      </div>
+      <p>Сначала подбираются зоны для этих объектов, затем распределяется остаток бюджета.</p>
+      <div className="priority-items">
+        {priorityAssets.map(({ id, feature }) => (
+          <div className="priority-item" key={id}>
+            <span><b>{feature ? assetName(feature) : id}</b><small>{id} · <span className={currentPlan?.priority?.covered_asset_ids.includes(id) ? "priority-success" : "priority-unavailable"}>{currentPlan?.priority?.reasons[id] ?? "Пересчитываем…"}</span></small></span>
+            <button onClick={() => togglePriority(id)} aria-label={`Убрать ${feature ? assetName(feature) : id} из приоритетов`}>×</button>
+          </div>
+        ))}
+      </div>
+      {currentPlan?.priority && chosen && <p>Обычный план: {formatRub(currentPlan.priority.baseline_data_cost_rub)} · охват {pct(currentPlan.priority.baseline_coverage_share)}. С приоритетами: {formatRub(chosen.data_cost_rub)} · охват {pct(chosen.coverage_share)}.</p>}
+    </div>
+  );
+  useEffect(() => {
+    if (!mapVisible || !activeAsset) return;
+    const frame = requestAnimationFrame(() => selectedObjectRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
+    return () => cancelAnimationFrame(frame);
+  }, [assetId, mapVisible, activeSession?.run_id]);
   const activeZone = zones.find(
     (item) => item.properties.candidate_id === zoneId,
   );
   const zoneAssets = activeZone
     ? assets.filter((item) => pointInZone(item, activeZone))
     : [];
-  const totalLoss = assets.reduce(
-    (sum, item) => sum + Number(item.properties.expected_loss_rub || 0),
+  const totalLoss = assets.some(item => riskAsset(item)) ? assets.reduce(
+    (sum, item) => sum + (riskAsset(item) ? finiteNumber(item.properties.expected_loss_rub) ?? 0 : 0),
     0,
-  );
+  ) : null;
   const planRowsC = new Map((currentPlan?.plan_rows ?? [])
     .filter((row) => row.strategy === "C")
     .map((row) => [String(row.candidate_id), row]));
   const downloadCurrentPlan = async () => {
-    if (!activeSession || budget === null || !currentPlan || exporting) return;
+    if (!activeSession || budget === null || !currentPlan || exporting || priorityAssetIds.length) return;
     setExporting(true);
     setExportError(null);
     try {
@@ -603,12 +672,20 @@ export default function App() {
             Анализ
           </button>
           <button
-            className={newsOpen ? "active" : ""}
-            onClick={() => setNewsOpen(!newsOpen)}
+            className={`nav-news${newsOpen ? " active" : ""}`}
+            onClick={() => { setMessagesOpen(false); setMessage(null); setNewsOpen(!newsOpen); }}
             aria-expanded={newsOpen}
             title="Все новости и сводки, из которых берётся слой «Сообщения»"
           >
             Новости
+          </button>
+          <button
+            className={`nav-messages${messagesOpen ? " active" : ""}`}
+            onClick={() => { setNewsOpen(false); setMessage(null); setMessagesOpen(!messagesOpen); }}
+            aria-expanded={messagesOpen}
+            title={`Сообщения на карте: ${messageCount}`}
+          >
+            Сообщения{messageCount > 0 && <span className="nav-count"> · {messageCount}</span>}
           </button>
         </nav>
         <span className="top-spacer" />
@@ -616,14 +693,14 @@ export default function App() {
           <button
             className="top-export"
             type="button"
-            disabled={!currentPlan || exporting}
+            disabled={!currentPlan || exporting || !!priorityAssetIds.length}
             aria-busy={exporting}
             onClick={() => void downloadCurrentPlan()}
             title="Выгрузить файлы этой сцены и выбранного бюджета"
           >
             <ArrowDownToLine size={16} />
             <span>{exporting ? "Готовим комплект…" : "Выгрузить комплект"}</span>
-            <small className="export-note">при бюджете {formatRub(budget)}</small>
+            <small className="export-note">{priorityAssetIds.length ? "сначала сбросьте приоритеты" : `при бюджете ${formatRub(budget)}`}</small>
           </button>
         )}
       </header>
@@ -653,9 +730,11 @@ export default function App() {
           }}
         />
       )}
+      {messagesOpen && <MessagesList messages={messages} onClose={() => setMessagesOpen(false)} onSelect={selectMessageFromList} />}
       <main className="workspace">
         <div
-          className={`map-screen ${mapVisible ? "" : "map-hidden"} ${scene ? "scene-mode" : ""} ${baseMap === "optical" ? "optical-mode" : ""}`}
+          className={`map-screen ${mapVisible ? "" : "map-hidden"} ${scene ? "scene-mode" : ""} ${baseMap === "optical" ? "optical-mode" : ""} ${scene && panelOpen && (message || newsOpen || messagesOpen) ? "tiled" : ""}`}
+          style={{ "--tile-right": newsOpen ? "30.25rem" : "26.5rem" } as CSSProperties}
           aria-hidden={!mapVisible}
           inert={!mapVisible}
         >
@@ -667,9 +746,10 @@ export default function App() {
             baseMap={baseMap}
             visibleLayers={layers}
             messages={messages}
-            showMessages={showMessages}
+            showMessages={true}
             overlayOpacity={opacity}
             selectedAsset={assetId}
+            priorityAssetIds={priorityAssetIds}
             selectedZone={zoneId}
             active={mapVisible}
             overviewRequest={overviewRequest}
@@ -687,11 +767,15 @@ export default function App() {
               setPanelCollapsed(false);
             }}
             onIssue={setMapIssue}
-            onSelectMessage={setMessage}
+            onSelectMessage={(selected) => {
+              setNewsOpen(false);
+              setMessagesOpen(false);
+              setMessage(selected);
+            }}
             focus={messageFocus}
             newsOpen={newsOpen}
           />
-          {message && (
+          {message && mapVisible && (
             <MessagePanel
               message={message}
               onClose={() => setMessage(null)}
@@ -796,18 +880,6 @@ export default function App() {
                 Спутник
               </button>
             </div>
-            {messages && (
-              <div className="basemap-switch media-switch">
-                <button
-                  className={showMessages ? "active" : ""}
-                  onClick={() => setShowMessages(!showMessages)}
-                  aria-pressed={showMessages}
-                  title={`События из СМИ и обращения очевидцев: ${messages.events.features.length} событий, ${messages.reports.features.length} обращений ждут модерации. Повод проверить территорию — не входит в p, ущерб и план.`}
-                >
-                  Сообщения · {messageCount}
-                </button>
-              </div>
-            )}
           </div>
           {scene && panelOpen && (
             <aside className={`context-panel${panelCollapsed ? " collapsed" : ""}`}>
@@ -856,6 +928,24 @@ export default function App() {
                     ? "Результаты модели доступны"
                     : "Исходный снимок есть; анализ не выполнен"}
               </div>
+              {activeAsset && (
+                <section className="context-section focus-section object-priority-card" ref={selectedObjectRef} aria-label="Выбранный объект">
+                  <h2>Выбранный объект</h2>
+                  <strong>{assetName(activeAsset)}</strong>
+                  <p>{String(activeAsset.properties.asset_id)} · вероятность воды {formatProbability(activeAsset.properties.p_flood)}</p>
+                  <p>Ожидаемый ущерб {formatRub(activeAsset.properties.expected_loss_rub)}</p>
+                  <button
+                    className={`priority-action${priorityAssetIds.includes(String(activeAsset.properties.asset_id)) ? " active" : ""}`}
+                    disabled={activeAsset.properties.status === "no_data"}
+                    onClick={() => togglePriority(String(activeAsset.properties.asset_id))}
+                  >{priorityAssetIds.includes(String(activeAsset.properties.asset_id)) ? "✓ В приоритете · убрать" : "Добавить в приоритет"}</button>
+                  {activeAsset.properties.status === "no_data" && <p>Для объекта нет расчёта, поэтому его нельзя включить в план.</p>}
+                  {priorityAssetIds.includes(String(activeAsset.properties.asset_id)) && currentPlan?.priority && (
+                    <p className={currentPlan.priority.covered_asset_ids.includes(String(activeAsset.properties.asset_id)) ? "priority-success" : "priority-unavailable"} role="status">{currentPlan.priority.reasons[String(activeAsset.properties.asset_id)]}</p>
+                  )}
+                  {priorityAssetIds.length > 0 && <p>Всего в приоритете: {priorityAssetIds.length}. Можно выбрать ещё один кружок на карте.</p>}
+                </section>
+              )}
               {scene.status === "observation_only" && renderAnalysisAction(scene)}
               {!scene.bounds && (
                 <p className="inline-error">
@@ -956,19 +1046,6 @@ export default function App() {
                         Объекты<Hint text={HINTS.assets} /><small>{assets.length} точек</small>
                       </span>
                     </label>
-                    <label className="layer-row">
-                      <input
-                        type="checkbox"
-                        checked={layers.zones}
-                        onChange={() => toggle("zones")}
-                      />
-                      <span>
-                        Зоны съёмки<Hint text={HINTS.zones} />
-                        <small>
-                          {zones.length} кандидатов · план C выделен синим
-                        </small>
-                      </span>
-                    </label>
                   </>
                 )}
               </section>
@@ -976,6 +1053,7 @@ export default function App() {
                 <>
                   <section className="context-section">
                     <h2>План дополнительной съёмки</h2>
+                    <p className="zone-map-note">Зелёным — зоны плана C. Контуры расчётные, не форма снимка.</p>
                     <label className="budget-field">
                       Бюджет данных, ₽
                       <input
@@ -1005,13 +1083,14 @@ export default function App() {
                       }
                       aria-label="Изменить бюджет"
                     />
-                    {activeSession.plan_c_saturation_rub != null && (
+                    {!priorityAssetIds.length && activeSession.plan_c_saturation_rub != null && (
                       <p className="budget-saturation">
                         Свыше ≈ {formatRub(activeSession.plan_c_saturation_rub)} состав плана C не меняется.
                       </p>
                     )}
+                    {renderPriorityList()}
                     <div className="plan-summary">
-                      <span>План C · {currentPlan?.plans.C.length ?? "—"} зон</span>
+                      <span>План C · {currentPlan ? countLabel(currentPlan.plans.C.length, "зона", "зоны", "зон") : "—"}</span>
                       <strong>{formatRub(chosen?.data_cost_rub)}</strong>
                     </div>
                     <div className="plan-summary">
@@ -1040,25 +1119,9 @@ export default function App() {
                       Подробный анализ <BarChart3 size={17} />
                     </button>
                   </section>
-                  {(activeAsset || activeZone) && (
+                  {activeZone && (
                     <section className="context-section focus-section">
-                      <h2>
-                        {activeAsset ? "Выбранный объект" : "Выбранная зона"}
-                      </h2>
-                      {activeAsset && (
-                        <>
-                          <strong>{assetName(activeAsset)}</strong>
-                          <p>
-                            {String(activeAsset.properties.asset_id)} ·
-                            вероятность воды{" "}
-                            {formatProbability(activeAsset.properties.p_flood)}
-                          </p>
-                          <p>
-                            Ожидаемый ущерб{" "}
-                            {formatRub(activeAsset.properties.expected_loss_rub)}
-                          </p>
-                        </>
-                      )}
+                      <h2>Выбранная зона</h2>
                       {activeZone && (
                         <>
                           <strong>
@@ -1086,12 +1149,6 @@ export default function App() {
                   )}
                 </>
               )}
-              <details className="context-foot">
-                <summary>Пояснения к карте</summary>
-                Маркеры — места снимков, не подтверждённые зоны затопления.
-                Оптическая мозаика 2019 года — географический контекст; дата
-                отдельного пикселя неизвестна.
-              </details>
               </>)}
             </aside>
           )}
@@ -1108,6 +1165,16 @@ export default function App() {
         </div>
           <div className={`analysis-screen ${mapVisible ? "analysis-hidden" : ""}`} aria-hidden={mapVisible} inert={mapVisible}>
             <div className="analysis-shell">
+              <div className="analysis-side">
+              {/* Screen-wide actions of the analysis page: above the locations, not in a scene's head. */}
+              <nav className="analysis-rail" aria-label="Переход с экрана анализа">
+                <button onClick={() => (scene ? navigate("scene", scene.chip_id) : overview())}>
+                  <ArrowLeft size={15} /> К карте
+                </button>
+                <button onClick={overview}>
+                  <Globe2 size={15} /> Все наблюдения
+                </button>
+              </nav>
               <aside className="analysis-locations" aria-label="Локации для анализа">
                 <div className="analysis-locations-head">
                   <h2>Локации</h2>
@@ -1157,18 +1224,9 @@ export default function App() {
                   )}
                 </div>
               </aside>
+              </div>
               <div className="analysis-content">
             <div className="analysis-head">
-              <button
-                onClick={() =>
-                  scene ? navigate("scene", scene.chip_id) : overview()
-                }
-              >
-                <ArrowLeft size={17} /> К карте
-              </button>
-              <button onClick={overview}>
-                <Globe2 size={17} /> Все наблюдения
-              </button>
               <div>
                 <span>{scene ? "АНАЛИЗ СЦЕНЫ" : "АНАЛИЗ НАБЛЮДЕНИЙ"}</span>
                 <h1>
@@ -1233,15 +1291,25 @@ export default function App() {
                   assetName={assetName}
                   observationDate={date(scene?.observation_date ?? activeSession.observation_date)}
                 />
+                <div className="operator-context">
+                  <strong>Учебный портфель · {assets.length} объектов</strong>
+                  <p>Стоимость и уязвимость заданы сценарием. Карта показывает воду, включая постоянную; ожидаемый ущерб не является подтверждёнными потерями.</p>
+                  <p>Срок решения: <strong>{dateTimeUtc(activeSession.metadata.budget.decision_deadline)}</strong>. Цены и сроки получения дополнительных снимков сценарные.</p>
+                </div>
+                {unassessed.length > 0 && <div className="risk-missing" role="status">
+                  <strong>Требуют проверки: недостаточно данных · {unassessed.length}</strong>
+                  <p>Состояние неизвестно. Эти объекты не входят в оценённый ущерб и сценарные суммы; проверьте их осмотром или дополнительным снимком.</p>
+                  <div>{unassessed.map(item => <button key={String(item.properties.asset_id)} onClick={() => selectRiskAsset(String(item.properties.asset_id))}>{assetName(item)} · {String(item.properties.asset_id)}{item.properties.status === "partial" ? " · неполные данные" : " · нет оценки"}</button>)}</div>
+                </div>}
                 <div className="analysis-columns">
                   <section className="analysis-card">
                     <div className="card-title">
                       <h2>Приоритет осмотра<Hint text={HINTS.inspection} /></h2>
-                      <span>{assets.length} объектов · ожидаемый ущерб {formatRub(totalLoss)}</span>
+                      <span>{assets.length - unassessed.length} из {assets.length} оценено · ущерб {formatRub(totalLoss)}</span>
                     </div>
                     <details className="analysis-explain">
                       <summary>Что означает неопределённость карты?</summary>
-                      {String(activeSession.metadata.uncertainty?.method ?? "").startsWith("entropy_p") ? (<>
+                      {entropy ? (<>
                       <p>
                         Насколько модель сомневается, есть ли вода в точке объекта. Считается по
                         вероятности воды p (энтропия, в битах от 0 до 1): 0 — модель уверена
@@ -1262,6 +1330,9 @@ export default function App() {
                         {activeSession.metadata.uncertainty?.units && <p>Единицы: {activeSession.metadata.uncertainty.units}.</p>}
                       </>)}
                     </details>
+                    <div className="inspection-controls">
+                      {inspection.size > 0 ? <><button className={assetSort.key === "inspection" ? "active" : ""} onClick={() => setAssetSort({ key: "inspection", descending: false })}>По очередности осмотра</button><details><summary>Правило осмотра</summary><p>{inspectionPriority?.rule}</p></details></> : <p>Рекомендации осмотра не сохранены в этом комплекте. Для сравнения доступны сортировки по ущербу и вероятности; это не готовое решение о выезде.</p>}
+                    </div>
                     <div className="table-scroll">
                       <table>
                         <thead>
@@ -1312,21 +1383,23 @@ export default function App() {
                                 <strong>{assetName(item)}</strong>
                                 <small>
                                   {String(item.properties.asset_id)}
-                                  {item.properties.status === "no_data" && " · нет данных"}
+                                  {!riskAsset(item) && " · нет оценки"}
+                                  {inspection.get(String(item.properties.asset_id)) && ` · осмотр № ${inspection.get(String(item.properties.asset_id))!.inspection_order}`}
                                 </small>
+                                <small className="asset-action">{!riskAsset(item) ? "Проверить на месте или дополнительным снимком" : inspection.get(String(item.properties.asset_id))?.action}</small>
                               </td>
                               <td>
-                                {item.properties.status === "no_data"
+                                {!riskAsset(item)
                                   ? "—"
                                   : <span title={`Точное p: ${formatExactProbability(item.properties.p_flood)}`}>
                                       {formatProbability(item.properties.p_flood)}
                                     </span>}
                               </td>
                               <td>
-                                {formatRub(item.properties.expected_loss_rub)}
+                                {riskAsset(item) ? formatRub(item.properties.expected_loss_rub) : "—"}
                               </td>
                               <td>
-                                {item.properties.uncertainty == null ||
+                                {!riskAsset(item) || item.properties.uncertainty == null ||
                                 item.properties.uncertainty === ""
                                   ? "—"
                                   : Number(item.properties.uncertainty).toFixed(
@@ -1341,8 +1414,15 @@ export default function App() {
                     {activeAsset && (
                       <div className="card-foot asset-detail">
                         <div><strong>{assetName(activeAsset)} · {String(activeAsset.properties.asset_id)}</strong>
-                          <span>Стоимость {formatRub(activeAsset.properties.asset_value_rub)} · уязвимость {money(activeAsset.properties.vulnerability_coef)} · точное p {formatExactProbability(activeAsset.properties.p_flood)}</span>
+                          <span>Стоимость {formatRub(activeAsset.properties.asset_value_rub)} · уязвимость {money(activeAsset.properties.vulnerability_coef, 2)} · точное p {riskAsset(activeAsset) ? formatExactProbability(activeAsset.properties.p_flood) : "нет оценки"}</span>
+                          <span>{!riskAsset(activeAsset) ? "Недостаточно данных — нужен осмотр или дополнительный снимок." : inspection.get(String(activeAsset.properties.asset_id))?.action ?? "Рекомендация отсутствует в комплекте."}</span>
+                          {riskAsset(activeAsset) && inspection.get(String(activeAsset.properties.asset_id))?.reason && <details><summary>Почему такой приоритет</summary><p>{inspection.get(String(activeAsset.properties.asset_id))?.reason}</p></details>}
                         </div>
+                        <button
+                          className={priorityAssetIds.includes(String(activeAsset.properties.asset_id)) ? "priority-active" : ""}
+                          disabled={activeAsset.properties.status === "no_data"}
+                          onClick={() => togglePriority(String(activeAsset.properties.asset_id))}
+                        >{priorityAssetIds.includes(String(activeAsset.properties.asset_id)) ? "Убрать из приоритетов" : "Добавить в приоритет"}</button>
                         <button onClick={() => {
                           setLayers((current) => ({ ...current, assets: true }));
                           setPanelOpen(true);
@@ -1350,6 +1430,7 @@ export default function App() {
                         }}>Показать на карте</button>
                       </div>
                     )}
+                    <RiskMatrix assets={assets} selected={assetId} onSelect={selectRiskAsset} name={assetName} entropy={entropy} />
                   </section>
                   <div className="analysis-stack">
                     <section className="analysis-card">
@@ -1380,10 +1461,11 @@ export default function App() {
                           onChange={(event) => setBudget(Number(event.target.value))}
                           aria-label="Бюджет данных плана"
                         />
-                        {activeSession.plan_c_saturation_rub != null && (
+                        {!priorityAssetIds.length && activeSession.plan_c_saturation_rub != null && (
                           <p>Свыше ≈ {formatRub(activeSession.plan_c_saturation_rub)} состав плана C не меняется.</p>
                         )}
                       </div>
+                      {renderPriorityList()}
                       {planError ? <p className="inline-error">{planError}</p>
                         : !currentPlan && <p className="analysis-plan-loading" role="status">Пересчитываем план…</p>}
                       {chosen && <div className="analysis-plan-totals">
@@ -1408,8 +1490,15 @@ export default function App() {
                             </strong>
                             <div className="strategy-values">
                               <span>Данные <strong>{formatRub(row.data_cost_rub)}</strong></span>
+                              <span>Полная стоимость <strong>{formatRub(row.decision_cost_rub)}</strong></span>
                               <span>Охват <strong>{pct(row.coverage_share)}</strong></span>
                               <span>Доля R <strong>{pct(row.decision_risk_share)}</strong></span>
+                            </div>
+                            <small>{row.budget_feasible ? "В бюджете данных" : "Превышен бюджет данных"}</small>
+                            <div className="strategy-uncertainty">
+                              <span>Остаточная неопределённость <strong>{row.residual_uncertainty == null ? "—" : `${money(row.residual_uncertainty, 3)} ${entropy ? "бит · сумма по объектам" : activeSession.metadata.uncertainty?.units ?? "ед. показателя"}`}</strong></span>
+                              <small>{({ baseline: "Исходная оценка", scenario: "Сценарий · не измеренное улучшение", measured: "Измерено", not_estimated: "Не оценена" } as Record<string, string>)[row.uncertainty_status] ?? "Статус не указан"}</small>
+                              {row.uncertainty_basis && <details><summary>Основание оценки</summary><p>{row.uncertainty_basis}</p></details>}
                             </div>
                             {row.strategy === "B" && !row.budget_feasible && (
                               <small>
@@ -1421,10 +1510,11 @@ export default function App() {
                       ))}
                       <div className="card-foot">
                         <p>Охват — доля ожидаемого ущерба объектов в зонах, а не предотвращённый ущерб.</p>
-                        <p>Цены рассчитаны по сценарной ставке {money(activeSession.metadata.pricing?.base_rate_rub_km2)} ₽/км²; это не тариф.</p>
+                        <p>Цены рассчитаны по сценарной ставке {money(activeSession.metadata.pricing?.base_rate_rub_km2, 2)} ₽/км²; это не тариф.</p>
                         <details>
                           <summary>Методика расчёта</summary>
                           <p>Сценарная цена ошибки решения R = V·q·min(p, 1−p). Показана доля R объектов в зонах от R всех оценённых объектов; снижение фактических потерь не заявляется.</p>
+                          <p>Допущения R: одинаковая цена двух типов ошибок и идеальное уточнение снимком. Реальные стоимость выезда, цена пропуска и качество нового снимка здесь не моделируются; это не подтверждённая экономия.</p>
                           <p>План C не покупает новые данные ради объектов, для которых исход по карте почти определён: их осмотр планируется по исходным данным.</p>
                         </details>
                         <details>
@@ -1435,8 +1525,8 @@ export default function App() {
                     </section>
                     <section className="analysis-card">
                       <div className="card-title">
-                        <h2>Дополнительная съёмка</h2>
-                        <span>{zones.length} кандидатных зон</span>
+                        <h2>Зоны заказа</h2>
+                        <span>{countLabel(zones.length, "зона", "зоны", "зон")}</span>
                       </div>
                       <div className="zone-tabs">
                         <button
@@ -1452,7 +1542,7 @@ export default function App() {
                           Все зоны
                         </button>
                       </div>
-                      <div className="zone-list" aria-label={zoneView === "plan" ? "Зоны плана C" : "Все зоны съёмки"}>
+                      <div className="zone-list" aria-label={zoneView === "plan" ? "Зоны плана C" : "Все зоны заказа"}>
                         {zones
                           .filter(
                             (item) =>
@@ -1477,12 +1567,12 @@ export default function App() {
                               <span>
                                 <b>{String(item.properties.candidate_id)}</b>
                                 <small>
-                                  {money(item.properties.area_km2)} км² ·{" "}
+                                  {money(item.properties.area_km2, 3)} км² ·{" "}
                                   {String(
                                     item.properties.sensor_type,
                                   ).toUpperCase()}{" "}
                                   · доступна{" "}
-                                  {date(
+                                  {dateTimeUtc(
                                     String(item.properties.available_at ?? ""),
                                   )}
                                 </small>
@@ -1513,7 +1603,6 @@ export default function App() {
                             ] ??
                             "Причина выбора недоступна"}</span>
                           <button onClick={() => {
-                            setLayers((current) => ({ ...current, zones: true }));
                             setPanelOpen(true);
                             setSourceViewerOpen(true);
                           }}>Показать на карте</button>

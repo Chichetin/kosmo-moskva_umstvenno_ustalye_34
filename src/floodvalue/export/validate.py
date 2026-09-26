@@ -23,6 +23,7 @@ from shapely.geometry import Point, box, shape
 from floodvalue.contracts import files as F
 from floodvalue.contracts.geo import MIN_AREA_KM2, area_km2, product_half_up, round_half_up
 from floodvalue.contracts.io import read_csv, read_json
+from floodvalue.contracts.kopeck import decision_risk_from_el
 from floodvalue.contracts.schemas import (
     AssetCsvRow,
     AssetLossRow,
@@ -330,15 +331,6 @@ def _check_plan(report: _Report, plan: list[ProcurementPlanRow], catalog: dict, 
 def covered_expected_loss(zones: list, points: dict[str, Point], el: dict[str, float]) -> float:
     """EL of unique asset_id covered by any zone; `covers` counts the boundary (task.md)."""
     return sum(v for aid, v in el.items() if any(z.covers(points[aid]) for z in zones))
-
-
-def decision_risk_from_el(el: float, p: float) -> float:
-    """Expected cost of a wrong decision R = V·q·min(p, 1−p), rub. (scenario, D-049), from the
-    written EL and p of asset_loss.csv (V·q = EL/p), exactly as procurement does: EL rounded to
-    the kopeck would otherwise drift from V·q·min(p, 1−p) by up to 0,005 per asset (#146)."""
-    if p <= 0.5:
-        return el
-    return el * (1.0 - p) / p
 
 
 def _optional_number(extra: dict, field: str) -> tuple[bool, float | None]:

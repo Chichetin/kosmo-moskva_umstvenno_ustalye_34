@@ -145,8 +145,8 @@ export default function NewsPanel({
               + "(оператор, форма очевидца и сообщения на одном адресе).");
           }
           if (response.status === 401 || response.status === 403) {
-            throw new Error("Список новостей доступен аналитику: откройте интерфейс локально "
-              + "или войдите на странице /media/analyst.");
+            throw new Error("Список новостей закрыт на этом сервере: войдите на странице "
+              + "/media/analyst или откройте интерфейс локально.");
           }
           if (!response.ok) throw new Error(`Не удалось загрузить новости (${response.status}).`);
           return response.json() as Promise<Feed>;

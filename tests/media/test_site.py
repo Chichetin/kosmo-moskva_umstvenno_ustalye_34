@@ -241,6 +241,50 @@ def test_news_feed_follows_the_map_access(settings):
     assert OBSERVED_MINUTE in item["event_time_start"]
 
 
+def test_public_event_card_shows_sources_without_eyewitness_data(settings):
+    """Operator = analyst (D-065): a click on a point of the public map opens the event card
+    without login — what the sources published, coarse point and hour; the eyewitness's text,
+    photos, contacts and the moderation trail stay behind the login."""
+    app = create_app(replace(settings, analyst_token=TOKEN, public_reports=True,
+                             operator_map_public=True))
+    eid = _news_on_eyewitness_event(app, settings)
+    r = call(app, "GET", f"/api/media/events/{eid}", client=REMOTE,
+             headers={"X-Forwarded-For": "203.0.113.7"})
+    assert r.status == 200, r.body
+    card = r.json()
+    body = r.body.decode()
+    for private in PRIVATE:
+        assert private not in body
+    assert OBSERVED_MINUTE not in body
+    assert card["exact_locations"] is False
+    assert [e["origin"] for e in card["evidence"]] == ["news"]
+    assert card["evidence"][0]["title"] == "Подтопление в центре"
+    assert "linked_by" not in card["evidence"][0]
+    assert card["event"]["geometry"]["coordinates"] == [37.62, 55.75]
+    assert card["event"]["place_label"] is None and card["event"]["geo_candidates"] == []
+    assert card["history"] == card["reviews"] == card["possible_duplicates"] == []
+    exact = call(app, "GET", f"/api/media/events/{eid}", client=REMOTE,
+                 headers={"Authorization": f"Bearer {TOKEN}"})
+    assert exact.status == 200 and exact.json()["exact_locations"] is True
+    assert {e["origin"] for e in exact.json()["evidence"]} == {"news", "citizen"}
+
+
+def test_public_event_card_of_eyewitness_only_event_needs_login(settings):
+    app = create_app(replace(settings, analyst_token=TOKEN, public_reports=True,
+                             operator_map_public=True))
+    rid = _submit(app)
+    auth = {"Authorization": f"Bearer {TOKEN}", "X-FloodValue-Media": "1"}
+    eid = call(app, "POST", f"/api/media/reports/{rid}/moderate", json_body={"decision": "accept"},
+               headers=auth, client=REMOTE).json()["event_id"]
+    assert call(app, "GET", f"/api/media/events/{eid}", client=REMOTE).status == 401
+
+
+def test_event_card_is_closed_when_the_map_is_closed(settings):
+    app = create_app(replace(settings, analyst_token=TOKEN, public_reports=True))
+    eid = _news_on_eyewitness_event(app, settings)
+    assert call(app, "GET", f"/api/media/events/{eid}", client=REMOTE).status == 401
+
+
 def test_demo_loads_once_and_stays_off_test(settings, conn):
     import json
 

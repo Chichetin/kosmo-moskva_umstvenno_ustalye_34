@@ -14,12 +14,14 @@ from __future__ import annotations
 import csv
 import json
 import math
+from collections.abc import Iterable
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 from floodvalue.contracts import load_run_config
+from floodvalue.contracts.kopeck import kopeck_sum, ok_rows
 from floodvalue.paths import data_dir, output_dir
 from floodvalue.procurement import strategies, zones
 from floodvalue.procurement.pricing import load_pricing
@@ -202,7 +204,7 @@ def _context(run_dir: Path) -> dict[str, Any]:
     catalog = zones.build_catalog(assets, bounds, decision_at, pricing_cfg, loss=loss,
                                   uncertainty=unc, transform=transform,
                                   decision_deadline=deadline)
-    ok_ids = {r["asset_id"] for r in loss if r["status"] == "ok"}
+    ok_ids = {r["asset_id"] for r in ok_rows(loss)}
     ok_assets = [a for a in assets if a["asset_id"] in ok_ids]
     cov = zones.coverage(catalog, ok_assets, deadline)
     excluded = {f["properties"]["candidate_id"]: r for f in catalog["features"]
@@ -239,8 +241,10 @@ def _not_selected_reason(cid: str, ctx: dict[str, Any], res: dict[str, Any]) -> 
             "помещается в остаток бюджета при пересчёте всей корзины")
 
 
-def _plan(ctx: dict[str, Any], budget_rub: float, social: bool | None = None) -> dict[str, Any]:
+def _plan(ctx: dict[str, Any], budget_rub: float, social: bool | None = None,
+          priority_asset_ids: Iterable[str] = ()) -> dict[str, Any]:
     required = ctx["required"] if social is None else (ctx["social_ids"] if social else [])
+    required = sorted(set(required) | set(priority_asset_ids))
     res = strategies.compute_plan(ctx["catalog"], ctx["cov"], ctx["eligible"], ctx["loss"],
                                   Decimal(str(budget_rub)), ctx["pricing"], ctx["as_of"],
                                   other_cfg=ctx["rc"]["other_cost"], required=required)
@@ -267,6 +271,32 @@ def plan(run_dir: Path, budget_rub: float, social: bool | None = None) -> dict[s
     return _plan(_cached_context(Path(run_dir)), budget_rub, social)
 
 
+def priority_plan(run_dir: Path, budget_rub: float, asset_ids: Iterable[str]) -> dict[str, Any]:
+    """Preview plan C with selected assets covered first; leave bundle files untouched."""
+    ctx = _cached_context(Path(run_dir))
+    assessed_ids = strategies.assessed(ctx["loss"])
+    selected_ids = sorted(set(asset_ids))
+    invalid_ids = sorted(set(selected_ids) - set(assessed_ids))
+    if invalid_ids:
+        raise ValueError(f"Объекты не найдены среди оценённых: {', '.join(invalid_ids)}")
+    baseline = _plan(ctx, budget_rub)
+    result = _plan(ctx, budget_rub, priority_asset_ids=selected_ids)
+    covered_ids = {aid for cid in result["plans"]["C"] for aid in ctx["cov"].get(cid, ())}
+    available_ids = {aid for cid in ctx["eligible"] for aid in ctx["cov"].get(cid, ())}
+    baseline_c = next(row for row in baseline["comparison"] if row["strategy"] == "C")
+    result["priority"] = {
+        "asset_ids": selected_ids,
+        "covered_asset_ids": sorted(set(selected_ids) & covered_ids),
+        "reasons": {aid: ("В зоне плана C" if aid in covered_ids else
+                          "Нет доступной к сроку зоны" if aid not in available_ids else
+                          "Не вошёл в план при этом бюджете") for aid in selected_ids},
+        "baseline_candidate_ids": baseline["plans"]["C"],
+        "baseline_data_cost_rub": baseline_c["data_cost_rub"],
+        "baseline_coverage_share": baseline_c["coverage_share"],
+    }
+    return result
+
+
 def _cell(v: Any) -> str:
     if v is None:
         return ""
@@ -275,7 +305,7 @@ def _cell(v: Any) -> str:
     if isinstance(v, Decimal):
         return f"{v:f}"
     if isinstance(v, float):
-        return repr(v)
+        return repr(v) if math.isfinite(v) else ""  # contract: empty, not "nan" (#235)
     return str(v)
 
 
@@ -326,8 +356,7 @@ def write_outputs(run_dir: Path, budget_rub: float) -> dict[str, Any]:
                                   deadline_hours=SENS_DEADLINE_HOURS)
     _write_csv(run_dir / "procurement_sensitivity.csv", SENS_FIELDS, sens)
     # exact sum of the kopeck EL of asset_loss.csv (#127), same as coverage_share in the CSV
-    denom = float(sum((Decimal(r["expected_loss_rub"]) for r in ctx["loss"] if r["status"] == "ok"),
-                      Decimal(0)))
+    denom = kopeck_sum(r["expected_loss_rub"] for r in ok_rows(ctx["loss"]))
     kinds: dict[str, int] = {}
     for f in ctx["catalog"]["features"]:
         k = f["properties"]["zone_kind"]
@@ -445,4 +474,3 @@ def run(args) -> int:
               f"зоны {res['plans'][r['strategy']]}")
     print(f"procure: файлы в {out}")
     return 0
-

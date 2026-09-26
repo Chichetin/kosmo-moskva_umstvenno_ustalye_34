@@ -25,7 +25,7 @@ def main(argv: list[str] | None = None) -> int:
     srv.add_argument("--host", default="127.0.0.1")
     srv.add_argument("--port", type=int, default=8765)
     sub.add_parser("purge", help="удалить обращения и фото с истёкшим сроком хранения")
-    demo = sub.add_parser("demo", help="загрузить помеченные ДЕМО-сообщения (replay: Sri-Lanka 2017, Assam 2016, Nigeria 2018)")
+    demo = sub.add_parser("demo", help="загрузить помеченные ДЕМО-сообщения (replay: сцены train/validation — Sri-Lanka, India, Nigeria, Ghana, Pakistan, Paraguay, Somalia)")
     demo.add_argument("--remove", action="store_true", help="удалить демо-данные")
     args = parser.parse_args(argv)
     settings = load_settings()
