@@ -88,7 +88,7 @@
   function initMap() {
     if (typeof L === "undefined") { $("map").textContent = "Карта не загрузилась (нет доступа к CDN) — списки и карточки работают."; return; }
     map = L.map("map", { zoomAnimation: !reduced, fadeAnimation: !reduced }).setView([20, 20], 2);
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18, attribution: "© участники OpenStreetMap" }).addTo(map);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18, attribution: "© участники OpenStreetMap", referrerPolicy: "strict-origin-when-cross-origin" }).addTo(map);
     eventLayer = L.layerGroup().addTo(map);
     reportLayer = L.layerGroup().addTo(map);
     sceneLayer = L.layerGroup().addTo(map);
