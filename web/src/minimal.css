@@ -880,3 +880,39 @@ tbody tr.selected,
     display: none;
   }
 }
+
+/* «Сообщения» toggle and card (/api/media/map) */
+.map-top-center {
+  gap: 8px;
+}
+
+.media-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.media-switch button.active svg {
+  color: #f0b85a;
+}
+
+.media-count {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #ffffff14;
+  color: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.media-preview {
+  display: grid;
+  gap: 4px;
+  max-width: 260px;
+}
+
+.media-preview small {
+  color: #929da2;
+  line-height: 1.35;
+}
