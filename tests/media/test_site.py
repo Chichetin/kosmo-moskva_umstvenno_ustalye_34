@@ -3,6 +3,7 @@ to go public without an analyst token; /api/media/map gives the operator layer w
 
 import importlib.util
 from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -21,6 +22,11 @@ FORM = {"category": "flooding", "description": "Вода у дома 5, звон
         "observed_precision": "unknown", "place_text": "ул. Речная, 5, кв. 12",
         "idempotency_key": "b" * 24}
 PRIVATE = ("+7 900", "Вода у дома", "Речная", "37.618765", "55.751234")
+# an observation time with a minute: the public feed must show only its hour
+_SEEN = datetime.now(UTC).replace(second=39, microsecond=0) - timedelta(hours=2)
+_SEEN = _SEEN.replace(minute=30)
+OBSERVED_AT = _SEEN.isoformat()
+OBSERVED_MINUTE = _SEEN.strftime("T%H:30")
 
 
 @pytest.mark.parametrize("path,media", [
@@ -163,3 +169,136 @@ def test_public_map_hides_eyewitness_text_after_split(settings):
             assert event["geometry"]["coordinates"] == [37.62, 55.75]
     for private in PRIVATE:
         assert private not in public.body.decode()
+
+
+def _news_on_eyewitness_event(app, settings) -> int:
+    """Accepted eyewitness report → event with the eyewitness's point; a news item joins it."""
+    from contextlib import closing
+
+    from floodvalue.media import events as ev
+    from floodvalue.media.store import connect, transaction
+
+    r = call(app, "POST", "/api/media/reports", data={**FORM, "observed_at": OBSERVED_AT,
+                                                      "observed_precision": "hour"})
+    assert r.status == 201, r.body
+    rid = r.json()["report_id"]
+    auth = {"Authorization": f"Bearer {TOKEN}", "X-FloodValue-Media": "1"}
+    eid = call(app, "POST", f"/api/media/reports/{rid}/moderate", json_body={"decision": "accept"},
+               headers=auth, client=REMOTE).json()["event_id"]
+    with closing(connect(settings.db_path)) as c, transaction(c):
+        src = c.execute("SELECT source_id FROM sources WHERE kind='news' LIMIT 1").fetchone()[0]
+        c.execute("INSERT INTO publications(source_id, external_id, url, canonical_url, title, "
+                  "content_scope, fetched_at, content_hash, title_key, source_domain) "
+                  "VALUES(?,?,?,?,?,?,?,?,?,?)", (src, "x", "http://n/1", "http://n/1",
+                  "Подтопление в центре", "title", "2026-09-26T10:00:00Z", "h", "k", "n"))
+        pid = c.execute("SELECT last_insert_rowid()").fetchone()[0]
+        ev.link(c, eid, origin="news", is_original=True, link_kind="auto", actor="system",
+                publication_id=pid, report_type="occurred", facts={})
+        stored = c.execute("SELECT event_time_start FROM events WHERE event_id=?", (eid,)).fetchone()[0]
+    assert stored and stored[14:16] != "00"  # the event carries the eyewitness's minute
+    return eid
+
+
+def test_public_news_feed_shows_publications_without_eyewitness_data(settings, conn):
+    """«Новости» on the public stand: every publication with a place to jump to; eyewitness
+    reports are not publications, and an event's eyewitness point is coarsened like on the map."""
+    from floodvalue.media.demo import DEMO_ITEMS, load_demo
+
+    app = create_app(replace(settings, analyst_token=TOKEN, public_reports=True,
+                             operator_map_public=True))
+    eid = _news_on_eyewitness_event(app, settings)
+    load_demo(conn, settings)
+    r = call(app, "GET", "/api/media/news", client=REMOTE,
+             headers={"X-Forwarded-For": "203.0.113.7"})
+    assert r.status == 200 and r.json()["exact_locations"] is False
+    body = r.body.decode()
+    for private in PRIVATE:
+        assert private not in body
+    items = r.json()["publications"]
+    assert {"description", "report_id", "status_token_hash"}.isdisjoint(
+        {key for item in items for key in item})
+    news = next(p for p in items if p["title"] == "Подтопление в центре")
+    assert news["event_id"] == eid and not news["is_demo"]
+    assert news["place"] == {"label": None, "center": [37.62, 55.75], "bbox": None,
+                             "precision": "coarsened"}
+    assert news["event_time_start"].endswith(":00:00Z")  # the hour, as on the public map
+    assert OBSERVED_MINUTE not in body
+    demo = [p for p in items if p["is_demo"]]
+    assert len(demo) == len(DEMO_ITEMS)
+    assert all(p["place"]["center"] and p["event_time_start"] for p in demo)
+    assert {p["place"]["label"] for p in demo} >= {"Batticaloa", "Assam", "Kwara"}
+
+
+def test_news_feed_follows_the_map_access(settings):
+    app = create_app(replace(settings, analyst_token=TOKEN, public_reports=True))
+    _news_on_eyewitness_event(app, settings)
+    assert call(app, "GET", "/api/media/news", client=REMOTE).status == 401
+    exact = call(app, "GET", "/api/media/news", client=REMOTE,
+                 headers={"Authorization": f"Bearer {TOKEN}"})
+    assert exact.status == 200 and exact.json()["exact_locations"] is True
+    (item,) = exact.json()["publications"]
+    assert item["place"]["center"] == [37.618765, 55.751234]
+    assert OBSERVED_MINUTE in item["event_time_start"]
+
+
+def test_public_event_card_shows_sources_without_eyewitness_data(settings):
+    """Operator = analyst (D-065): a click on a point of the public map opens the event card
+    without login — what the sources published, coarse point and hour; the eyewitness's text,
+    photos, contacts and the moderation trail stay behind the login."""
+    app = create_app(replace(settings, analyst_token=TOKEN, public_reports=True,
+                             operator_map_public=True))
+    eid = _news_on_eyewitness_event(app, settings)
+    r = call(app, "GET", f"/api/media/events/{eid}", client=REMOTE,
+             headers={"X-Forwarded-For": "203.0.113.7"})
+    assert r.status == 200, r.body
+    card = r.json()
+    body = r.body.decode()
+    for private in PRIVATE:
+        assert private not in body
+    assert OBSERVED_MINUTE not in body
+    assert card["exact_locations"] is False
+    assert [e["origin"] for e in card["evidence"]] == ["news"]
+    assert card["evidence"][0]["title"] == "Подтопление в центре"
+    assert "linked_by" not in card["evidence"][0]
+    assert card["event"]["geometry"]["coordinates"] == [37.62, 55.75]
+    assert card["event"]["place_label"] is None and card["event"]["geo_candidates"] == []
+    assert card["history"] == card["reviews"] == card["possible_duplicates"] == []
+    exact = call(app, "GET", f"/api/media/events/{eid}", client=REMOTE,
+                 headers={"Authorization": f"Bearer {TOKEN}"})
+    assert exact.status == 200 and exact.json()["exact_locations"] is True
+    assert {e["origin"] for e in exact.json()["evidence"]} == {"news", "citizen"}
+
+
+def test_public_event_card_of_eyewitness_only_event_needs_login(settings):
+    app = create_app(replace(settings, analyst_token=TOKEN, public_reports=True,
+                             operator_map_public=True))
+    rid = _submit(app)
+    auth = {"Authorization": f"Bearer {TOKEN}", "X-FloodValue-Media": "1"}
+    eid = call(app, "POST", f"/api/media/reports/{rid}/moderate", json_body={"decision": "accept"},
+               headers=auth, client=REMOTE).json()["event_id"]
+    assert call(app, "GET", f"/api/media/events/{eid}", client=REMOTE).status == 401
+
+
+def test_event_card_is_closed_when_the_map_is_closed(settings):
+    app = create_app(replace(settings, analyst_token=TOKEN, public_reports=True))
+    eid = _news_on_eyewitness_event(app, settings)
+    assert call(app, "GET", f"/api/media/events/{eid}", client=REMOTE).status == 401
+
+
+def test_demo_loads_once_and_stays_off_test(settings, conn):
+    import json
+
+    from floodvalue.media.demo import DEMO_ITEMS, DEMO_SCENES, load_demo
+
+    first = json.loads(load_demo(conn, settings))
+    again = json.loads(load_demo(conn, settings))
+    assert first["demo_events"] == again["demo_events"] >= 3
+    assert again["demo_report_pending"] is None
+    assert conn.execute("SELECT COUNT(*) FROM publications WHERE is_demo=1").fetchone()[0] \
+        == len(DEMO_ITEMS)
+    assert conn.execute("SELECT COUNT(*) FROM citizen_reports WHERE is_demo=1").fetchone()[0] == 1
+    assert conn.execute("SELECT COUNT(*) FROM events WHERE is_demo=1 AND "
+                        "event_time_start IS NULL").fetchone()[0] == 0
+    split = json.loads((REPO_ROOT / "splits" / "split_v1.json").read_text(encoding="utf-8"))
+    assert not set(DEMO_SCENES) & set(split["test"])
+    assert set(DEMO_SCENES) <= set(split["train"]) | set(split["validation"])

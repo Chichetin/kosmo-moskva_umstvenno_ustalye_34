@@ -8,7 +8,10 @@ GET /api/media/events is the analyst's GeoJSON with filters.
 GET /api/media/map is the operator map's read-only layer: events plus pending eyewitness reports
 without personal data. FLOODVALUE_MEDIA_OPERATOR_MAP_PUBLIC=1 opens it without login (the operator
 UI is public for now); then points of reports and events are coarsened to
-MAP_PUBLIC_GRID degrees and the hour, and event titles and places are dropped."""
+MAP_PUBLIC_GRID degrees and the hour, and event titles and places are dropped.
+GET /api/media/news is the operator's «Новости» feed under the same rule: what the sources
+published (never eyewitness reports), each with the place read from the publication itself and the
+point of its event (coarsened when public), so the operator can jump to the region."""
 
 from __future__ import annotations
 
@@ -53,6 +56,7 @@ CSP = ("default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; "
        "frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 STATUS_LIMIT = (60, 3600)
 MAP_PUBLIC_GRID = 0.01  # ≈ 1 km: a public map shows where a report is, not the eyewitness's door
+COARSE_PRECISION = {"locality", "district", "region", "country"}  # coarser than the grid
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -234,18 +238,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # --- operator map ----------------------------------------------------------------------
 
+    def operator_exact(request: Request) -> bool:
+        """Operator read access (map layer, news, event card). The operator and the analyst are one
+        person (D-065): logged in — exact data; FLOODVALUE_MEDIA_OPERATOR_MAP_PUBLIC=1 without
+        login — coarse points and hours, no eyewitness data; otherwise the login is required."""
+        if not settings.operator_map_public:
+            analyst(request)
+            return True
+        try:
+            analyst(request)
+        except HTTPException:
+            return False
+        return True
+
     @app.get("/api/media/map")
     def operator_map(request: Request, include_demo: bool = True):
         """Events and not-yet-moderated eyewitness reports for the operator's «Сообщения» layer.
         Accepted reports are already inside events; rejected and spam are never shown."""
-        exact = True
-        if not settings.operator_map_public:
-            analyst(request)
-        else:
-            try:
-                analyst(request)
-            except HTTPException:
-                exact = False
+        exact = operator_exact(request)
         with db() as conn:
             events = _event_features(conn, None, None, None, None, None, False, include_demo)
             reports = _report_features(conn, include_demo, exact)
@@ -254,6 +264,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"events": {"type": "FeatureCollection", "features": events},
                 "reports": {"type": "FeatureCollection", "features": reports},
                 "exact_locations": exact}
+
+    @app.get("/api/media/news")
+    def news_feed(request: Request, limit: int = 200, include_demo: bool = True):
+        """The operator's «Новости» panel: publications of the sources (news, bulletins, demo),
+        newest first, each with a place to jump to and the satellite observations found for its
+        event. Same access as /api/media/map; eyewitness reports never appear here."""
+        exact = operator_exact(request)
+        with db() as conn:
+            items = _news_items(conn, max(1, min(int(limit), 200)), include_demo, exact)
+            polled = conn.execute(
+                "SELECT MAX(finished_at) FROM ingestion_runs WHERE status = 'ok'").fetchone()[0]
+        return {"publications": items, "sources_polled_at": polled, "exact_locations": exact}
 
     # --- analyst: reports queue ------------------------------------------------------------
 
@@ -373,9 +395,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/media/events/{event_id}")
     def event_card(request: Request, event_id: int):
-        analyst(request)
+        """Event card; the same access as the map. Without login on the public stand — what the
+        sources published (see _public_card)."""
+        exact = operator_exact(request)
         with db() as conn:
-            return _card(conn, event_id)
+            card = _card(conn, event_id)
+        return {**card, "exact_locations": True} if exact else _public_card(card)
 
     @app.post("/api/media/events/{event_id}/review")
     async def review(request: Request, event_id: int):
@@ -645,6 +670,26 @@ def _public_event(feature: dict) -> dict:
                            "geo_precision": "coarsened"}}
 
 
+def _public_card(card: dict) -> dict:
+    """The event card on the public stand without login: publications of the sources with the
+    event's coarse point and hour (as _public_event). No eyewitness evidence (text, photos,
+    contacts), no geocoder candidates of the place text, no moderation history or reviewers.
+    An event known only from eyewitnesses stays behind the login."""
+    evidence = [{k: v for k, v in item.items() if k != "linked_by"}
+                for item in card["evidence"]
+                if not item.get("report_id") and item.get("origin") != "citizen"]
+    if not evidence:
+        raise HTTPException(401, "событие известно только по обращениям очевидцев — нужен вход")
+    event = card["event"]
+    feature = _public_event({"type": "Feature", "geometry": event.get("geometry"),
+                             "properties": event})
+    return {"event": {**feature["properties"], "geometry": feature["geometry"],
+                      "geo_candidates": []},
+            "evidence": evidence, "observations": card["observations"], "history": [],
+            "reviews": [], "possible_duplicates": [], "missing": card["missing"],
+            "exact_locations": False}
+
+
 def _report_features(conn, include_demo: bool, exact: bool) -> list[dict]:
     """Pending reports with a location. No description, contacts, photos or tokens: the free text
     stays in the analyst queue. Without analyst access coordinates snap to MAP_PUBLIC_GRID."""
@@ -668,6 +713,99 @@ def _report_features(conn, include_demo: bool, exact: bool) -> list[dict]:
                                    "submitted_at": r["submitted_at"] if exact
                                    else _coarse_time(r["submitted_at"]),
                                    "moderation_status": "pending", "is_demo": r["is_demo"]}})
+    return out
+
+
+def _final_event(conn, event_id: int | None):
+    """Follow merges to the event that holds the evidence now."""
+    seen = set()
+    while event_id is not None and event_id not in seen:
+        seen.add(event_id)
+        row = conn.execute("SELECT * FROM events WHERE event_id=?", (event_id,)).fetchone()
+        if row is None or not row["merged_into"]:
+            return row
+        event_id = row["merged_into"]
+    return None
+
+
+def _coords(geometry) -> list[list[float]]:
+    out: list[list[float]] = []
+
+    def walk(value) -> None:
+        if isinstance(value, list) and value and isinstance(value[0], (int, float)):
+            out.append([float(value[0]), float(value[1])])
+        elif isinstance(value, list):
+            for part in value:
+                walk(part)
+
+    walk((geometry or {}).get("coordinates"))
+    return out
+
+
+def _news_place(pub, event, exact: bool) -> dict | None:
+    """Where a publication points: the label from its own text (bulletin place or the first
+    place mention), the point or area of its event; public → the point snaps to the grid."""
+    hint = loads(pub["place_hint_json"]) or {}
+    extraction = loads(pub["extraction_json"]) or {}
+    mentions = extraction.get("place_mentions") or []
+    label = hint.get("label") or (mentions[0] if mentions else None)
+    geometry = (loads(event["geometry_json"]) if event is not None else None) or hint.get("geometry")
+    points = _coords(geometry)
+    if not points:
+        return {"label": label, "center": None, "bbox": None, "precision": "unknown"} if label else None
+    lons, lats = [c[0] for c in points], [c[1] for c in points]
+    bbox = [min(lons), min(lats), max(lons), max(lats)]
+    center = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2]
+    precision = (event["geo_precision"] if event is not None else hint.get("precision")) or "unknown"
+    if geometry.get("type") == "Point":
+        bbox = None
+        if not exact:  # the point snaps to the grid; a country or region stays named as such
+            center = _coarse(*center)
+            precision = precision if precision in COARSE_PRECISION else "coarsened"
+    if exact and event is not None and event["place_label"]:
+        label = label or event["place_label"]
+    return {"label": label, "center": [round(v, 6) for v in center],
+            "bbox": [round(v, 6) for v in bbox] if bbox else None, "precision": precision}
+
+
+def _event_time(event, key: str, exact: bool) -> str | None:
+    if event is None:
+        return None
+    return event[key] if exact else _coarse_time(event[key])
+
+
+def _news_items(conn, limit: int, include_demo: bool, exact: bool) -> list[dict]:
+    sql = ("SELECT p.*, s.name AS source_name, s.kind AS source_kind, s.attribution "
+           "FROM publications p JOIN sources s USING(source_id)")
+    if not include_demo:
+        sql += " WHERE p.is_demo = 0"
+    sql += " ORDER BY COALESCE(p.published_at, p.fetched_at) DESC, p.publication_id DESC LIMIT ?"
+    out = []
+    for pub in conn.execute(sql, (limit,)).fetchall():
+        link = conn.execute("SELECT event_id FROM evidence WHERE publication_id=? "
+                            "ORDER BY is_original DESC, event_id LIMIT 1",
+                            (pub["publication_id"],)).fetchone()
+        event = _final_event(conn, link["event_id"] if link else None)
+        observations = []
+        if event is not None:
+            observations = [dict(m) for m in conn.execute(
+                "SELECT catalog, observation_ref, product_type, observation_start, suitability, "
+                "reason FROM observation_matches WHERE event_id=? "
+                "ORDER BY suitability='suitable' DESC, observation_start LIMIT 5",
+                (event["event_id"],))]
+        out.append({
+            "publication_id": pub["publication_id"], "source_id": pub["source_id"],
+            "source_name": pub["source_name"], "source_kind": pub["source_kind"],
+            "attribution": pub["attribution"], "url": pub["url"], "title": pub["title"],
+            "text_excerpt": pub["text_excerpt"], "published_at": pub["published_at"],
+            "fetched_at": pub["fetched_at"], "report_type": pub["report_type"],
+            "extraction_method": pub["extraction_method"],
+            "extraction_status": pub["extraction_status"], "is_demo": pub["is_demo"],
+            "event_id": event["event_id"] if event is not None else None,
+            # an event's time may be an eyewitness's observed_at: public → the hour, as on the map
+            "event_time_start": _event_time(event, "event_time_start", exact),
+            "event_time_end": _event_time(event, "event_time_end", exact),
+            "place": _news_place(pub, event, exact), "observations": observations})
     return out
 
 

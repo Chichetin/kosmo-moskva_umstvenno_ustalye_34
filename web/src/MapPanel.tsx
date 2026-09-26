@@ -38,6 +38,7 @@ type Props = {
   onIssue: (message: string | null) => void;
   onSelectMessage?: (message: SelectedMessage) => void;
   focus?: { lngLat: [number, number]; zoom: number; request: number } | null;
+  newsOpen?: boolean;
 };
 const empty: FeatureCollection = { type: "FeatureCollection", features: [] };
 const features = (items: Feature[]): FeatureCollection => ({
@@ -110,7 +111,7 @@ const messageCard = (props: Record<string, unknown>, kind: "event" | "report") =
     if (props.place_label) line(String(props.place_label));
     const coarse = props.geo_precision === "coarsened";
     line(`${when(props.event_time_start ?? props.first_detected_at, props.event_time_start ? props.time_precision : "hour", coarse)} · ${REVIEW_STATE[String(props.review_state)] ?? ""}`);
-    if (coarse) line("место показано с точностью ≈ 1 км, время — до часа; подробности — у аналитика", "small");
+    if (coarse) line("место показано с точностью ≈ 1 км, время — до часа; точные данные — после входа", "small");
   }
   line("Сообщение не проверено по снимкам и не входит в p, ущерб и план.", "small");
   return node;
@@ -119,14 +120,18 @@ const reducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const minimumZoom = () => (window.innerWidth < 700 ? 0.9 : 1.15);
 const overviewZoom = () => (window.innerWidth < 700 ? 1.15 : 2.05);
-const overviewPadding = () => ({
-  top: 0,
-  right: 0,
-  bottom: 0,
-  left: window.innerWidth < 700
-    ? 0
-    : Math.round(Math.min(58, Math.max(30, window.innerWidth * 0.036)) + 320), // .map-top-left width
-});
+// The globe sits on the layout grid axis (minimal.css «Layout grid»): the centre of the area
+// right of the search panel. The offset is the panel's rendered edge, so the CSS zoom step
+// and gutter are accounted for exactly as the navigation above the globe sees them.
+const overviewPadding = () => {
+  const rail = document.querySelector(".map-top-left")?.getBoundingClientRect().right ?? 0;
+  return {
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: window.innerWidth <= 700 ? 0 : Math.max(0, Math.round(rail)),
+  };
+};
 const noPadding = () => ({ top: 0, right: 0, bottom: 0, left: 0 });
 
 export default function MapPanel(props: Props) {
@@ -136,6 +141,7 @@ export default function MapPanel(props: Props) {
   current.current = props;
   const popup = useRef<maplibregl.Popup | null>(null);
   const lastScene = useRef<string | null>(null);
+  const lastOverview = useRef(0);
   const [ready, setReady] = useState(0);
   const [unavailable, setUnavailable] = useState<string | null>(null);
 
@@ -767,21 +773,49 @@ export default function MapPanel(props: Props) {
       mapRef.current?.getSource("observations") as GeoJSONSource | undefined
     )?.setData(markers(props.scenes));
   }, [props.scenes, ready]);
-  // «Приблизить к месту» from the message panel.
+  // Show the whole globe before travelling to a selected message.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !props.focus) return;
-    map.easeTo({ center: props.focus.lngLat, zoom: props.focus.zoom, duration: reducedMotion() ? 0 : 900 });
+    const { lngLat, zoom } = props.focus;
+    const news = props.newsOpen && window.innerWidth > 700
+      ? document.querySelector(".news-panel")?.getBoundingClientRect()
+      : null;
+    // The place lands on the grid axis between the scene list and the right-hand panel (the news
+    // panel, or the message card that opens with it: fixed, 400 + 24 px).
+    const destinationPadding = news
+      ? { ...overviewPadding(), right: Math.max(0, Math.round(window.innerWidth - news.left)) }
+      : { ...overviewPadding(), right: window.innerWidth > 700 ? 424 : 0 };
+    map.stop();
+    map.setPadding(noPadding());
+    if (reducedMotion()) {
+      map.jumpTo({ center: lngLat, zoom, padding: destinationPadding });
+      return;
+    }
+    const approach = () => {
+      map.flyTo({ center: lngLat, zoom, padding: destinationPadding, duration: 1700, curve: 1.15, essential: true });
+    };
+    map.once("moveend", approach);
+    map.easeTo({ zoom: minimumZoom(), duration: 750, easing: (t) => t * t * (3 - 2 * t) });
+    return () => { map.off("moveend", approach); };
   }, [props.focus?.request]);
+  // The «Новости» panel closed: give the camera its overview padding back (no offset left behind).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || props.newsOpen || props.scene) return;
+    map.setPadding(overviewPadding());
+  }, [props.newsOpen]);
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready || !map.getLayer("boundary")) return;
     updateScene();
-    if (!props.scene?.bounds || lastScene.current === props.scene.chip_id)
+    // A hidden map (the analysis page) has no size: fit when it is shown, not before.
+    if (!props.active || !props.scene?.bounds || lastScene.current === props.scene.chip_id)
       return;
     lastScene.current = props.scene.chip_id;
     popup.current?.remove();
     map.stop();
+    map.resize();
     map.setPadding(noPadding());
     const [west, south, east, north] = props.scene.bounds;
     map.fitBounds(
@@ -798,7 +832,7 @@ export default function MapPanel(props: Props) {
         duration: reducedMotion() ? 0 : 850,
       },
     );
-  }, [props.scene?.chip_id, props.session?.run_id, ready]);
+  }, [props.scene?.chip_id, props.session?.run_id, props.active, ready]);
   useEffect(() => {
     const map = mapRef.current;
     (map?.getSource("media-events") as GeoJSONSource | undefined)?.setData(
@@ -849,9 +883,12 @@ export default function MapPanel(props: Props) {
   }, [props.active]);
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready || !props.active || props.scene ||
-        (!props.overviewRequest && !lastScene.current)) return;
+    if (!map || !ready || !props.active || props.scene) return;
+    // Leaving a scene without an overview request keeps the camera where it is.
+    const requested = props.overviewRequest !== lastOverview.current;
+    lastOverview.current = props.overviewRequest;
     lastScene.current = null;
+    if (!requested || props.focus) return;
     map.stop();
     map.setPadding(overviewPadding());
     map.easeTo({

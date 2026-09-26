@@ -1094,7 +1094,8 @@ tbody tr.selected,
   align-self: start;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 106px);
+  /* vh inside a zoomed element is multiplied by the zoom: divide it back out. */
+  height: calc(100vh / var(--ui-zoom) - 106px);
   margin-top: 96px;
   overflow: hidden;
   border: 0;
@@ -1252,6 +1253,33 @@ tbody tr.selected,
   margin: 0;
 }
 
+/* Budget asked before the run (plan C of the bundle is built for it). */
+.analysis-budget-ask {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  max-width: 420px;
+  color: #bac5c9;
+  font-size: 14px;
+}
+
+.analysis-budget-ask input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #ffffff2d;
+  border-radius: var(--radius);
+  background: #0d1012;
+  color: #edf2f3;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.analysis-budget-ask small {
+  color: #9aa7ad;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .analysis-unavailable {
   margin: 12px 0;
   color: #aebbc1;
@@ -1320,21 +1348,6 @@ tbody tr.selected,
   color: #97a7ae;
 }
 
-.source-viewer-return {
-  position: fixed;
-  top: 132px;
-  right: 412px;
-  z-index: 12;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 12px;
-  border: 1px solid #ffffff30;
-  border-radius: var(--radius);
-  background: #101619ed;
-  color: #edf2f4;
-  font-size: 14px;
-}
 
 @media (max-width: 1100px) {
   .analysis-shell {
@@ -1379,11 +1392,6 @@ tbody tr.selected,
   .analysis-source-link {
     margin-left: 0;
   }
-  .source-viewer-return {
-    top: auto;
-    bottom: 64px;
-    right: 12px;
-  }
   .topbar {
     height: 54px;
     padding: 0 14px;
@@ -1398,14 +1406,22 @@ tbody tr.selected,
   .topbar-map .top-nav {
     top: 58px;
     left: 50%;
-    gap: 22px;
+    gap: 16px;
   }
   .topbar-analysis .top-nav {
-    margin-left: auto;
-    gap: 12px;
+    position: absolute;
+    top: 58px;
+    left: 50%;
+    margin-left: 0;
+    height: auto;
+    transform: translateX(-50%);
+    gap: 16px;
   }
   .top-nav button {
     font-size: 14px;
+  }
+  .top-nav .nav-count {
+    display: none;
   }
   .top-export {
     display: none;
@@ -1617,39 +1633,35 @@ tbody tr.selected,
   line-height: 1.35;
 }
 
-/* Interface scale on the globe screen. Only overlays are scaled: MapLibre's canvas and its
-   popups stay unscaled so pointer coordinates remain exact. Larger screens get a larger step. */
-.map-top-left,
-.map-top-center,
-.search-panel,
-.search-toggle,
-.reopen-panel,
-.context-panel,
-.basemap-switch,
-.maplibregl-ctrl-bottom-right,
-.maplibregl-ctrl-bottom-left {
+:root {
   --ui-zoom: 1;
 }
 
 @media (min-width: 1100px) {
-  .topbar, .map-top-left, .map-top-center, .search-panel, .search-toggle, .reopen-panel,
-  .context-panel, .basemap-switch, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
-    zoom: 1.2;
-  }
+  :root { --ui-zoom: 1.2; }
 }
 
 @media (min-width: 1800px) {
-  .topbar, .map-top-left, .map-top-center, .search-panel, .search-toggle, .reopen-panel,
-  .context-panel, .basemap-switch, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
-    zoom: 1.35;
-  }
+  :root { --ui-zoom: 1.35; }
 }
 
 @media (min-width: 2300px) {
-  .topbar, .map-top-left, .map-top-center, .search-panel, .search-toggle, .reopen-panel,
-  .context-panel, .basemap-switch, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
-    zoom: 1.5;
-  }
+  :root { --ui-zoom: 1.5; }
+}
+
+/* Interface scale: one step for the globe screen and the analysis page, so switching
+   Земля ↔ Анализ does not jump in size. Only top-level overlays are zoomed (never an element
+   inside another zoomed one); MapLibre's canvas and its popups stay unscaled so pointer
+   coordinates remain exact. Larger screens get a larger step. */
+.topbar,
+.map-top-left,
+.map-top-center,
+.reopen-panel,
+.context-panel,
+.maplibregl-ctrl-bottom-right,
+.maplibregl-ctrl-bottom-left,
+.analysis-shell {
+  zoom: var(--ui-zoom);
 }
 
 /* Logo: larger and heavier than the navigation. */
@@ -1791,3 +1803,279 @@ details.context-foot summary { cursor: pointer; margin-bottom: 6px; }
 .context-panel.collapsed { bottom: auto; height: auto; overflow: hidden; }
 }
 .analysis-head > button { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+
+/* Layout grid (map screen). One column axis for the globe, the navigation and the
+   basemap switch: the centre of the free area between the side panels. Panels and the
+   centred groups share the same --ui zoom step, so the rails are written in their local
+   px and scale together; MapPanel takes the globe offset from the panel's real edge.
+     | gutter | search panel 320 | ——— free area, axis at its centre ——— | context panel | 28 |
+   The context panel (right rail) exists only in a scene. */
+:root {
+  --grid-gutter: clamp(30px, 3.6vw, 58px);
+  --grid-rail-left: calc(var(--grid-gutter) + 360px); /* .map-top-left is 360 px wide */
+  --grid-rail-right: calc(28px + 372px);
+}
+
+@media (max-width: 1100px) {
+  :root {
+    --grid-rail-right: calc(28px + 340px);
+  }
+}
+
+.topbar-map .top-nav,
+.map-top-center,
+.scene-mode .map-top-center {
+  left: var(--grid-rail-left);
+  right: 0;
+  transform: none;
+  display: flex;
+  justify-content: center;
+  pointer-events: none; /* the strip spans the map; only its buttons take clicks */
+}
+
+.topbar-map .top-nav > *,
+.map-top-center > * {
+  pointer-events: auto;
+}
+
+.topbar-map.topbar-scene .top-nav,
+.scene-mode .map-top-center {
+  right: var(--grid-rail-right);
+}
+
+@media (max-width: 700px) {
+  /* Phones: panels stack over the map, the axis is the screen centre. */
+  .topbar-map .top-nav,
+  .topbar-map.topbar-scene .top-nav,
+  .map-top-center,
+  .scene-mode .map-top-center {
+    left: 0;
+    right: 0;
+  }
+}
+
+/* One tab style for the navigation above the globe and the switch below it: same type, height,
+   spacing and underline. .basemap-switch lives inside .map-top-center, which already carries
+   the --ui zoom step, so it is no longer zoomed a second time (it was 1.2 × 1.2). */
+.topbar-map .top-nav,
+.map-top-center,
+.basemap-switch {
+  gap: 30px;
+}
+
+.top-nav button,
+.top-nav button.active,
+.basemap-switch button,
+.basemap-switch button.active {
+  height: 34px;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 550;
+  line-height: 34px;
+}
+
+.top-nav button.active::after,
+.basemap-switch button.active::after {
+  bottom: -5px;
+}
+
+@media (max-width: 700px) {
+  .topbar-map .top-nav,
+  .map-top-center,
+  .basemap-switch {
+    gap: 22px;
+  }
+  .top-nav button,
+  .top-nav button.active,
+  .basemap-switch button,
+  .basemap-switch button.active {
+    font-size: 14px;
+  }
+}
+
+/* «Наблюдения»: frosted glass (translucent, blurred map behind; content stays opaque), lighter
+   and slightly smaller type. The panel and «Все сцены» are no longer zoomed on top of the
+   column's zoom (they were 1.44× and 1.73×): one --ui step for the whole column, sizes below
+   are in the column's px. */
+.search-panel {
+  padding: 0 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(13, 17, 19, 0.55);
+  backdrop-filter: blur(24px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(160%) !important;
+}
+
+.scene-library-head {
+  padding: 26px 0 18px;
+}
+
+.scene-library-head h1 {
+  font-size: 24px;
+  font-weight: 540;
+  letter-spacing: -0.03em;
+}
+
+.search-box {
+  height: 52px;
+  margin: 0 0 14px;
+}
+
+.search-box input {
+  font-size: 16px;
+}
+
+.search-toggle {
+  min-height: 58px;
+  font-size: 17px;
+  font-weight: 480;
+}
+
+.scene-results {
+  margin: 0 -12px;
+  padding: 2px 12px 16px;
+}
+
+.scene-results > button {
+  width: calc(100% + 24px);
+  min-height: 80px;
+  margin: 0 -12px;
+  padding: 13px 12px;
+}
+
+.scene-results > button::after {
+  left: 12px;
+  right: 12px;
+}
+
+.scene-results strong {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.scene-results small {
+  margin-top: 6px;
+  font: 14px/1.4 "Science Gothic", system-ui, sans-serif;
+  font-weight: 400;
+}
+
+.scene-results small code {
+  font-size: 12px;
+}
+
+.scene-results em {
+  font-size: 13px;
+  font-weight: 520;
+}
+
+/* The hint is a <small> in the list: not a list row, it wraps instead of being cut. */
+.scene-results .search-hint {
+  display: block;
+  margin: 0;
+  padding: 14px 0 4px;
+  white-space: normal;
+  overflow-wrap: break-word;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+@media (max-width: 700px) {
+  .search-panel,
+  .scene-mode .search-panel {
+    padding: 0 16px;
+  }
+  .scene-library-head {
+    padding: 16px 0 10px;
+  }
+  .scene-library-head h1 {
+    font-size: 19px;
+  }
+  .search-box {
+    margin: 0 0 6px;
+  }
+}
+
+/* Map notice («Часть картографических данных недоступна…»): on the grid axis, above the
+   basemap switch instead of over it. It is not zoomed itself, so the zoomed rails and the
+   switch height (bottom 26 + ~40 px) are multiplied by --ui-zoom here. */
+.map-issue {
+  left: calc(var(--grid-rail-left) * var(--ui-zoom));
+  right: 0;
+  bottom: calc(66px * var(--ui-zoom) + 12px);
+  width: fit-content;
+  max-width: 420px;
+  margin: 0 auto;
+  transform: none;
+}
+
+.scene-mode .map-issue {
+  right: calc(var(--grid-rail-right) * var(--ui-zoom));
+}
+
+@media (max-width: 700px) {
+  .map-issue,
+  .scene-mode .map-issue {
+    left: 12px;
+    right: 12px;
+    bottom: 64px;
+  }
+}
+
+/* Analysis page: «К карте» and «Все наблюдения» lead off the whole screen, so they sit above
+   «Локации» (the strip under the top bar), not in the head of the selected scene. The column
+   (actions + locations) sticks as one; vh inside the zoomed shell is divided by the zoom. */
+.analysis-side {
+  position: sticky;
+  top: 64px;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  height: calc(100vh / var(--ui-zoom) - 88px);
+  margin-top: 64px;
+}
+
+.analysis-side .analysis-locations {
+  position: static;
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  margin-top: 0;
+}
+
+.analysis-rail {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.analysis-rail button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: var(--radius);
+  background: #171b1e;
+  color: #dce3e6;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: background 160ms ease;
+}
+
+.analysis-rail button:hover {
+  background: #22292d;
+}
+
+@media (max-width: 700px) {
+  .analysis-side {
+    position: static;
+    height: auto;
+    margin-top: 100px;
+  }
+  .analysis-side .analysis-locations {
+    flex: none;
+    height: 248px;
+  }
+}
