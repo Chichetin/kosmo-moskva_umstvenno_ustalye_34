@@ -7,7 +7,7 @@
 | | commit (top-level, run_metadata.json) | worktree |
 |---|---|---|
 | было | `85e493ae3953587fb4b03ebd090c522fed191d03` (= `origin/main`, HEAD этого коммита) | `.claude/worktrees/eval-109-main` (детач от `origin/main`, удалён после отчёта) |
-| стало | `14293ad10d7998013eb3ceafaaf03ede44ce79ed` (родитель HEAD `9d064b3`; последний коммит `9d064b3` менял только `docs/`, код и раскладки не менял — вывод из `outputs-land109/run/` совпадает с HEAD) | `.claude/worktrees/land-109` |
+| стало | `14293ad10d7998013eb3ceafaaf03ede44ce79ed` (после него код менял только `6d0aa0a` — округление `with_base_rate` до ROUND_HALF_UP; при множителях ×0,5…×2,0 ставка точная, числа те же, см. `procurement-sensitivity.md`) | `.claude/worktrees/land-109` |
 
 `decision_at` = `2017-05-30T23:59:59+00:00`, `decision_deadline` = `2017-05-31T11:59:59+00:00`,
 `budget_rub` = 5000.0 — совпадают в обеих версиях.
