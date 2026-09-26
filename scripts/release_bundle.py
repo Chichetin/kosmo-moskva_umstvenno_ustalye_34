@@ -164,7 +164,7 @@ def build(run_dir: Path, models_dir: Path, dest: Path) -> list[Path]:
     write_zip(models_zip, models_dir, "models")
     zips = [run_zip, models_zip]
     lines = sorted(f"{sha256_file(p)}  {p.name}" for p in zips)
-    (dest / SUMS).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (dest / SUMS).write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     return zips
 
 

@@ -172,7 +172,8 @@ def test_local_mode_refuses_foreign_host(app):
 def test_tooltips_never_get_html_strings():
     import re
     from pathlib import Path
-    js = (Path(__file__).resolve().parents[2] / "src/floodvalue/media/static/analyst.js").read_text()
+    js_path = Path(__file__).resolve().parents[2] / "src/floodvalue/media/static/analyst.js"
+    js = js_path.read_text(encoding="utf-8")
     assert ".innerHTML" not in js and "insertAdjacentHTML" not in js
     for call_args in re.findall(r"\.bind(?:Tooltip|Popup)\(([^)]{0,40})", js):
         assert call_args.startswith("tipNode("), call_args

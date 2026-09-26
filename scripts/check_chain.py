@@ -21,7 +21,7 @@ s1p = data / "raw/HandLabeled/S1Hand" / f"{chip}_S1Hand.tif"
 with rasterio.open(s1p) as r: s1 = r.read().astype(np.float32); s1t, s1crs, s1shape = r.transform, r.crs, r.shape
 with rasterio.open(kit / "flood_probability.tif") as r: p_file = r.read(1); pt, pcrs, pnod = r.transform, r.crs, r.nodata
 with rasterio.open(kit / "flood_mask.tif") as r: m_file = r.read(1); mnod = r.nodata
-meta = json.load(open(kit / "run_metadata.json")); thr = float(meta["threshold"])
+meta = json.load(open(kit / "run_metadata.json", encoding="utf-8")); thr = float(meta["threshold"])
 
 check(pcrs == s1crs and p_file.shape == s1shape and pt.almost_equals(s1t, 1e-12), f"сетка p = сетка S1 ({pcrs}, {p_file.shape})")
 valid = np.isfinite(s1).all(0)
@@ -38,14 +38,14 @@ from floodvalue.calibration import calibrator
 from floodvalue.paths import MODELS_DIR
 mod = importlib.import_module(METHODS["unet"])
 p_raw = mod.predict_proba(s1)
-cfg = json.load(open(MODELS_DIR / "unet" / "config.json"))
+cfg = json.load(open(MODELS_DIR / "unet" / "config.json", encoding="utf-8"))
 cal = calibrator.load(MODELS_DIR / "unet" / "calibration.json", cfg["weights_sha256"])
 p_mem = calibrator.apply(cal["calibrator"], p_raw)
 d = np.abs(p_mem[valid].astype(np.float64) - pv.astype(np.float64))
 check(float(d.max()) < 1e-5, f"модель в памяти = файл: max |Δp| = {d.max():.2e}")
 
 # assets: lon/lat -> pixel -> p in file == p_flood in asset_loss.csv
-gj = json.load(open(kit / "assets.geojson")); loss = {r["asset_id"]: r for r in csv.DictReader(open(kit / "asset_loss.csv"))}
+gj = json.load(open(kit / "assets.geojson", encoding="utf-8")); loss = {r["asset_id"]: r for r in csv.DictReader(open(kit / "asset_loss.csv", encoding="utf-8"))}
 with rasterio.open(s1p) as r: b = r.bounds
 for f in gj["features"]:
     lon, lat = f["geometry"]["coordinates"]; aid = f["properties"]["asset_id"]

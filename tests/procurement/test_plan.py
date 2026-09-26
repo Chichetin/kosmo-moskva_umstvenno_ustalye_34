@@ -71,7 +71,8 @@ def test_budget_change_keeps_inputs(tmp_path):
     cat_hash = hashlib.sha256((tmp_path / "candidate_orders.geojson").read_bytes()).hexdigest()
     prun.write_outputs(tmp_path, 20000)
     assert _hashes(tmp_path) == before
-    assert json.loads((tmp_path / "run_metadata.json").read_text())["threshold"] == 0.5
+    meta = json.loads((tmp_path / "run_metadata.json").read_text(encoding="utf-8"))
+    assert meta["threshold"] == 0.5
     with open(tmp_path / "procurement_sensitivity.csv", encoding="utf-8") as f:
         sens = list(csv.DictReader(f))
     for prefix in ("budget_", "rate_x"):

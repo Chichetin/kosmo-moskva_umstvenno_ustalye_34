@@ -71,7 +71,8 @@ def test_asset_uncertainty_and_el_range_come_from_predict_rasters(run_dir):
     (out / "prediction.json").write_text(json.dumps(
         {"threshold": 0.37, "uncertainty": {"measure": "entropy_p", "units": "биты, 0…1",
                                             "status": "проверено на validation",
-                                            "choice": "models/unet/uncertainty.json"}}))
+                                            "choice": "models/unet/uncertainty.json"}}),
+                                                encoding="utf-8")
     assert assets_run.run(args) == 0
     loss = _read(out / "asset_loss.csv")
     assert len(loss) == 10
@@ -107,7 +108,8 @@ def test_without_predict_rasters_uncertainty_is_unverified_entropy(run_dir):
 def test_uncertainty_nodata_at_ok_asset_is_empty_not_zero(run_dir):
     args, out, _ = run_dir
     _write(out / "uncertainty.tif", np.full((H, W), PROB_NODATA, "float32"))
-    (out / "prediction.json").write_text(json.dumps({"uncertainty": {"measure": "entropy_p"}}))
+    (out / "prediction.json").write_text(json.dumps({"uncertainty": {"measure": "entropy_p"}}),
+        encoding="utf-8")
     assert assets_run.run(args) == 0
     for r in _read(out / "asset_loss.csv").values():
         assert r["status"] == "ok" and r["uncertainty"] == ""
@@ -142,7 +144,8 @@ def test_raster_without_its_measure_in_prediction_is_ignored(run_dir):
     args, out, _ = run_dir
     _write(out / "uncertainty.tif", np.full((H, W), 0.123, "float32"))
     (out / "prediction.json").write_text(json.dumps({"chip_id": "Other_9", "threshold": 0.37,
-                                                     "uncertainty": {"measure": "entropy_p"}}))
+                                                     "uncertainty": {"measure": "entropy_p"}}),
+                                                         encoding="utf-8")
     assert assets_run.run(args) == 0
     for r in _read(out / "asset_loss.csv").values():
         assert float(r["uncertainty"]) == pytest.approx(binary_entropy(float(r["p_flood"])))
@@ -156,7 +159,7 @@ def test_inspection_threshold_only_for_entropy_measures(run_dir):
     for measure, expect_none in (("member_std", True), ("entropy_p", False)):
         (out / "prediction.json").write_text(json.dumps(
             {"threshold": 0.37, "uncertainty": {"measure": measure, "units": "u",
-                                                "status": "s"}}))
+                                                "status": "s"}}), encoding="utf-8")
         assert assets_run.run(args) == 0
         prio = json.loads((out / "assets_metadata.json").read_text(encoding="utf-8"))[
             "inspection_priority"]
