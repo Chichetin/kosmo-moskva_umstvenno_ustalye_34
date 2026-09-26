@@ -33,6 +33,7 @@ function statusLabel(value: string): string {
     case "counterfactual_over_budget": return "Выше бюджета данных";
     case "empty_plan": return "Зон нет";
     case "ok": case "recomputed": return "Рассчитан";
+    case "fixed_plan": return "План C с прежними зонами";
     case "no_data": return "Нет данных";
     default: return "Статус не указан";
   }
