@@ -3,7 +3,7 @@
   position: absolute;
   top: 80px;
   right: 28px;
-  bottom: 24px;
+  bottom: 92px; /* clear of the bottom switches «Карта / Спутник / Сообщения» */
   z-index: 8;
   width: 400px;
   overflow: auto;
