@@ -780,18 +780,31 @@ export default function MapPanel(props: Props) {
       mapRef.current?.getSource("observations") as GeoJSONSource | undefined
     )?.setData(markers(props.scenes));
   }, [props.scenes, ready]);
-  // «Приблизить к месту» from the message panel.
+  // Show the whole globe before travelling to a selected message.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !props.focus) return;
-    // From the «Новости» panel: keep the place between the scene list and the panel.
-    const news = window.innerWidth > 700 ? document.querySelector(".news-panel")?.getBoundingClientRect() : null;
-    map.easeTo({
-      center: props.focus.lngLat,
-      zoom: props.focus.zoom,
-      duration: reducedMotion() ? 0 : 900,
-      ...(news ? { padding: { ...overviewPadding(), right: Math.max(0, Math.round(window.innerWidth - news.left)) } } : {}),
-    });
+    const { lngLat, zoom } = props.focus;
+    const news = props.newsOpen && window.innerWidth > 700
+      ? document.querySelector(".news-panel")?.getBoundingClientRect()
+      : null;
+    // The place lands on the grid axis between the scene list and the right-hand panel (the news
+    // panel, or the message card that opens with it: fixed, 400 + 24 px).
+    const destinationPadding = news
+      ? { ...overviewPadding(), right: Math.max(0, Math.round(window.innerWidth - news.left)) }
+      : { ...overviewPadding(), right: window.innerWidth > 700 ? 424 : 0 };
+    map.stop();
+    map.setPadding(noPadding());
+    if (reducedMotion()) {
+      map.jumpTo({ center: lngLat, zoom, padding: destinationPadding });
+      return;
+    }
+    const approach = () => {
+      map.flyTo({ center: lngLat, zoom, padding: destinationPadding, duration: 1700, curve: 1.15, essential: true });
+    };
+    map.once("moveend", approach);
+    map.easeTo({ zoom: minimumZoom(), duration: 750, easing: (t) => t * t * (3 - 2 * t) });
+    return () => { map.off("moveend", approach); };
   }, [props.focus?.request]);
   // The «Новости» panel closed: give the camera its overview padding back (no offset left behind).
   useEffect(() => {
@@ -882,7 +895,7 @@ export default function MapPanel(props: Props) {
     const requested = props.overviewRequest !== lastOverview.current;
     lastOverview.current = props.overviewRequest;
     lastScene.current = null;
-    if (!requested) return;
+    if (!requested || props.focus) return;
     map.stop();
     map.setPadding(overviewPadding());
     map.easeTo({

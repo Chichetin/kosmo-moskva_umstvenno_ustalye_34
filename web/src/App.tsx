@@ -14,6 +14,7 @@ import Backdrop from "./Backdrop";
 import MapPanel from "./MapPanel";
 import { WorldLocator } from "./WorldLocator";
 import MessagePanel, { type SelectedMessage } from "./MessagePanel";
+import MessagesList from "./MessagesList";
 import SensitivityPanel from "./SensitivityPanel";
 import NewsPanel from "./NewsPanel";
 import PlanZones from "./PlanZones";
@@ -184,18 +185,15 @@ export default function App() {
   const [searchOpen, setSearchOpen] = useState(() => window.innerWidth >= 700);
   const [panelOpen, setPanelOpen] = useState(true);
   const [newsOpen, setNewsOpen] = useState(false);
+  const [messagesOpen, setMessagesOpen] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [overviewRequest, setOverviewRequest] = useState(0);
   const [mapIssue, setMapIssue] = useState<string | null>(null);
   // «Сообщения» (/api/media/map): null — the layer is unavailable here (media not served,
   // or closed to this viewer); the toggle is then hidden rather than shown broken.
   const [messages, setMessages] = useState<MediaMap | null>(null);
-  const [showMessages, setShowMessages] = useState(true);
   const [message, setMessage] = useState<SelectedMessage | null>(null);
   const [messageFocus, setMessageFocus] = useState<{ lngLat: [number, number]; zoom: number; request: number } | null>(null);
-  useEffect(() => {
-    if (!showMessages) setMessage(null);
-  }, [showMessages]);
   useEffect(() => {
     let stopped = false;
     const load = () =>
@@ -417,9 +415,21 @@ export default function App() {
     navigate("earth");
   };
   const overview = () => {
+    setMessageFocus(null);
     navigate("earth");
     setSearchOpen(true);
     setOverviewRequest((value) => value + 1);
+  };
+  const selectMessageFromList = (selected: SelectedMessage) => {
+    setNewsOpen(false);
+    setMessagesOpen(false);
+    setMessage(selected);
+    setMessageFocus((previous) => ({
+      lngLat: selected.lngLat,
+      zoom: selected.kind === "report" ? 10 : 9,
+      request: (previous?.request ?? 0) + 1,
+    }));
+    if (!mapActive || scene) navigate("earth");
   };
   const toggle = (key: keyof LayerFlags) =>
     setLayers((value) => ({ ...value, [key]: !value[key] }));
@@ -603,11 +613,19 @@ export default function App() {
           </button>
           <button
             className={newsOpen ? "active" : ""}
-            onClick={() => setNewsOpen(!newsOpen)}
+            onClick={() => { setMessagesOpen(false); setNewsOpen(!newsOpen); }}
             aria-expanded={newsOpen}
             title="Все новости и сводки, из которых берётся слой «Сообщения»"
           >
             Новости
+          </button>
+          <button
+            className={messagesOpen ? "active" : ""}
+            onClick={() => { setNewsOpen(false); setMessagesOpen(!messagesOpen); }}
+            aria-expanded={messagesOpen}
+            title={`Сообщения на карте: ${messageCount}`}
+          >
+            Сообщения{messageCount > 0 && <span className="nav-count"> · {messageCount}</span>}
           </button>
         </nav>
         {!mapVisible && (
@@ -663,6 +681,7 @@ export default function App() {
           }}
         />
       )}
+      {messagesOpen && <MessagesList messages={messages} onClose={() => setMessagesOpen(false)} onSelect={selectMessageFromList} />}
       <main className="workspace">
         <div
           className={`map-screen ${mapVisible ? "" : "map-hidden"} ${scene ? "scene-mode" : ""} ${baseMap === "optical" ? "optical-mode" : ""}`}
@@ -677,7 +696,7 @@ export default function App() {
             baseMap={baseMap}
             visibleLayers={layers}
             messages={messages}
-            showMessages={showMessages}
+            showMessages={true}
             overlayOpacity={opacity}
             selectedAsset={assetId}
             selectedZone={zoneId}
@@ -701,7 +720,7 @@ export default function App() {
             focus={messageFocus}
             newsOpen={newsOpen}
           />
-          {message && (
+          {message && mapVisible && (
             <MessagePanel
               message={message}
               onClose={() => setMessage(null)}
@@ -806,18 +825,6 @@ export default function App() {
                 Спутник
               </button>
             </div>
-            {messages && (
-              <div className="basemap-switch media-switch">
-                <button
-                  className={showMessages ? "active" : ""}
-                  onClick={() => setShowMessages(!showMessages)}
-                  aria-pressed={showMessages}
-                  title={`События из СМИ и обращения очевидцев: ${messages.events.features.length} событий, ${messages.reports.features.length} обращений ждут модерации. Повод проверить территорию — не входит в p, ущерб и план.`}
-                >
-                  Сообщения · {messageCount}
-                </button>
-              </div>
-            )}
           </div>
           {scene && panelOpen && (
             <aside className={`context-panel${panelCollapsed ? " collapsed" : ""}`}>
