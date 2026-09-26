@@ -728,6 +728,10 @@ input:focus-visible,
   gap: 25px;
 }
 
+.analysis-head .world-locator {
+  flex: 0 0 220px;
+}
+
 .analysis-head > button,
 .analysis-head > a {
   border: 0;

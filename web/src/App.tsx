@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import Backdrop from "./Backdrop";
 import MapPanel from "./MapPanel";
+import { WorldLocator } from "./WorldLocator";
 import {
   formatExactProbability,
   formatNumber as money,
@@ -225,6 +226,9 @@ export default function App() {
     (messages?.events.features.length ?? 0) + (messages?.reports.features.length ?? 0);
   const [zoneView, setZoneView] = useState<"plan" | "all">("plan");
   const scene = scenes.find((item) => item.chip_id === route.chipId) ?? null;
+  const locatorPosition = scene?.bounds
+    ? { lon: (scene.bounds[0] + scene.bounds[2]) / 2, lat: (scene.bounds[1] + scene.bounds[3]) / 2 }
+    : scene?.position ?? null;
   const activeSession = scene?.run_id === session?.run_id ? session : null;
   const mapActive = route.view === "map";
   const mapVisible = mapActive || sourceViewerOpen;
@@ -1093,6 +1097,13 @@ export default function App() {
                 >
                   <Layers3 size={16} /> Исходный снимок и слои
                 </button>
+              )}
+              {scene && locatorPosition && (
+                <WorldLocator
+                  lon={locatorPosition.lon}
+                  lat={locatorPosition.lat}
+                  label={scene.territory.replaceAll("-", " ")}
+                />
               )}
             </div>
             {!activeSession && (
