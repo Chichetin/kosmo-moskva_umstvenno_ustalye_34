@@ -169,6 +169,16 @@ def test_overlapping_zones_do_not_double_count():
     assert row["covered_asset_ids"] == "A01 A02"
 
 
+def test_covered_el_of_kopeck_el_has_no_float_noise():
+    # #127: EL in asset_loss.csv is to the kopeck; their float sum 0.1 + 0.2 = 0.30000000000000004
+    # must be written as the exact kopeck sum
+    cov = {"x": ["A01", "A02"]}
+    el = {"A01": {"el": 0.1, "unc": 0.1}, "A02": {"el": 0.2, "unc": 0.2}}
+    row = strategies.comparison_row("B", ["x"], [], Decimal(0), cov, el, OTHER)
+    assert repr(row["covered_expected_loss_rub"]) == "0.3"
+    assert row["coverage_share"] == 1.0
+
+
 def test_b_takes_only_primary_wide_offer():
     res = plan("1000000")
     assert res["plans"]["B"] == ["W-CHIP"]  # не W-CHIP-S3 / -O05 / -OP и т. д.

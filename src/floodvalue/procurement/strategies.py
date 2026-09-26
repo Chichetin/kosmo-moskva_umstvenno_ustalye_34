@@ -199,8 +199,9 @@ def comparison_row(strategy: str, ids: list[str], rows: list[Mapping[str, Any]],
     data = basket_total(rows)
     other = other_cost(len(ids), other_cfg)
     covered = sorted(a for a in {x for c in ids for x in cov.get(c, ())} if a in el)
-    covered_el = sum(el[a]["el"] for a in covered)
-    denom = sum(v["el"] for v in el.values())
+    # EL are to the kopeck (asset_loss.csv, #127): exact decimal sums, no float noise in the CSV
+    covered_el = float(sum((Decimal(repr(el[a]["el"])) for a in covered), Decimal(0)))
+    denom = float(sum((Decimal(repr(v["el"])) for v in el.values()), Decimal(0)))
     uncs = {a: v["unc"] for a, v in el.items()}
     if strategy == "A":
         res_u = sum(uncs.values()) if uncs else None
