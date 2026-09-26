@@ -112,7 +112,7 @@ const messageCard = (props: Record<string, unknown>, kind: "event" | "report") =
     if (props.place_label) line(String(props.place_label));
     const coarse = props.geo_precision === "coarsened";
     line(`${when(props.event_time_start ?? props.first_detected_at, props.event_time_start ? props.time_precision : "hour", coarse)} · ${REVIEW_STATE[String(props.review_state)] ?? ""}`);
-    if (coarse) line("место показано с точностью ≈ 1 км, время — до часа; подробности — у аналитика", "small");
+    if (coarse) line("место показано с точностью ≈ 1 км, время — до часа; точные данные — после входа", "small");
   }
   line("Сообщение не проверено по снимкам и не входит в p, ущерб и план.", "small");
   return node;
