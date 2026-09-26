@@ -1,0 +1,16 @@
+# systemd --user variant of ../floodvalue-media-worker.service (D-062); install as floodvalue-site.service.
+[Unit]
+Description=FloodValue media worker
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/apps/floodvalue
+EnvironmentFile=%h/.config/floodvalue/floodvalue.env
+ExecStart=%h/apps/floodvalue/.venv/bin/python -m floodvalue.media worker
+NoNewPrivileges=true
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=default.target

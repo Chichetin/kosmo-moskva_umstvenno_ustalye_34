@@ -58,6 +58,59 @@ uv run --frozen python -m floodvalue.media worker    # фоновый сбор, 
 loopback, сайт без `FLOODVALUE_MEDIA_ANALYST_TOKEN` не запускается: иначе модерацию мог бы
 выполнять кто угодно.
 
+## Отдельный домен для формы очевидца (D-062)
+
+Второй блок `deploy/Caddyfile` (`report.example.org`) — короткий адрес только для формы: тот же
+процесс, но через этот домен открыты лишь `GET /report`, `/report/status`, `/media/static/*`,
+`/api/media/report-config` и `POST /api/media/reports`, `/api/media/reports/status`; `/`
+перенаправляет на форму, всё остальное — 404. Интерфейс оператора, страница и API аналитика и
+слой `/api/media/map` через него недоступны. Первый домен работает как прежде. Второй домен не
+нужен — блок удалить.
+
+## Сервер без root (D-062)
+
+Если на сервере нет root, а Caddy уже работает от обычного пользователя:
+
+1. Код — в `~/apps/floodvalue`. Приватный репозиторий без учётных данных на сервере: локально
+   `git bundle create floodvalue.bundle <ветка>`, на сервер — rsync, там
+   `GIT_LFS_SKIP_SMUDGE=1 git clone -b <ветка> floodvalue.bundle floodvalue`; объекты LFS из
+   `models/` — rsync в `.git/lfs/objects/`, затем `git lfs install --local && git lfs checkout`
+   (`git status` должен быть чистым: иначе `run_metadata.json` получит `commit_dirty`).
+   Обновление — `git bundle create upd.bundle <старый commit>..<ветка>`, `git fetch upd.bundle
+   <ветка> && git merge --ff-only FETCH_HEAD`.
+2. `uv sync --frozen`. Окружение — `~/.config/floodvalue/floodvalue.env` (права 600).
+3. Юниты `deploy/user/*.service` → `~/.config/systemd/user/`, `systemctl --user enable --now
+   floodvalue-site floodvalue-media-worker`; нужен `loginctl enable-linger`.
+4. Блоки из `deploy/Caddyfile` — в Caddyfile пользователя (или отдельным файлом через `import`),
+   `caddy validate`, затем `caddy reload`. Порт в `reverse_proxy` = `FLOODVALUE_APP_PORT`.
+
+## Данные на публичном сервере
+
+**`make data` и `make all` на публичном сервере не запускать**: `data` докачивает недостающие
+слои всего набора, включая `LabelHand` test. Нужны только:
+
+- `raw/HandLabeled/S1Hand/*.tif` сцен каталога — train, dev, validation; из test — только
+  демо-чип после `eval-test` (D-033);
+- `raw/Sen1Floods11_Metadata.geojson` (дата события для закупки и слоя «вода до события»);
+- `interim/source_manifest_s1.json` и `interim/qc.csv` без строк test (в нём доли воды по
+  разметке).
+
+`LabelHand`, `S2Hand`, `JRCWaterHand` интерфейсу и этапам анализа не нужны (`metrics.csv` берётся
+из `docs/verification`). Готовый комплект сцены — те же этапы, что `make all`, без `data`:
+
+```bash
+P=".venv/bin/python -m"; C=<chip_id>; B=5000
+$P floodvalue predict --chip $C --budget $B
+$P floodvalue.baseline.predict --chip $C --mask-only
+$P floodvalue prewater --chip $C
+$P floodvalue assets --chip $C --budget $B
+$P floodvalue procure --chip $C --budget $B
+$P floodvalue export --chip $C --budget $B
+$P floodvalue validate
+```
+
+`FLOODVALUE_APP_ALLOW_TEST` на публичном сервере не выставлять.
+
 ## Слой «Сообщения» для карты оператора: `GET /api/media/map`
 
 ```json

@@ -9,3 +9,33 @@ flood.example.org {
 	}
 	reverse_proxy 127.0.0.1:8000
 }
+
+# Optional second domain for the eyewitness form only (D-062). Same process; everything that is not
+# the form (operator UI, analyst page, analyst API, operator map layer) answers 404 here, and `/`
+# redirects to the form. Replace report.example.org with the real domain or delete this block.
+report.example.org {
+	encode zstd gzip
+	request_body {
+		max_size 30MB
+	}
+	@pages {
+		method GET HEAD
+		path /report /report/status /media/static/* /api/media/report-config
+	}
+	@submit {
+		method POST
+		path /api/media/reports /api/media/reports/status
+	}
+	handle @pages {
+		reverse_proxy 127.0.0.1:8000
+	}
+	handle @submit {
+		reverse_proxy 127.0.0.1:8000
+	}
+	handle / {
+		redir * /report 302
+	}
+	handle {
+		respond "Not found" 404
+	}
+}
