@@ -1,0 +1,66 @@
+# Источники мониторинга сообщений о паводках (floodvalue.media, #168). Лежит в пакете, не в
+# configs/: configs/ заморожен к eval-test, а этот файл на p, маску и порог не влияет.
+# Источник включается, только если enabled: true И terms_status: checked (условия проверены
+# по официальному документу, ссылка — terms_url, дата — terms_checked). Ключей здесь нет:
+# секреты — только в переменных окружения сервера (.env.example).
+# kind: news — публикации СМИ; bulletin — специализированные сводки (не журналистика).
+sources:
+  - source_id: gdacs_floods
+    name: "GDACS — сводки о наводнениях"
+    kind: bulletin
+    adapter: gdacs
+    url: https://www.gdacs.org/
+    enabled: true
+    terms_status: checked
+    terms_url: https://www.gdacs.org/About/termofuse.aspx
+    terms_checked: "2026-09-26"
+    # Условия: данные «as is», только ориентировочные, не заменяют официальные оповещения,
+    # для решений нужна проверка по другим источникам. Явного требования атрибуции нет —
+    # указываем источник всё равно.
+    attribution: "GDACS (Global Disaster Alert and Coordination System), gdacs.org"
+    content_storage_policy: summary
+    poll_interval_s: 900
+    config:
+      endpoint: https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH
+      allowed_hosts: [www.gdacs.org]
+      min_interval_s: 2
+      lookback_days: 30
+
+  - source_id: gdelt_floods
+    name: "GDELT DOC 2.0 — новостные публикации о паводках"
+    kind: news
+    adapter: gdelt_doc
+    url: https://www.gdeltproject.org/
+    enabled: true
+    terms_status: checked
+    terms_url: https://www.gdeltproject.org/about.html#termsofuse
+    terms_checked: "2026-09-26"
+    # Метаданные GDELT открыты с обязательной ссылкой на GDELT Project. Тексты статей
+    # принадлежат изданиям — храним только заголовок, URL, домен, язык и время (headline_only).
+    # Лимит API: не чаще одного запроса в 5 секунд (ответ 429 сообщает об этом).
+    attribution: "Метаданные: The GDELT Project, https://www.gdeltproject.org/"
+    content_storage_policy: headline_only
+    poll_interval_s: 900
+    config:
+      endpoint: https://api.gdeltproject.org/api/v2/doc/doc
+      allowed_hosts: [api.gdeltproject.org]
+      min_interval_s: 6
+      query: '(flood OR flooding OR "flash flood" OR наводнение OR паводок OR подтопление)'
+      maxrecords: 100
+      initial_hours: 24
+      overlap_minutes: 30
+
+  - source_id: example_rss
+    name: "RSS-лента издания (пример, выключено)"
+    kind: news
+    adapter: rss
+    url: null
+    enabled: false
+    terms_status: requires_check
+    attribution: null
+    content_storage_policy: headline_only
+    poll_interval_s: 900
+    config:
+      endpoint: https://example.org/rss.xml
+      allowed_hosts: [example.org]
+      language: ru
