@@ -39,6 +39,7 @@ const labels: Record<string, string> = {
   bridge: "Мост",
   water_treatment: "Очистные сооружения",
   telecom: "Узел связи",
+  telecom_node: "Узел связи",
   water_intake: "Водозабор",
   workshop: "Мастерская",
   clinic: "Медпункт",
@@ -619,6 +620,10 @@ export default function App() {
                       <span>Охват ожидаемого ущерба</span>
                       <strong>{pct(chosen?.coverage_share)}</strong>
                     </div>
+                    <div className="plan-summary">
+                      <span>Цена ошибки решения в зонах · сценарий</span>
+                      <strong>{pct(chosen?.decision_risk_share)}</strong>
+                    </div>
                     {planError && <p className="inline-error">{planError}</p>}
                     <button
                       className="analysis-link"
@@ -742,6 +747,10 @@ export default function App() {
                     <span>Охват ущерба</span>
                     <strong>{pct(chosen?.coverage_share)}</strong>
                   </div>
+                  <div>
+                    <span>Цена ошибки решения · сценарий</span>
+                    <strong>{pct(chosen?.decision_risk_share)}</strong>
+                  </div>
                 </div>
                 <div className="analysis-columns">
                   <section className="analysis-card">
@@ -846,11 +855,15 @@ export default function App() {
                                   : "Приоритетный заказ"}
                             </strong>
                             <small>
-                              Данные {money(row.data_cost_rub)} ₽ · охват{" "}
-                              {pct(row.coverage_share)}
+                              Данные {money(row.data_cost_rub)} ₽ · охват
+                              ущерба {pct(row.coverage_share)} · цена ошибки
+                              решения {pct(row.decision_risk_share)}
                             </small>
                             {row.strategy === "B" && !row.budget_feasible && (
-                              <small>Выше бюджета</small>
+                              <small>
+                                Выше бюджета — контрфактическая, не
+                                рекомендация
+                              </small>
                             )}
                             {row.strategy === "C" && (
                               <small>
@@ -863,7 +876,11 @@ export default function App() {
                       ))}
                       <div className="card-foot">
                         Охват — доля ожидаемого ущерба в зонах, а не
-                        предотвращённый ущерб.
+                        предотвращённый ущерб. Цена ошибки решения R = V·q·min(p,
+                        1−p) — сценарий: доля там, где снимок может изменить
+                        решение «ехать / не ехать» (D-049); снижение потерь не
+                        заявляется. C не снимает объекты, где по карте почти
+                        наверняка вода: они сразу идут на осмотр.
                       </div>
                     </section>
                     <section className="analysis-card">
@@ -957,7 +974,6 @@ export default function App() {
                             item.strategy === "C" &&
                             /^(budget|rate)_/.test(item.scenario_id),
                         )
-                        .slice(0, 10)
                         .map((item) => (
                           <div className="scenario" key={item.scenario_id}>
                             <span>{item.scenario_id.replaceAll("_", " ")}</span>
@@ -973,9 +989,8 @@ export default function App() {
                         .filter(
                           (item) =>
                             item.strategy === "A" &&
-                            /^[pVq]_portfolio_/.test(item.scenario_id),
+                            /^[pVq]_portfolio_x[0-9.]+$/.test(item.scenario_id),
                         )
-                        .slice(0, 6)
                         .map((item) => (
                           <div className="scenario" key={item.scenario_id}>
                             <span>{item.scenario_id.replaceAll("_", " ")}</span>

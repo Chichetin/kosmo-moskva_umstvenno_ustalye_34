@@ -87,6 +87,8 @@ export type Comparison = {
   budget_feasible: boolean;
   covered_expected_loss_rub: number;
   coverage_share: number | null;
+  addressed_decision_risk_rub: number | null;
+  decision_risk_share: number | null;
   residual_uncertainty: number | null;
   uncertainty_status: string;
   covered_asset_ids: string;

@@ -174,3 +174,36 @@ def test_mask_nodata_and_zero_remain_transparent(tmp_path):
     assert rgba[0, 0, 3] == 0
     assert rgba[1, 0, 3] == 0
     assert rgba[0, 1, 3] == rgba[1, 1, 3] == 157
+
+
+def test_test_chips_stay_sealed_in_the_raw_catalog(tmp_path, monkeypatch):
+    """Until eval-test the operator catalog neither lists nor renders test chips (D-010, D-033)."""
+    monkeypatch.delenv("FLOODVALUE_APP_RUN_DIR", raising=False)
+    monkeypatch.delenv("FLOODVALUE_APP_ALLOW_TEST", raising=False)
+    monkeypatch.setattr(run, "output_dir", lambda: tmp_path / "empty-outputs")
+    monkeypatch.setattr(run, "data_dir", lambda: tmp_path)
+    raw = tmp_path / "raw" / "HandLabeled" / "S1Hand"
+    raw.mkdir(parents=True)
+    sources = []
+    for chip_id in ("Spain_1", "Nigeria_1"):
+        path = raw / f"{chip_id}_S1Hand.tif"
+        with rasterio.open(path, "w", driver="GTiff", width=8, height=8, count=2,
+                           dtype="float32", crs="EPSG:4326",
+                           transform=from_origin(81.6, 7.8, 0.01, 0.01)) as dest:
+            dest.write(np.full((2, 8, 8), -15, dtype=np.float32))
+        sources.append({"chip_id": chip_id, "file": path.name,
+                        "event_id": chip_id.split("_")[0], "observation_date": "2017-05-30"})
+    manifest = tmp_path / "interim" / "source_manifest_s1.json"
+    manifest.parent.mkdir()
+    manifest.write_text(json.dumps({"sources": sources}))
+
+    assert [item["chip_id"] for item in run.scenes()] == ["Nigeria_1"]
+    for endpoint in (run.observation_preview, run.observation_s1):
+        with pytest.raises(run.HTTPException) as sealed:
+            endpoint("Spain_1")
+        assert sealed.value.status_code == 404
+    assert run.observation_preview("Nigeria_1").body.startswith(b"\x89PNG")
+
+    monkeypatch.setenv("FLOODVALUE_APP_ALLOW_TEST", "1")
+    assert sorted(item["chip_id"] for item in run.scenes()) == ["Nigeria_1", "Spain_1"]
+    assert run.observation_s1("Spain_1").body.startswith(b"\x89PNG")

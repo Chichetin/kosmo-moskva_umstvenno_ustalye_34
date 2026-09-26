@@ -23,6 +23,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
+from floodvalue.data.split import EVENT_PARTS
 from floodvalue.paths import REPO_ROOT, data_dir, output_dir
 from floodvalue.procurement.pricing import load_pricing, price_basket
 from floodvalue.procurement.run import plan
@@ -34,6 +35,15 @@ REQUIRED = (
     "strategy_comparison.csv", "procurement_plan.csv", "sensitivity.csv",
 )
 app = FastAPI(title="FloodValue operator")
+TEST_EVENTS = frozenset(EVENT_PARTS["test"])
+
+
+def _sealed(chip_id: str) -> bool:
+    """Test chips stay sealed until eval-test (D-010, D-033): the raw catalog neither lists nor
+    renders them. A finished analysis of the chip (made after eval-test, D-033) or an explicit
+    FLOODVALUE_APP_ALLOW_TEST=1 opens it."""
+    return (chip_id.rsplit("_", 1)[0] in TEST_EVENTS
+            and os.environ.get("FLOODVALUE_APP_ALLOW_TEST") != "1")
 
 
 def _available_runs() -> list[Path]:
@@ -158,6 +168,8 @@ def scenes():
                 by_chip[chip_id]["observation_date"] = source.get("observation_date")
                 by_chip[chip_id]["preview_url"] = f"/api/observations/{chip_id}/preview.png"
                 continue
+            if _sealed(chip_id):
+                continue
             info = _raster_info(path)
             result.append({"run_id": None, "chip_id": chip_id,
                            "fixture": False,
@@ -170,6 +182,9 @@ def scenes():
 
 
 def _observation_file(chip_id: str) -> Path:
+    if _sealed(chip_id) and chip_id not in {
+            str(_json(path / "run_metadata.json").get("chip_id", path.name)) for path in _available_runs()}:
+        raise HTTPException(404, "Снимок из test запечатан до eval-test")
     manifest = data_dir() / "interim" / "source_manifest_s1.json"
     if manifest.is_file():
         for source in _json(manifest).get("sources", []):
