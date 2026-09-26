@@ -140,7 +140,7 @@ const overviewPadding = () => ({
   bottom: 0,
   left: window.innerWidth < 700
     ? 0
-    : Math.round(Math.min(58, Math.max(30, window.innerWidth * 0.036)) + 286),
+    : Math.round(Math.min(58, Math.max(30, window.innerWidth * 0.036)) + 320), // .map-top-left width
 });
 const noPadding = () => ({ top: 0, right: 0, bottom: 0, left: 0 });
 
