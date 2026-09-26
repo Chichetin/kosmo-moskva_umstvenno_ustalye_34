@@ -16,7 +16,7 @@
   чекпойнта). Validation и test не читаются. Главная метрика — mean6 AP (без порога):
   рабочий конвейер заново калибрует p и выбирает порог на validation (D-029), поэтому IoU при
   0,5 искажает сравнение рецептов, сдвигающих вероятности.
-- **Шум seed** — `docs/verification/loeo-sweep/r0_ref` против `r1_seed1`: AP ±0,013.
+- **Шум seed** — `docs/verification/loeo-sweep/r0_ref` против `r1_seed1` (каталог приходит с PR #139): AP ±0,013.
 - **Продвижение** — только если кандидат выше обоих эталонов на ≥ 0,02 mean6 AP на двух seed,
   без провала отдельного события > 0,08 AP; затем ансамбль 5 seed, калибровка на validation
   (`make calibrate`), `eval-test --part validation` «было → стало», PR с reviewer и evaluator.

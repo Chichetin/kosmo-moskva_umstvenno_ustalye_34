@@ -14,7 +14,7 @@ protocol:
     tool: "python -m floodvalue.model.unet.loeo"
     primary_metric: "mean6 AP (без порога) на эпохе 60, модель unet_e60"
     why_not_iou_at_0_5: "рабочий конвейер заново калибрует p (Platt) и выбирает порог на validation (D-029)"
-    reference: "docs/verification/loeo-sweep/r0_ref и r1_seed1 (рецепт D-019, seed 20260925 и 1)"
+    reference: "docs/verification/loeo-sweep/r0_ref и r1_seed1 (рецепт D-019, seed 20260925 и 1; каталог — PR #139)"
     seed_noise_ap: 0.013          # |mean6 AP(r1) − mean6 AP(r0)|
     promote_if:
       - "mean6 AP кандидата выше max(r0, r1) не меньше чем на 0.02 на ДВУХ seed"
