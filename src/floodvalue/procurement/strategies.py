@@ -71,6 +71,11 @@ def other_cost(n_zones: int, other_cfg: Mapping[str, Any]) -> Decimal:
             + Decimal(str(other_cfg["review_per_zone_rub"])) * n_zones).quantize(Decimal("0.01"))
 
 
+def _el_sum(values: Iterable[float]) -> float:
+    """EL are to the kopeck (asset_loss.csv, #127): exact decimal sum, no float tail in files."""
+    return float(sum((Decimal(repr(v)) for v in values), Decimal(0)))
+
+
 def assessed(loss: Iterable[Mapping[str, Any]]) -> dict[str, dict[str, float]]:
     """asset_id → {el, unc} только для status=ok (прочие не входят ни в охват, ни в знаменатель)."""
     out = {}
@@ -158,7 +163,7 @@ def _run_c(items: Mapping[str, Mapping[str, Any]], cov: Mapping[str, list[str]],
     while (b := best_candidate("ratio")):
         take(b, "")
     return {"chosen": chosen, "reasons": reasons, "social": social, "total": total,
-            "covered_el": sum(el[a]["el"] for a in covered)}
+            "covered_el": _el_sum(el[a]["el"] for a in covered)}
 
 
 def select_c(items: Mapping[str, Mapping[str, Any]], cov: Mapping[str, list[str]],
@@ -200,9 +205,8 @@ def comparison_row(strategy: str, ids: list[str], rows: list[Mapping[str, Any]],
     data = basket_total(rows)
     other = other_cost(len(ids), other_cfg)
     covered = sorted(a for a in {x for c in ids for x in cov.get(c, ())} if a in el)
-    # EL are to the kopeck (asset_loss.csv, #127): exact decimal sums, no float noise in the CSV
-    covered_el = float(sum((Decimal(repr(el[a]["el"])) for a in covered), Decimal(0)))
-    denom = float(sum((Decimal(repr(v["el"])) for v in el.values()), Decimal(0)))
+    covered_el = _el_sum(el[a]["el"] for a in covered)
+    denom = _el_sum(v["el"] for v in el.values())
     uncs = {a: v["unc"] for a, v in el.items()}
     if strategy == "A":
         res_u = sum(uncs.values()) if uncs else None
