@@ -8,6 +8,7 @@ import {
   Search,
   X,
 } from "lucide-react";
+import Backdrop from "./Backdrop";
 import MapPanel from "./MapPanel";
 import type { Feature, MediaMap, Plan, SceneSummary, Session } from "./types";
 
@@ -360,6 +361,7 @@ export default function App() {
     : null;
   return (
     <div className="app">
+      <Backdrop paused={!mapActive || !!scene} />
       <header className={`topbar ${mapActive ? "topbar-map" : "topbar-analysis"}`}>
         <button className="brand" onClick={overview} aria-label="Митрандир — обзор Земли">
           <svg className="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">

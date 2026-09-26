@@ -129,8 +129,6 @@ input:focus-visible,
   color: #fff;
 }
 
-.workspace,
-.map-screen,
 .analysis-screen {
   background-color: #050607;
   background-image:
@@ -144,8 +142,10 @@ input:focus-visible,
   height: 100%;
 }
 
+/* The globe floats over Backdrop.tsx (backdrop.css); the analysis screen keeps its own flat background. */
 .map-screen {
   overflow: visible;
+  background: transparent;
 }
 
 .map-screen:not(.scene-mode)::before,
