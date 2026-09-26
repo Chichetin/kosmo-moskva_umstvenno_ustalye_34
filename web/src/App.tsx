@@ -497,7 +497,7 @@ export default function App() {
     : null;
   return (
     <div className="app">
-      <Backdrop paused={!mapActive || !!scene} />
+      <Backdrop paused={!mapActive || !!scene} ocean={baseMap === "optical"} />
       <header className={`topbar ${mapVisible ? "topbar-map" : "topbar-analysis"}`}>
         <button className="brand" onClick={overview} aria-label="Митрандир — обзор Земли">
           <svg className="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
