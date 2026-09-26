@@ -114,21 +114,12 @@ function startScene(canvas: HTMLCanvasElement, isPaused: () => boolean) {
     stencil: false,
     powerPreference: "low-power",
   });
-  const program = gl && link(gl);
-  if (!gl || !program) {
+  // GPU resources; null while the context is lost (driver reset, sleep) until it is restored.
+  let res = gl && setup(gl);
+  if (!gl || !res) {
     canvas.hidden = true;
     return null;
   }
-  const buffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-  gl.useProgram(program);
-  const position = gl.getAttribLocation(program, "p");
-  gl.enableVertexAttribArray(position);
-  gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
-  const uRes = gl.getUniformLocation(program, "uRes");
-  const uTime = gl.getUniformLocation(program, "uTime");
-  const uShift = gl.getUniformLocation(program, "uShift");
 
   const reduced = matchMedia("(prefers-reduced-motion: reduce)");
   const finePointer = matchMedia("(pointer: fine)");
@@ -149,6 +140,7 @@ function startScene(canvas: HTMLCanvasElement, isPaused: () => boolean) {
   let sy = 0;
 
   const draw = (now: number) => {
+    if (!res) return;
     const w = Math.max(1, Math.ceil(innerWidth / 3));
     const h = Math.max(1, Math.ceil(innerHeight / 3));
     if (canvas.width !== w || canvas.height !== h) {
@@ -156,12 +148,13 @@ function startScene(canvas: HTMLCanvasElement, isPaused: () => boolean) {
       canvas.height = h;
       gl.viewport(0, 0, w, h);
     }
-    gl.uniform2f(uRes, w, h);
-    gl.uniform1f(uTime, ((now - start) / 1000) % 3600);
-    gl.uniform2f(uShift, -sx * PARALLAX, sy * PARALLAX);
+    gl.uniform2f(res.uRes, w, h);
+    gl.uniform1f(res.uTime, ((now - start) / 1000) % 3600);
+    gl.uniform2f(res.uShift, -sx * PARALLAX, sy * PARALLAX);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   };
-  const running = () => ready && !frozen && !reduced.matches && !document.hidden && !isPaused();
+  const running = () =>
+    ready && !!res && !frozen && !reduced.matches && !document.hidden && !isPaused();
   const frame = (now: number) => {
     raf = 0;
     if (!running()) return;
@@ -206,9 +199,17 @@ function startScene(canvas: HTMLCanvasElement, isPaused: () => boolean) {
     if (!raf && !canvas.hidden) draw(performance.now());
   };
   const lost = (event: Event) => {
-    event.preventDefault();
-    frozen = true;
+    event.preventDefault(); // allows webglcontextrestored
+    res = null;
     canvas.hidden = true;
+    sync();
+  };
+  const restored = () => {
+    res = setup(gl);
+    if (!res) return;
+    canvas.hidden = false;
+    draw(performance.now());
+    sync();
   };
   canvas.dataset.state = "still";
   draw(start);
@@ -221,6 +222,7 @@ function startScene(canvas: HTMLCanvasElement, isPaused: () => boolean) {
   addEventListener("pointermove", move, { passive: true });
   addEventListener("resize", redraw);
   canvas.addEventListener("webglcontextlost", lost);
+  canvas.addEventListener("webglcontextrestored", restored);
   return {
     sync,
     stop() {
@@ -232,9 +234,31 @@ function startScene(canvas: HTMLCanvasElement, isPaused: () => boolean) {
       removeEventListener("pointermove", move);
       removeEventListener("resize", redraw);
       canvas.removeEventListener("webglcontextlost", lost);
-      gl.deleteBuffer(buffer);
-      gl.deleteProgram(program);
+      canvas.removeEventListener("webglcontextrestored", restored);
+      if (res) {
+        gl.deleteBuffer(res.buffer);
+        gl.deleteProgram(res.program);
+      }
     },
+  };
+}
+
+function setup(gl: WebGLRenderingContext) {
+  const program = link(gl);
+  if (!program) return null;
+  const buffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  gl.useProgram(program);
+  const position = gl.getAttribLocation(program, "p");
+  gl.enableVertexAttribArray(position);
+  gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+  return {
+    program,
+    buffer,
+    uRes: gl.getUniformLocation(program, "uRes"),
+    uTime: gl.getUniformLocation(program, "uTime"),
+    uShift: gl.getUniformLocation(program, "uShift"),
   };
 }
 
