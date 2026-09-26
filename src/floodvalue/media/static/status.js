@@ -3,6 +3,7 @@
   "use strict";
   const $ = (id) => document.getElementById(id);
   // Public status texts (media/reports.py PUBLIC_STATUS) → stage on the track; unknown → plain list.
+  // Stage 2 is the analyst's decision either way: «Не принято в работу» is a final stage, not an error.
   const STAGE = { "На проверке у аналитика": 1, "Принято в работу": 2, "Не принято в работу": 2 };
   function track(status, submitted) {
     const stage = STAGE[status];
