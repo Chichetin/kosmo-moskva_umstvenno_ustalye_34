@@ -1,6 +1,6 @@
 # Архитектурное ревью `src/floodvalue` — 26.09.2026
 
-Разбор модулей, которые чаще всего менялись за 23–26.09. Состояние кода — `main` `e1ee6b8`.
+Разбор модулей, которые чаще всего менялись за 23–26.09. Состояние кода — `main` `e1ee6b8`. Сверено с `main` `2af1a76` 26.09 в 22:45: выводы в силе, номера строк и статус #236 обновлены, уточнения — в комментариях к #232–#236.
 
 Коммитов на файл за этот период:
 - `procurement/run.py` — 15;
@@ -35,7 +35,7 @@
 | 2 | [#233](https://github.com/Chichetin/kosmo-moskva_umstvenno_ustalye_34/issues/233) | `PlanContext` для плана закупки и чувствительности | сильный | ~150 строк; средний | после сдачи |
 | 3 | [#234](https://github.com/Chichetin/kosmo-moskva_umstvenno_ustalye_34/issues/234) | EL сценариев чувствительности считает assets, export не повторяет D-028 | сильный | −40 / +10 строк; низкий–средний | после сдачи |
 | 4 | [#235](https://github.com/Chichetin/kosmo-moskva_umstvenno_ustalye_34/issues/235) | Одна запись и одно чтение CSV контракта (`contracts.io`) | стоит изучить | ~−70 строк, 6 файлов; низкий | после сдачи |
-| 5 | [#236](https://github.com/Chichetin/kosmo-moskva_umstvenno_ustalye_34/issues/236) | Тест паритета: план на ползунке совпадает с файлами комплекта | стоит изучить | тест ~20 строк; низкий | **тест — до 22:00** |
+| 5 | [#236](https://github.com/Chichetin/kosmo-moskva_umstvenno_ustalye_34/issues/236) | Тест паритета: план на ползунке совпадает с файлами комплекта | стоит изучить | тест ~20 строк; низкий | тест в `main` (6a22668); п. 2 — после сдачи |
 | 6 | [#237](https://github.com/Chichetin/kosmo-moskva_umstvenno_ustalye_34/issues/237) | `paths.s1_file` / `stage_dir`, манифест через схему | спорно | ~80 строк, 7 файлов | после сдачи |
 | 7 | [#238](https://github.com/Chichetin/kosmo-moskva_umstvenno_ustalye_34/issues/238) | media: SQL из обработчиков в `store` | спорно | ~100 строк; вне цепочки жюри | после сдачи |
 
@@ -44,7 +44,7 @@
 - каждая правка кода, который пишет 12 файлов, рискует критерием 12 перед стоп-кодом;
 - после `eval-test` любая правка `src/` требует повтора по D-030.
 
-Исключение — тест из #236: он не меняет `src/`, а только проверяет критерии 16 и 19.
+Исключение — тест из #236: он не меняет `src/`, а только проверяет критерии 16 и 19. Сделан до заморозки: `test_plan_matches_bundle_files`, коммит 6a22668.
 
 ## 1. Модуль копеечной арифметики — [#232](https://github.com/Chichetin/kosmo-moskva_umstvenno_ustalye_34/issues/232)
 
@@ -63,7 +63,7 @@ flowchart LR
 - долю охвата;
 - R = V·q·min(p, 1−p) (D-049).
 
-Где копии: `procurement/strategies.py:93,106`, `export/validate.py:335`, `assets/sensitivity.py:85`, `procurement/run.py:204,328`, `export/assemble.py:145,159`.
+Где копии: `procurement/strategies.py:93,106`, `export/validate.py:335`, `assets/sensitivity.py:85`, `procurement/run.py:204,328`, `export/assemble.py:145,159`. Фильтр `status == ok` есть ещё в `procurement/zones.py:166`.
 
 После того как #146 ввёл EL в копейках, их расхождение чинили два фикса подряд: 13f827d и 26d9440 (#173).
 
@@ -71,7 +71,7 @@ flowchart LR
 
 **Выгода.** Контрольная арифметика критериев 13 и 16 живёт в одном месте и проверяется одним тестом.
 
-**Риск.** Если validate возьмёт R из того же модуля, что и procurement, валидатор перестанет проверять производителя независимо. Контрольные числа в тестах validate должны остаться литералами, а не вызовом общей функции.
+**Риск.** Если validate возьмёт R из того же модуля, что и procurement, валидатор перестанет проверять производителя независимо. Контрольные числа в тестах validate должны остаться литералами, а не вызовом общей функции. После #251 (99a9229) validate уже сверяет EL тем же `product_half_up`, которым его считает assets (`export/validate.py:568`, `assets/portfolio.py:155`); независимость держится на литералах `test_el_off_by_one_kopeck_fails`.
 
 ## 2. Контекст плана закупки — [#233](https://github.com/Chichetin/kosmo-moskva_umstvenno_ustalye_34/issues/233)
 
@@ -79,8 +79,8 @@ flowchart LR
 - у `sensitivity()` 14 параметров;
 - `compute_plan` (10 параметров) вызывается в `src/` 8 раз;
 - охват и допуск зон строятся тремя способами: `run._context`, `strategies.coverage_at` (фикс контура исключённых зон — 146f3f4) и тестовый `ctx()`;
-- тест паритета `tests/procurement/test_plan.py:288` существует только из-за этого дублирования;
-- `zones.covered_assets` (`procurement/zones.py:418`) вызывается только из теста.
+- тест паритета `tests/procurement/test_plan.py:299` существует только из-за этого дублирования;
+- `zones.covered_assets` (`procurement/zones.py:419`) вызывается только из теста.
 
 **Решение.** Неизменяемый `PlanContext` собирается один раз, план и чувствительность считаются по нему.
 
@@ -93,7 +93,7 @@ flowchart LR
 **Проблема.**
 - export разбирает `changed_inputs_json` и заново применяет правила обрезки из assets (`export/assemble.py:113–135`, `PARAM_CLIP`).
 - Если пересчитанная ΣEL не совпала с итогом assets, строка плана C (`…__C_fixed`) не попадает в `sensitivity.csv`. Остаётся лишь запись в `warnings`, а сама строка assets остаётся.
-- export читает колонку procurement `covered_asset_ids`, которой нет среди полей `strategy_comparison.csv`.
+- export читает колонку `covered_asset_ids`: procurement её пишет (`procurement/run.py:40`), но в полях контракта `strategy_comparison.csv` её нет (`docs/contracts.md` §6, `STRATEGY_COMPARISON_FIELDS`, `tests/fixtures/good`). Без неё `fixed_plan_rows` молча пишет строки `…__C_fixed` с охватом 0.00, без записи в `warnings`.
 
 **Решение.** assets пишет EL по объектам для каждого сценария — это дополнительный ключ, §7a его допускает. export только суммирует.
 
@@ -125,6 +125,8 @@ flowchart LR
 
 **Риск.** Низкий: сначала только тест.
 
+**Статус (26.09, 22:45).** Тест сделан: `tests/procurement/test_plan.py:335`, коммит 6a22668. Он собирает комплект и вызывает `plan()` на одних и тех же `configs/`, поэтому смену цен после сборки комплекта не ловит — это закроет п. 2, после сдачи.
+
 ## 6. Пути в `paths` — [#237](https://github.com/Chichetin/kosmo-moskva_umstvenno_ustalye_34/issues/237)
 
 **Проблема.**
@@ -155,7 +157,7 @@ flowchart LR
 - не трогает замороженные модули;
 - убирает класс ошибок, который уже дважды пришлось чинить.
 
-#233 и #234 естественно ложатся поверх него. До заморозки в 22:00 — только тест из **#236**.
+#233 и #234 естественно ложатся поверх него. Тест из **#236** сделан до заморозки (6a22668); п. 2 — после сдачи.
 
 ## Правила для тех, кто возьмёт
 
