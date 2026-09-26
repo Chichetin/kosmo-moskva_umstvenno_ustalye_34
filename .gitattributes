@@ -1,3 +1,24 @@
+# Line endings (D-046, #133): LF in the index and in every checkout, including Windows clones
+# with core.autocrlf=true — sha256 of models/unet/*.json in run_metadata.json and *.sh must not change.
+* text=auto eol=lf
+
+# CSV are written by the csv module with CRLF rows (RFC 4180) and are stored so in the index;
+# hashes of splits/fixtures depend on these bytes — never convert.
+*.csv -text
+
+# Binary formats of the project
+*.tif binary
+*.tiff binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.xlsx binary
+*.docx binary
+*.pptx binary
+
 # Веса моделей и калибраторы — через Git LFS (требование сдачи: веса в GitVerse)
 models/**/*.pt filter=lfs diff=lfs merge=lfs -text
 models/**/*.pth filter=lfs diff=lfs merge=lfs -text

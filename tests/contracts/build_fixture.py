@@ -93,7 +93,7 @@ def write_csv(path: Path, rows: list[dict]) -> None:
 
 def write_json(path: Path, obj) -> None:
     path.write_text(json.dumps(obj, ensure_ascii=False, indent=2, allow_nan=False) + "\n",
-                    encoding="utf-8")
+                    encoding="utf-8", newline="\n")
 
 
 def build(out: Path) -> None:
