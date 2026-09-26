@@ -628,6 +628,17 @@ export default function App() {
             Сообщения{messageCount > 0 && <span className="nav-count"> · {messageCount}</span>}
           </button>
         </nav>
+        {!mapVisible && (
+          // Screen-wide actions of the analysis page: next to the navigation, not in a scene's head.
+          <div className="top-analysis-actions">
+            <button onClick={() => (scene ? navigate("scene", scene.chip_id) : overview())}>
+              <ArrowLeft size={15} /> К карте
+            </button>
+            <button onClick={overview}>
+              <Globe2 size={15} /> Все наблюдения
+            </button>
+          </div>
+        )}
         <span className="top-spacer" />
         {activeSession && (
           <button
@@ -1165,16 +1176,6 @@ export default function App() {
               </aside>
               <div className="analysis-content">
             <div className="analysis-head">
-              <button
-                onClick={() =>
-                  scene ? navigate("scene", scene.chip_id) : overview()
-                }
-              >
-                <ArrowLeft size={17} /> К карте
-              </button>
-              <button onClick={overview}>
-                <Globe2 size={17} /> Все наблюдения
-              </button>
               <div>
                 <span>{scene ? "АНАЛИЗ СЦЕНЫ" : "АНАЛИЗ НАБЛЮДЕНИЙ"}</span>
                 <h1>

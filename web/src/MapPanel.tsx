@@ -788,9 +788,11 @@ export default function MapPanel(props: Props) {
     const news = props.newsOpen && window.innerWidth > 700
       ? document.querySelector(".news-panel")?.getBoundingClientRect()
       : null;
+    // The place lands on the grid axis between the scene list and the right-hand panel (the news
+    // panel, or the message card that opens with it: fixed, 400 + 24 px).
     const destinationPadding = news
       ? { ...overviewPadding(), right: Math.max(0, Math.round(window.innerWidth - news.left)) }
-      : noPadding();
+      : { ...overviewPadding(), right: window.innerWidth > 700 ? 424 : 0 };
     map.stop();
     map.setPadding(noPadding());
     if (reducedMotion()) {

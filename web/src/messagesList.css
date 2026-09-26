@@ -1,12 +1,12 @@
 .messages-list {
   position: fixed;
-  top: 140px;
+  top: calc(116px * var(--ui-zoom) + 16px); /* below the zoomed top navigation, as .message-panel */
   right: 24px;
   z-index: 31;
   display: flex;
   flex-direction: column;
   width: min(400px, calc(100vw - 32px));
-  max-height: min(560px, calc(100vh - 164px));
+  max-height: min(560px, calc(100vh - 116px * var(--ui-zoom) - 40px));
   overflow: hidden;
   background: #0d1113f7;
   color: #dde3e5;

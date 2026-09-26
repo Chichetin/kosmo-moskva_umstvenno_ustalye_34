@@ -2019,3 +2019,37 @@ details.context-foot summary { cursor: pointer; margin-bottom: 6px; }
     bottom: 64px;
   }
 }
+
+/* Analysis page: «К карте» and «Все наблюдения» lead off the whole screen, so they sit in the top
+   bar right after the navigation, not in the head of the selected scene. */
+.top-analysis-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 28px;
+}
+
+.top-analysis-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius);
+  background: #171b1e;
+  color: #dce3e6;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: background 160ms ease;
+}
+
+.top-analysis-actions button:hover {
+  background: #22292d;
+}
+
+@media (max-width: 700px) {
+  .top-analysis-actions {
+    display: none; /* «Земля» in the navigation leads back to the map on a phone */
+  }
+}
