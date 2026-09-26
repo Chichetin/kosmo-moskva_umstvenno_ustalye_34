@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   ArrowDownToLine,
   ArrowLeft,
@@ -638,16 +638,16 @@ export default function App() {
             Анализ
           </button>
           <button
-            className={newsOpen ? "active" : ""}
-            onClick={() => { setMessagesOpen(false); setNewsOpen(!newsOpen); }}
+            className={`nav-news${newsOpen ? " active" : ""}`}
+            onClick={() => { setMessagesOpen(false); setMessage(null); setNewsOpen(!newsOpen); }}
             aria-expanded={newsOpen}
             title="Все новости и сводки, из которых берётся слой «Сообщения»"
           >
             Новости
           </button>
           <button
-            className={messagesOpen ? "active" : ""}
-            onClick={() => { setNewsOpen(false); setMessagesOpen(!messagesOpen); }}
+            className={`nav-messages${messagesOpen ? " active" : ""}`}
+            onClick={() => { setNewsOpen(false); setMessage(null); setMessagesOpen(!messagesOpen); }}
             aria-expanded={messagesOpen}
             title={`Сообщения на карте: ${messageCount}`}
           >
@@ -699,7 +699,8 @@ export default function App() {
       {messagesOpen && <MessagesList messages={messages} onClose={() => setMessagesOpen(false)} onSelect={selectMessageFromList} />}
       <main className="workspace">
         <div
-          className={`map-screen ${mapVisible ? "" : "map-hidden"} ${scene ? "scene-mode" : ""} ${baseMap === "optical" ? "optical-mode" : ""} ${scene && panelOpen && message ? "tiled" : ""}`}
+          className={`map-screen ${mapVisible ? "" : "map-hidden"} ${scene ? "scene-mode" : ""} ${baseMap === "optical" ? "optical-mode" : ""} ${scene && panelOpen && (message || newsOpen || messagesOpen) ? "tiled" : ""}`}
+          style={{ "--tile-right": newsOpen ? "30.25rem" : "26.5rem" } as CSSProperties}
           aria-hidden={!mapVisible}
           inert={!mapVisible}
         >
@@ -731,7 +732,11 @@ export default function App() {
               setPanelCollapsed(false);
             }}
             onIssue={setMapIssue}
-            onSelectMessage={setMessage}
+            onSelectMessage={(selected) => {
+              setNewsOpen(false);
+              setMessagesOpen(false);
+              setMessage(selected);
+            }}
             focus={messageFocus}
             newsOpen={newsOpen}
           />
