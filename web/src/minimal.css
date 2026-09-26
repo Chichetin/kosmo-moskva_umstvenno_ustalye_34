@@ -779,7 +779,7 @@ input:focus-visible,
   background: none;
 }
 
-.analysis-metrics span {
+.analysis-metrics > div > span {
   color: #9ba8ad;
   font-size: 0.875rem;
 }
