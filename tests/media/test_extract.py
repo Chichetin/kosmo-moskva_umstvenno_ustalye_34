@@ -70,3 +70,26 @@ def test_llm_answer_schema_rejects_coordinates_and_extra_fields():
     assert validate_llm_answer(json.dumps({**ok, "lat": 10.0, "lon": 76.0}), "llm:test") is None
     assert validate_llm_answer(json.dumps({**ok, "report_type": "confirmed"}), "llm:test") is None
     assert validate_llm_answer("not json", "llm:test") is None
+
+
+@pytest.mark.parametrize("title, kind, place", [
+    ("Inondations dans le Var : des habitants évacués", "occurred", "Var"),
+    ("Inundaciones en Valencia dejan decenas de desalojados", "occurred", "Valencia"),
+    ("Hochwasser in Bayern: Orte überflutet", "occurred", "Bayern"),
+    ("Banjir merendam ratusan rumah di Jakarta", "occurred", "Jakarta"),
+    ("Enchente deixa bairros alagados em Porto Alegre", "occurred", "Porto Alegre"),
+    ("Alerte crue : vigilance orange", "warning", None),
+    ("河南暴雨引发洪水", "unclear", None),
+    ("فيضانات في ليبيا", "unclear", None),
+])
+def test_worldwide_languages_are_flood_news(title, kind, place):
+    x = extract_rules(title)
+    assert x.relevant and x.report_type == kind
+    if place:
+        assert place in x.place_mentions
+
+
+@pytest.mark.parametrize("title", ["Il est cruel de vendre", "Selling shares in Seoul",
+                                   "Flood of refugees at the border", "Crueldad animal en Madrid"])
+def test_new_language_words_do_not_catch_lookalikes(title):
+    assert not extract_rules(title).relevant
