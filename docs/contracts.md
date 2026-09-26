@@ -133,6 +133,8 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
   — пригодна); `covers_asset_ids` — объекты, которые позиция **наблюдает** к
   `decision_deadline`; у позиции с `exclusion_reason` всегда `[]`; `inside_geometry_asset_ids`
   — только у исключённых позиций: объекты внутри контура, это **не** охват (D-048).
+  `exclusion_reason` и `inside_geometry_asset_ids` есть, если каталог построен с
+  `decision_deadline` (в `procure` — всегда).
 - `procurement_plan.csv` ↔ каталог: каждый `candidate_id` есть в каталоге; `area_km2`,
   `base_rate_rub_km2`, `base_rate_status`, `processing_level`, `usage_type`,
   `guaranteed_purchase` строки = полям зоны каталога; доп. поля `sensor_type`,
