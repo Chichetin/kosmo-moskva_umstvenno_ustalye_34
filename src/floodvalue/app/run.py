@@ -7,6 +7,12 @@ import io
 import json
 import math
 import os
+import queue
+import subprocess
+import sys
+import threading
+import time
+import uuid
 import zipfile
 from functools import lru_cache
 from pathlib import Path
@@ -350,6 +356,115 @@ def download(run_id: str | None = None):
                 archive.write(path, path.name)
     return Response(buffer.getvalue(), media_type="application/zip",
                     headers={"Content-Disposition": f'attachment; filename="{run_dir.name}.zip"'})
+
+
+# --- Analysis of a raw observation from the catalog ------------------------------------------
+# The same stages as `make all` (data is already prepared), run as subprocesses: the app imports
+# no stage internals. One job at a time; the queue is short because the interface may be public.
+ANALYSIS_STEPS = (
+    ("Карта воды основного метода", ["floodvalue", "predict"]),
+    ("Маска baseline", ["floodvalue.baseline.predict", "--mask-only"]),
+    ("Объекты и ожидаемый ущерб", ["floodvalue", "assets"]),
+    ("Зоны и план съёмки A/B/C", ["floodvalue", "procure"]),
+    ("Комплект файлов", ["floodvalue", "export"]),
+    ("Проверка 12 файлов", ["floodvalue", "validate"]),
+)
+ANALYSIS_QUEUE_MAX = 3
+ANALYSIS_STEP_TIMEOUT_S = 600
+_jobs: dict[str, dict] = {}
+_jobs_lock = threading.Lock()
+_job_queue: queue.Queue[str] = queue.Queue()
+_worker: threading.Thread | None = None
+
+
+def _analysis_commands(chip_id: str, out: Path) -> list[list[str]]:
+    commands = []
+    for _, (module, *extra) in ANALYSIS_STEPS:
+        chip = [] if module == "floodvalue" and extra == ["validate"] else ["--chip", chip_id]
+        commands.append([sys.executable, "-m", module, *extra, *chip, "--out", str(out)])
+    return commands
+
+
+def _public(job: dict) -> dict:
+    return {key: value for key, value in job.items() if key != "out"}
+
+
+def _run_job(job_id: str) -> None:
+    with _jobs_lock:
+        job = _jobs[job_id]
+        job.update(status="running", started_at=time.time())
+    for index, (command, (label, _)) in enumerate(
+            zip(_analysis_commands(job["chip_id"], Path(job["out"])), ANALYSIS_STEPS), start=1):
+        with _jobs_lock:
+            job.update(step=index, step_label=label)
+        try:
+            done = subprocess.run(command, cwd=REPO_ROOT, capture_output=True, text=True,
+                                  timeout=ANALYSIS_STEP_TIMEOUT_S)
+            failed = done.returncode != 0
+            detail = (done.stderr or done.stdout or "").strip()[-600:]
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            failed, detail = True, str(exc)[-600:]
+        if failed:
+            with _jobs_lock:
+                job.update(status="failed", error=f"{label}: этап завершился с ошибкой",
+                           detail=detail, finished_at=time.time())
+            return
+    metadata = Path(job["out"]) / "run_metadata.json"
+    with _jobs_lock:
+        job.update(status="done", finished_at=time.time(),
+                   run_id=_json(metadata).get("run_id") if metadata.is_file() else None)
+
+
+def _worker_loop() -> None:
+    while True:
+        _run_job(_job_queue.get())
+
+
+def _ensure_worker() -> None:
+    global _worker
+    if _worker is None or not _worker.is_alive():
+        _worker = threading.Thread(target=_worker_loop, name="floodvalue-analysis", daemon=True)
+        _worker.start()
+
+
+@app.post("/api/analyses")
+def start_analysis(chip_id: str = Query(min_length=1, max_length=120)):
+    """Queue the analysis of one catalog observation; an existing analysis is returned as is."""
+    if os.environ.get("FLOODVALUE_APP_RUN_DIR"):
+        raise HTTPException(409, "Открыт один комплект (make app OUT=…): запуск анализа недоступен")
+    if _sealed(chip_id):
+        raise HTTPException(403, "Снимок из test запечатан до eval-test")
+    _observation_file(chip_id)  # 404 when the raw observation is not available
+    for path in _available_runs():
+        metadata = _json(path / "run_metadata.json")
+        if str(metadata.get("chip_id")) == chip_id:
+            return {"job_id": None, "chip_id": chip_id, "status": "done",
+                    "run_id": metadata.get("run_id", path.name)}
+    with _jobs_lock:
+        active = [job for job in _jobs.values() if job["status"] in ("queued", "running")]
+        for job in active:
+            if job["chip_id"] == chip_id:
+                return JSONResponse(_public(job), status_code=202)
+        if len(active) >= ANALYSIS_QUEUE_MAX:
+            raise HTTPException(429, "Очередь анализа занята, повторите через минуту")
+        job_id = uuid.uuid4().hex[:12]
+        job = {"job_id": job_id, "chip_id": chip_id, "status": "queued", "step": 0,
+               "steps": len(ANALYSIS_STEPS), "step_label": None, "run_id": None, "error": None,
+               "detail": None, "created_at": time.time(),
+               "out": str(output_dir() / f"{chip_id}_ui_{job_id}")}
+        _jobs[job_id] = job
+    _job_queue.put(job_id)
+    _ensure_worker()
+    return JSONResponse(_public(job), status_code=202)
+
+
+@app.get("/api/analyses/{job_id}")
+def analysis_status(job_id: str):
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+        if job is None:
+            raise HTTPException(404, "Задача анализа не найдена")
+        return _public(job)
 
 
 if STATIC_DIR.exists():
