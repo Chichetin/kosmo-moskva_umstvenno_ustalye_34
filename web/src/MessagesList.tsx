@@ -70,7 +70,7 @@ export default function MessagesList({ messages, onClose, onSelect }: {
           return (
             <button
               key={`${kind}-${id}`}
-              className="messages-list-item"
+              className={`messages-list-item ${kind === "event" ? "news" : "report"}`}
               onClick={() => onSelect({ kind, id: String(id), lngLat, props })}
             >
               <span className="messages-list-meta">

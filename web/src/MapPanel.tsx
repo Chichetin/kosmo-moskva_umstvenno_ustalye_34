@@ -79,6 +79,8 @@ const markers = (scenes: SceneSummary[]): FeatureCollection<Point> => ({
   ),
 });
 // «Сообщения» layer (/api/media/map): a reason to look at a territory, never an input to p or EL.
+const NEWS_COLOR = "#39ff88";  // news: events from bulletins and media (neon green)
+const REPORT_COLOR = "#f0b85a";  // eyewitness reports (amber)
 const mediaFeatures = (items: Feature[]): FeatureCollection => ({
   type: "FeatureCollection",
   features: items.flatMap((item) =>
@@ -176,6 +178,7 @@ export default function MapPanel(props: Props) {
       "plan-line": !!scene,
       "zone-focus": !!scene && !!selectedZone,
       "media-area": showMessages && !!messages,
+      "media-event-glow": showMessages && !!messages,
       "media-event": showMessages && !!messages,
       "media-report": showMessages && !!messages,
     };
@@ -567,12 +570,20 @@ export default function MapPanel(props: Props) {
         data: mediaFeatures(media?.reports.features ?? []),
       });
       // Calm markers on top of rasters and zones: an outline for areas, no fill, no pulsing.
+      // News (events from bulletins and media) are neon green, eyewitness reports amber.
       map.addLayer({
         id: "media-area",
         type: "line",
         source: "media-events",
         filter: ["!=", ["geometry-type"], "Point"],
-        paint: { "line-color": "#f0b85a", "line-width": 1.4, "line-opacity": 0.75, "line-dasharray": [2, 2] },
+        paint: { "line-color": NEWS_COLOR, "line-width": 1.4, "line-opacity": 0.8, "line-dasharray": [2, 2] },
+      });
+      map.addLayer({
+        id: "media-event-glow",
+        type: "circle",
+        source: "media-events",
+        filter: ["==", ["geometry-type"], "Point"],
+        paint: { "circle-radius": 13, "circle-color": NEWS_COLOR, "circle-opacity": 0.28, "circle-blur": 0.9 },
       });
       map.addLayer({
         id: "media-event",
@@ -581,9 +592,9 @@ export default function MapPanel(props: Props) {
         filter: ["==", ["geometry-type"], "Point"],
         paint: {
           "circle-radius": 6,
-          "circle-color": "#f0b85a",
-          "circle-opacity": ["case", ["==", ["get", "review_state"], "reviewed"], 0.95, 0.7],
-          "circle-stroke-color": "#1a1408",
+          "circle-color": NEWS_COLOR,
+          "circle-opacity": ["case", ["==", ["get", "review_state"], "reviewed"], 1, 0.85],
+          "circle-stroke-color": "#06240f",
           "circle-stroke-width": 1.5,
         },
       });
@@ -593,9 +604,9 @@ export default function MapPanel(props: Props) {
         source: "media-reports",
         paint: {
           "circle-radius": 6,
-          "circle-color": "#f0b85a",
+          "circle-color": REPORT_COLOR,
           "circle-opacity": 0.12,
-          "circle-stroke-color": "#f0b85a",
+          "circle-stroke-color": REPORT_COLOR,
           "circle-stroke-width": 2,
         },
       });
@@ -727,6 +738,12 @@ export default function MapPanel(props: Props) {
         ? [feature.geometry.coordinates[0], feature.geometry.coordinates[1]]
         : [event.lngLat.lng, event.lngLat.lat];
       current.current.onSelectMessage?.({ kind, id: String(id), lngLat, props });
+      const zoom = kind === "report" ? 10 : 9;  // as selectMessageFromList in App
+      if (map.getZoom() >= zoom - 0.5) return;
+      const padding = { ...overviewPadding(), right: window.innerWidth > 700 ? 424 : 0 };
+      map.stop();
+      if (reducedMotion()) map.jumpTo({ center: lngLat, zoom, padding });
+      else map.flyTo({ center: lngLat, zoom, padding, duration: 1500, curve: 1.15, essential: true });
     };
     map.on("click", "media-event", openMessage("event"));
     map.on("click", "media-area", openMessage("event"));
