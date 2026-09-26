@@ -12,6 +12,7 @@ import json
 import re
 import sqlite3
 
+from floodvalue.media.events import haversine_km
 from floodvalue.media.net import FetchError, fetch
 from floodvalue.media.store import now
 
@@ -39,7 +40,8 @@ def normalize(item: dict) -> dict:
     south, north, west, east = (float(value) for value in item["boundingbox"])
     return {"label": item.get("display_name", ""), "lat": float(item["lat"]),
             "lon": float(item["lon"]), "precision": precision_of(item),
-            "bbox": [west, south, east, north], "country_code": None}
+            "bbox": [west, south, east, north], "country_code": None,
+            "importance": float(item.get("importance") or 0)}
 
 
 def _key(query: str, language: str) -> str:
@@ -70,3 +72,67 @@ def geocode(db: sqlite3.Connection, query: str, *, language: str = "ru", limit: 
     db.execute("INSERT OR REPLACE INTO geocode_cache(query, result_json, fetched_at) "
                "VALUES (?, ?, ?)", (key, json.dumps(result, ensure_ascii=False), now()))
     return result
+
+
+PLACE_PRECISIONS = {"locality", "district", "region", "country"}
+AMBIGUOUS_KM = 50.0
+
+
+class Budget:
+    """Network calls left in this ingestion cycle."""
+
+    def __init__(self, calls: int):
+        self.calls = calls
+
+    def take(self) -> bool:
+        if self.calls <= 0:
+            return False
+        self.calls -= 1
+        return True
+
+
+def pick(results: list[dict], min_importance: float = 0.0) -> dict:
+    """Resolved / ambiguous / missing from geocoder candidates; never a guess among equals."""
+    places = [item for item in results if item["precision"] in PLACE_PRECISIONS
+              and item.get("importance", 0) >= min_importance]
+    if not places:
+        return {"status": "missing", "chosen": None, "candidates": []}
+    top = places[0]
+    rivals = [item for item in places[1:]
+              if haversine_km(top["lat"], top["lon"], item["lat"], item["lon"]) > AMBIGUOUS_KM
+              and item.get("importance", 0) >= 0.6 * top.get("importance", 0)]
+    if rivals:
+        return {"status": "ambiguous", "chosen": None, "candidates": [top, *rivals][:5]}
+    return {"status": "resolved", "chosen": top, "candidates": []}
+
+
+def resolve(db: sqlite3.Connection, name: str, variants: list[str], budget: Budget,
+            min_importance: float = 0.0) -> dict:
+    """Try the name and its nominative variants; 'pending' when the budget ran out."""
+    outcome = {"status": "missing", "chosen": None, "candidates": []}
+    for query in dict.fromkeys([*variants, name]):
+        cached = geocode(db, query, allow_network=False)
+        if cached is None:
+            if not budget.take():
+                return {"status": "pending", "chosen": None, "candidates": []}
+            cached = geocode(db, query)
+        outcome = pick(cached or [], min_importance)
+        if outcome["status"] != "missing":
+            return outcome
+    return outcome
+
+
+RANK = {"point": 0, "street": 1, "locality": 2, "district": 3, "region": 4, "country": 5}
+
+
+def most_precise(places: list[dict]) -> list[dict]:
+    """Drop a region or country when a more precise resolved place lies inside it."""
+    kept = []
+    for place in places:
+        west, south, east, north = place["bbox"]
+        inner = [other for other in places if other is not place
+                 and RANK[other["precision"]] < RANK[place["precision"]]
+                 and west <= other["lon"] <= east and south <= other["lat"] <= north]
+        if not inner:
+            kept.append(place)
+    return kept

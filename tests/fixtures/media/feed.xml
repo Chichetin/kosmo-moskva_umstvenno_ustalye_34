@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel><title>Test feed (invented texts)</title>
+<item><title>Floods hit Kerala and Tamil Nadu, thousands evacuated</title>
+<link>https://news.example.org/a1?utm_source=rss</link><guid>a1</guid>
+<pubDate>Sat, 26 Sep 2026 05:00:00 GMT</pubDate>
+<description><![CDATA[<p>Rivers <b>burst their banks</b> overnight.</p><script>alert(1)</script>]]></description></item>
+<item><title>Hotline flooded with calls after price hike</title>
+<link>https://news.example.org/a2</link><guid>a2</guid><pubDate>Sat, 26 Sep 2026 05:10:00 GMT</pubDate></item>
+<item><title>Flood forecast: heavy rain could bring flooding to Kerala next week</title>
+<link>https://news.example.org/a3</link><guid>a3</guid><pubDate>Sat, 26 Sep 2026 05:20:00 GMT</pubDate></item>
+<item><title>No flooding reported in Kerala, officials say</title>
+<link>https://news.example.org/a4</link><guid>a4</guid><pubDate>Sat, 26 Sep 2026 05:30:00 GMT</pubDate></item>
+<item><title>Remembering the 2013 floods in Alberta</title>
+<link>https://news.example.org/a5</link><guid>a5</guid><pubDate>Sat, 26 Sep 2026 05:40:00 GMT</pubDate></item>
+</channel></rss>

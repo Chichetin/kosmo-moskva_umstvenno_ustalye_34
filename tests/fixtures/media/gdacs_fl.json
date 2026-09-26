@@ -1,0 +1,12 @@
+{"type": "FeatureCollection", "bbox": [0, 0, 0, 0], "features": [
+ {"type": "Feature", "bbox": [80.12, 6.92, 80.12, 6.92],
+  "geometry": {"type": "Point", "coordinates": [80.12, 6.92]},
+  "properties": {"eventtype": "FL", "eventid": 9900001, "episodeid": 3, "name": "Flood in Testland",
+   "description": "Flood in Testland", "htmldescription": "Orange Flood in Testland from: 20 Sep 2026 01 to: 25 Sep 2026 01.",
+   "url": {"report": "https://www.gdacs.org/report.aspx?eventid=9900001&episodeid=3&eventtype=FL"},
+   "alertlevel": "Orange", "country": "Testland", "iso3": "TST", "fromdate": "2026-09-20T01:00:00",
+   "todate": "2026-09-25T01:00:00", "datemodified": "2026-09-25T06:00:00", "source": "GLOFAS",
+   "polygonlabel": "Centroid", "iscurrent": "true"}},
+ {"type": "Feature", "geometry": {"type": "Point", "coordinates": [10.0, 50.0]},
+  "properties": {"eventtype": "TC", "eventid": 9900002, "episodeid": 1, "name": "Cyclone"}}
+]}

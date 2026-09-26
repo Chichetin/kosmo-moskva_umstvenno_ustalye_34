@@ -1,0 +1,4 @@
+{"articles": [
+ {"url": "https://one.example.net/story", "url_mobile": "", "title": "Floods hit Kerala and Tamil Nadu, thousands evacuated", "seendate": "20260926T051500Z", "socialimage": "", "domain": "one.example.net", "language": "English", "sourcecountry": "India"},
+ {"url": "https://two.example.com/copy", "url_mobile": "", "title": "Floods hit Kerala and Tamil Nadu, thousands evacuated", "seendate": "20260926T052000Z", "socialimage": "", "domain": "two.example.com", "language": "English", "sourcecountry": "India"}
+]}

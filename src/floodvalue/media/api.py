@@ -27,7 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from starlette.datastructures import UploadFile
 
 from floodvalue.media import events as registry
-from floodvalue.media import geo, observations, reports
+from floodvalue.media import geo, ingest, observations, reports
 from floodvalue.media.net import FetchError
 from floodvalue.media.store import (
     attachments_dir,
@@ -38,6 +38,7 @@ from floodvalue.media.store import (
     parse_iso,
     record_history,
     secret_file,
+    set_setting,
     utc_now,
 )
 
@@ -725,17 +726,106 @@ def search_observations(event_id: int, name: str = Depends(require_operator)):
     return event_card(event_id, name)
 
 
+def _source_state(row: sqlite3.Row, moment: datetime) -> str:
+    if not row["enabled"]:
+        return "disabled"
+    if row["last_error_at"] and (not row["last_success_at"]
+                                 or row["last_error_at"] >= row["last_success_at"]):
+        return "error"
+    if not row["last_success_at"]:
+        return "never"
+    if moment - parse_iso(row["last_success_at"]) > timedelta(seconds=3 * row["poll_interval_s"]):
+        return "delayed"
+    return "ok"
+
+
+def _sources(db: sqlite3.Connection) -> list[dict]:
+    moment = utc_now()
+    return [{"source_id": row["source_id"], "name": row["name"], "kind": row["kind"],
+             "enabled": bool(row["enabled"]), "terms_status": row["terms_status"],
+             "terms_note": row["terms_note"], "attribution": row["attribution"],
+             "state": _source_state(row, moment), "last_attempt_at": row["last_attempt_at"],
+             "last_success_at": row["last_success_at"],
+             "last_new_item_at": row["last_new_item_at"], "last_error_at": row["last_error_at"],
+             "last_error": row["last_error"], "poll_interval_s": row["poll_interval_s"]}
+            for row in db.execute("SELECT * FROM source ORDER BY kind, source_id")]
+
+
 @router.get("/api/ops/summary")
 def summary(_: str = Depends(require_operator)):
     with connect() as db:
+        ingest.sync_sources(db, ingest.load_config())
         pending = db.execute("SELECT COUNT(*) FROM citizen_report "
                              "WHERE moderation_status = 'pending'").fetchone()[0]
         needs_geo = db.execute("SELECT COUNT(*) FROM event "
                                "WHERE review_state = 'needs_geo'").fetchone()[0]
         heartbeat = get_setting(db, "worker_heartbeat_at")
+        monitoring = ingest.monitoring_settings(db)
+        sources = _sources(db)
     alive = bool(heartbeat) and utc_now() - parse_iso(heartbeat) < timedelta(seconds=90)
     return {"pending_reports": pending, "needs_geo": needs_geo,
-            "worker": {"alive": alive, "heartbeat_at": heartbeat}}
+            "worker": {"alive": alive, "heartbeat_at": heartbeat},
+            "monitoring": monitoring, "sources": sources}
+
+
+class SourceIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool
+
+
+@router.patch("/api/ops/sources/{source_id}")
+def toggle_source(source_id: str, body: SourceIn, _: str = Depends(require_operator)):
+    with connect() as db:
+        row = db.execute("SELECT terms_status FROM source WHERE source_id = ?",
+                         (source_id,)).fetchone()
+        if row is None:
+            raise HTTPException(404, "Источник не найден")
+        if body.enabled and row["terms_status"] != "checked":
+            raise HTTPException(409, "Условия использования источника не проверены")
+        db.execute("UPDATE source SET enabled = ? WHERE source_id = ?",
+                   (int(body.enabled), source_id))
+        return _sources(db)
+
+
+class MonitoringIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool | None = None
+    interval_s: int | None = Field(default=None, ge=300, le=86400)
+
+
+@router.post("/api/ops/monitoring")
+def set_monitoring(body: MonitoringIn, _: str = Depends(require_operator)):
+    with connect() as db:
+        if body.enabled is not None:
+            set_setting(db, "monitoring_enabled", "1" if body.enabled else "0")
+        if body.interval_s is not None:
+            set_setting(db, "interval_s", str(body.interval_s))
+        return ingest.monitoring_settings(db)
+
+
+@router.post("/api/ops/monitoring/run")
+def request_run(_: str = Depends(require_operator)):
+    """Ask the worker for a cycle now; the API itself never fetches sources."""
+    with connect() as db:
+        set_setting(db, "run_requested_at", now())
+        heartbeat = get_setting(db, "worker_heartbeat_at")
+    alive = bool(heartbeat) and utc_now() - parse_iso(heartbeat) < timedelta(seconds=90)
+    return {"requested": True, "worker_alive": alive,
+            "note": None if alive else "Worker не запущен: python -m floodvalue.media worker"}
+
+
+@router.get("/api/ops/runs")
+def runs(limit: Annotated[int, Query(ge=1, le=100)] = 10, _: str = Depends(require_operator)):
+    with connect() as db:
+        result = []
+        for row in db.execute("SELECT * FROM ingestion_run ORDER BY run_id DESC LIMIT ?",
+                              (limit,)).fetchall():
+            item = dict(row)
+            item["sources"] = [dict(source) for source in db.execute(
+                "SELECT source_id, status, http_status, items_seen, items_new, items_relevant, "
+                "requests_used, error FROM source_run WHERE run_id = ?", (row["run_id"],))]
+            result.append(item)
+        return result
 
 
 def purge_expired(db: sqlite3.Connection) -> int:

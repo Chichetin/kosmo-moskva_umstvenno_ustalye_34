@@ -143,9 +143,9 @@ def link(db: sqlite3.Connection, event_id: int, *, origin: str, linked_by: str,
 
 
 def independent_origin_count(db: sqlite3.Connection, event_id: int) -> int:
-    """Originals only: reprints and repeated bulletins of one source count once."""
+    """Originals only: reprints, one outlet's follow-ups and repeated bulletins count once."""
     rows = db.execute(
-        "SELECT e.origin, e.report_id, p.source_id, p.title FROM evidence e "
+        "SELECT e.origin, e.report_id, p.source_id, p.domain FROM evidence e "
         "LEFT JOIN publication p ON p.publication_id = e.publication_id "
         "WHERE e.event_id = ? AND e.is_original = 1", (event_id,)).fetchall()
     keys = set()
@@ -154,8 +154,8 @@ def independent_origin_count(db: sqlite3.Connection, event_id: int) -> int:
             keys.add(("citizen", row["report_id"]))
         elif row["origin"] == "bulletin":
             keys.add(("bulletin", row["source_id"]))
-        else:
-            keys.add(("media", normalized_title(row["title"])))
+        else:  # one outlet publishing twice is still one origin
+            keys.add(("media", row["domain"] or row["source_id"]))
     return len(keys)
 
 
