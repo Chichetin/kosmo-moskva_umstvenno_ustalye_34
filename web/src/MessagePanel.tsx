@@ -217,6 +217,11 @@ export default function MessagePanel({
   );
 }
 
+// «1 независимый», «2 / 5 / 11 независимых»
+function independent(n: number) {
+  return `${n} ${n % 10 === 1 && n % 100 !== 11 ? "независимый" : "независимых"}`;
+}
+
 function originText(kinds: unknown) {
   return String(kinds ?? "").split(",").filter(Boolean).map((k) => ORIGIN[k] ?? k).join(", ") || "источник неизвестен";
 }
@@ -243,7 +248,7 @@ function EventBody({ card, onPhoto }: { card: EventCard; onPhoto: (id: string) =
           <Row name="Где">{e.place_label ?? "место не определено"} · точность: {label(PRECISION, e.geo_precision)}</Row>
           <Row name="Когда">{period}</Row>
           <Row name="Проверка">{label(REVIEW_STATE, e.review_state)} · {label(VERIFICATION, e.verification_result)}</Row>
-          <Row name="Источников">{e.independent_origin_count} независимых</Row>
+          <Row name="Источники">{independent(e.independent_origin_count)}</Row>
         </dl>
         {!!card.missing?.length && (
           <ul className="mp-missing">
@@ -254,7 +259,7 @@ function EventBody({ card, onPhoto }: { card: EventCard; onPhoto: (id: string) =
 
       <section className="mp-section">
         <h2>Источники · {card.evidence.length}</h2>
-        {card.evidence.map((ev) => <Source key={ev.evidence_id} ev={ev} onPhoto={onPhoto} />)}
+        {card.evidence.map((ev) => <Source key={ev.evidence_id} ev={ev} place={e.place_label} onPhoto={onPhoto} />)}
       </section>
 
       <section className="mp-section">
@@ -277,13 +282,15 @@ function EventBody({ card, onPhoto }: { card: EventCard; onPhoto: (id: string) =
   );
 }
 
-function Source({ ev, onPhoto }: { ev: Evidence; onPhoto: (id: string) => void }) {
+function Source({ ev, place, onPhoto }: { ev: Evidence; place?: string | null; onPhoto: (id: string) => void }) {
   const facts = ev.facts ?? {};
   const quotes = Array.isArray(facts.quotes) ? facts.quotes.map(String) : [];
   const reasons = Array.isArray(facts.reasons) ? facts.reasons.map(String) : [];
   const other = Object.entries(facts).filter(([k, v]) => !SHOWN_FACTS.has(k) && v !== null && typeof v !== "object");
   const hint = ev.time_hint ?? {};
   const timeText = typeof hint.text === "string" ? hint.text : typeof hint.time_basis === "string" ? hint.time_basis : null;
+  // A structured feed (GDACS) gives place and period as fields, not as words in a text.
+  const structured = ev.extraction_method === "source_structured";
   return (
     <article className="mp-source">
       <small className="mp-kicker">
@@ -310,8 +317,11 @@ function Source({ ev, onPhoto }: { ev: Evidence; onPhoto: (id: string) => void }
         <b>Как система поняла</b>
         <dl className="mp-facts">
           <Row name="Тип">{label(REPORT_TYPE, ev.report_type)}</Row>
-          <Row name="Место">{typeof facts.place_mention === "string" ? facts.place_mention : "не названо"}</Row>
-          <Row name="Время">{timeText ?? "в тексте не указано"}</Row>
+          <Row name="Место">
+            {typeof facts.place_mention === "string" ? facts.place_mention
+              : structured ? `из полей источника${place ? ` — ${place}` : ""}` : "не названо"}
+          </Row>
+          <Row name="Время">{timeText ?? (structured ? "из полей источника — период выше" : "в тексте не указано")}</Row>
           <Row name="Как">
             {label(EXTRACTION, ev.extraction_method, ev.origin === "citizen" ? "форма очевидца" : "—")}
             {reasons.length ? ` · ${reasons.join("; ")}` : ""}

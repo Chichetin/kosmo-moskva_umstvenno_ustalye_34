@@ -378,6 +378,15 @@ export default function MapPanel(props: Props) {
         map.setPaintProperty("background", "background-color", "#1c2124");
       if (map.getLayer("water"))
         map.setPaintProperty("water", "fill-color", "#0a0f12");
+      // The dark style paints ice near-black; on the map ice reads as ice: glaciers and ice shelves white.
+      for (const [id, color] of [
+        ["landcover_glacier", "#eef3f5"],
+        ["landcover_ice_shelf", "#e2eaee"],
+      ] as const) {
+        if (!map.getLayer(id)) continue;
+        map.setPaintProperty(id, "fill-color", color);
+        map.setPaintProperty(id, "fill-opacity", 0.95);
+      }
       for (const id of [
         "place_country_major",
         "place_country_minor",
