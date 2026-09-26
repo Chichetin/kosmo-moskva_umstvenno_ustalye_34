@@ -1,9 +1,10 @@
-# Line endings (D-046, #133): LF in the index and in every checkout, including Windows clones
-# with core.autocrlf=true — sha256 of models/unet/*.json in run_metadata.json and *.sh must not change.
+# Line endings (D-047, #133): LF in the index and in every checkout, including Windows clones
+# with core.autocrlf=true — sha256 of models/unet/*.json in run_metadata.json must match and
+# *.sh / .githooks must not get CRLF. Not redundant with the LFS rules below — do not remove.
 * text=auto eol=lf
 
-# CSV are written by the csv module with CRLF rows (RFC 4180) and are stored so in the index;
-# hashes of splits/fixtures depend on these bytes — never convert.
+# CSV are written by the csv module with CRLF rows (RFC 4180) and are stored as-is in the index
+# (30 CRLF, 13 LF); tests/fixtures/good is compared byte-for-byte with its builder — never convert.
 *.csv -text
 
 # Binary formats of the project
