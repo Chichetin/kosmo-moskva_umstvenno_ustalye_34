@@ -21,7 +21,7 @@ import copy
 import json
 from collections.abc import Iterable, Mapping
 from datetime import date, datetime, timedelta
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 from typing import Any
 
 from floodvalue.procurement import zones
@@ -319,7 +319,7 @@ def compute_plan(catalog: Mapping[str, Any], cov: Mapping[str, list[str]], eligi
     ``rule_c`` — правило C (D-049 ``"risk"``; ``"by_EL"`` — прежнее, для сравнения)."""
     items = catalog_items(catalog)
     el = assessed(loss)
-    budget = Decimal(str(budget)).quantize(Decimal("0.01"))
+    budget = Decimal(str(budget)).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
     cov_ok = {c: a for c, a in cov.items() if c in eligible}
     plans = {"A": [], "B": select_b(catalog, eligible)}
     plans["C"], c_reasons, info = select_c(items, cov_ok, el, budget, cfg, as_of, required,
@@ -380,7 +380,7 @@ def sensitivity(catalog: Mapping[str, Any], cov: Mapping[str, list[str]], eligib
     Интерпретация строки — изменение корзины относительно базы (текущие бюджет, ставка, срок),
     стоимость данных и решения, уникально покрытый EL, статус остаточной неопределённости."""
     kw = {"other_cfg": other_cfg, "required": list(required)}
-    budget = Decimal(str(budget)).quantize(Decimal("0.01"))
+    budget = Decimal(str(budget)).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
     base = compute_plan(catalog, cov, eligible, loss, budget, cfg, as_of, **kw)
     rows = []
 
