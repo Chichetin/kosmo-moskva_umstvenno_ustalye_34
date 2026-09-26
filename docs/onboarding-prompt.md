@@ -42,7 +42,7 @@ docs/contracts.md и docs/project-structure.md. Условия лежат в tas
 - 27.09 00:00 — всё в GitVerse и прогон из чистого клона;
 - 27.09 01:00 — стоп-код, после него push нет.
 
-Интерфейс — Streamlit + общее Python-ядро (D-034, #83), не React. GitVerse — канал сдачи.
+Интерфейс — FastAPI + собранный React/MapLibre (D-050); Streamlit не используется (D-051). GitVerse — канал сдачи.
 
 Работай по скиллу /orchestrate:
 1. `git fetch --prune && git pull --ff-only`, затем `gh issue list`. Выбери 1–3

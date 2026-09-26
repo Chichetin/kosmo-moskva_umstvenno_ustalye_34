@@ -13,6 +13,7 @@ from rasterio.transform import from_origin
 from rasterio.warp import transform
 
 from floodvalue.app import run
+from floodvalue.contracts.files import REQUIRED_FILES
 from floodvalue.paths import REPO_ROOT
 
 
@@ -36,7 +37,7 @@ def test_session_layers_and_export(monkeypatch):
     assert run.raster_layer("probability").body.startswith(b"\x89PNG\r\n\x1a\n")
     assert run.raster_layer("mask").body.startswith(b"\x89PNG\r\n\x1a\n")
     with zipfile.ZipFile(io.BytesIO(run.download().body)) as archive:
-        assert {"run_metadata.json", "flood_probability.tif", "asset_loss.csv"} <= set(archive.namelist())
+        assert set(REQUIRED_FILES) <= set(archive.namelist())  # all 12 required files
 
 
 def test_budget_changes_plan_without_writing_rasters(tmp_path, monkeypatch):
@@ -207,3 +208,38 @@ def test_test_chips_stay_sealed_in_the_raw_catalog(tmp_path, monkeypatch):
     monkeypatch.setenv("FLOODVALUE_APP_ALLOW_TEST", "1")
     assert sorted(item["chip_id"] for item in run.scenes()) == ["Nigeria_1", "Spain_1"]
     assert run.observation_s1("Spain_1").body.startswith(b"\x89PNG")
+
+
+def test_plan_without_s1_manifest_explains_instead_of_500(tmp_path, monkeypatch):
+    """plan() raises FileNotFoundError without interim/source_manifest_s1.json (contracts §10)."""
+    monkeypatch.setenv("FLOODVALUE_APP_RUN_DIR", str(REPO_ROOT / "tests" / "fixtures" / "good"))
+    monkeypatch.setenv("FLOODVALUE_DATA_DIR", str(tmp_path / "no-data"))
+    with pytest.raises(run.HTTPException) as failed:
+        run.recalculated_plan(5000)
+    assert failed.value.status_code == 422
+    assert "make data" in failed.value.detail
+
+
+def test_incomplete_run_names_missing_required_files(tmp_path, monkeypatch):
+    target = tmp_path / "Synthetic_000001_5000_abc1234"
+    shutil.copytree(REPO_ROOT / "tests" / "fixtures" / "good", target)
+    (target / "flood_mask.tif").unlink()
+    (target / "assets.csv").unlink()
+    monkeypatch.setenv("FLOODVALUE_APP_RUN_DIR", str(target))
+    with pytest.raises(run.HTTPException) as explicit:
+        run.session()
+    assert "flood_mask.tif" in explicit.value.detail and "assets.csv" in explicit.value.detail
+    monkeypatch.delenv("FLOODVALUE_APP_RUN_DIR")
+    monkeypatch.setattr(run, "output_dir", lambda: tmp_path)
+    with pytest.raises(run.HTTPException) as scanned:
+        run.session()
+    assert scanned.value.status_code == 503
+    assert "make all" in scanned.value.detail
+    assert target.name in scanned.value.detail and "flood_mask.tif" in scanned.value.detail
+
+
+def test_make_app_refuses_incomplete_out(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr("uvicorn.run", lambda *a, **k: pytest.fail("server must not start"))
+    args = type("Args", (), {"out": str(tmp_path)})()
+    assert run.run(args) == 1
+    assert "run_metadata.json" in capsys.readouterr().out
