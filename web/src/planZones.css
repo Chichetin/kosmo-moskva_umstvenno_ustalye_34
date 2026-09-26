@@ -1,0 +1,280 @@
+/* «Зоны плана C на снимке» (PlanZones.tsx): the scene with the chosen zones and a crop per zone. */
+.plan-zones {
+  margin-bottom: 22px;
+  padding: 0 0 18px;
+}
+
+.plan-zones-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 20px;
+  padding: 21px 22px 16px;
+}
+
+.plan-zones-head h2 {
+  margin: 0;
+  color: #eef1f2;
+  font-size: 17px;
+  font-weight: 610;
+}
+
+.plan-zones-head p {
+  margin: 6px 0 0;
+  color: #a4b0b5;
+  font-size: 13px;
+}
+
+.plan-zones-head .zone-tabs {
+  margin: 0;
+}
+
+.plan-zones-body {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  align-items: start;
+  gap: 18px;
+  padding: 0 22px;
+}
+
+.plan-zones-scene {
+  position: sticky;
+  top: 18px;
+  margin: 0;
+}
+
+.plan-zones svg {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  background: #0b0e10;
+}
+
+.plan-zones svg image {
+  image-rendering: pixelated;
+}
+
+.pz-ground {
+  fill: #0b0e10;
+}
+
+.pz-zone path {
+  fill: #4d9fff1f;
+  stroke: #4d9fff;
+  stroke-width: 2;
+}
+
+.pz-zone.active path {
+  fill: #4d9fff38;
+  stroke: #cfe4ff;
+  stroke-width: 2.5;
+}
+
+.pz-zone text,
+.pz-asset text {
+  font-family: inherit;
+  font-weight: 650;
+  paint-order: stroke;
+  stroke: #0b0e10;
+  stroke-width: 0.35em;
+  stroke-linejoin: round;
+}
+
+.pz-zone text {
+  fill: #cfe4ff;
+}
+
+.pz-asset circle {
+  fill: #7d888d;
+  stroke: #0b0e10;
+  stroke-width: 1.5;
+}
+
+.pz-asset text {
+  fill: #b9c3c7;
+}
+
+.pz-asset.covered circle {
+  fill: #f3f6f7;
+}
+
+.pz-asset.covered text {
+  fill: #f3f6f7;
+}
+
+.plan-zones-scene figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 10px;
+  color: #a4b0b5;
+  font-size: 12px;
+}
+
+.plan-zones-scene figcaption span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pz-key {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+}
+
+.pz-key.zone {
+  border: 2px solid #4d9fff;
+  background: #4d9fff1f;
+}
+
+.pz-key.covered,
+.pz-key.asset {
+  border-radius: 50%;
+  background: #f3f6f7;
+}
+
+.pz-key.asset {
+  background: #7d888d;
+}
+
+.plan-zones-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr));
+  gap: 14px;
+}
+
+.plan-zone {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 10px;
+  background: #101315;
+  outline: 1px solid transparent;
+  transition: outline-color 160ms ease;
+}
+
+.plan-zone.active {
+  outline-color: #4d9fff;
+}
+
+.plan-zone-picture {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.plan-zone-picture b {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  min-width: 22px;
+  padding: 2px 6px;
+  background: #4d9fff;
+  color: #06121f;
+  font-size: 12px;
+  text-align: center;
+}
+
+.plan-zone-meta {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.plan-zone-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: #eef1f2;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-zone-meta small {
+  color: #a4b0b5;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.plan-zone-meta ul {
+  display: grid;
+  gap: 4px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan-zone-meta li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  color: #d5dde0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-zone-meta li span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-zone-meta li em {
+  color: #8c989d;
+  font-style: normal;
+}
+
+.plan-zone-meta .plan-zone-sum {
+  color: #d5dde0;
+}
+
+.plan-zone-meta details {
+  color: #a4b0b5;
+  font-size: 12px;
+}
+
+.plan-zone-meta details summary {
+  cursor: pointer;
+}
+
+.plan-zone-meta details p {
+  margin: 6px 0 0;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.plan-zones-note {
+  margin: 16px 22px 0;
+  color: #8c989d;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@media (max-width: 1100px) {
+  .plan-zones-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .plan-zones-scene {
+    position: static;
+    max-width: 560px;
+  }
+}
+
+@media (max-width: 700px) {
+  .plan-zones-head,
+  .plan-zones-body {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  .plan-zones-note {
+    margin-left: 14px;
+    margin-right: 14px;
+  }
+}
