@@ -272,10 +272,12 @@ U-Net значимо лучше порога VH того же фолда в 4 ф
   (`docs/limitations.md` §7).
 - **Прокси-ошибка ≠ фактические потери.** Прокси-проверка сверяет EL с EL_ref =
   y·V·q по ручной метке воды, не с обследованными потерями инфраструктуры; на
-  validation MAE 274 286 руб. на демо-чипе, 284 926 руб. на всех 60 чипах
+  validation MAE 274 285,66 руб. на демо-чипе, 284 926 руб. на всех 60 чипах
   (`docs/verification/eval-validation.md` §5). В сдаваемом `run_metadata.json`
-  поле `proxy_check.status` пока `planned` — числа посчитаны, но не подключены к
-  экспорту (`docs/limitations.md` §5).
+  поле `proxy_check.status` на validation остаётся `planned` (независимой считается
+  только test, D-012/D-016), но с #107 (`export/assemble.py::proxy_check`) оно уже
+  **несёт реальные числа** демо-чипа (`result.estimated=True`), а не пустой
+  плейсхолдер — `docs/tz-compliance.md` строка 12, `tests/export/test_proxy_check.py`.
 - **Учебные V/q.** Портфель — 10 случайных точек с фиксированным seed и фиксированной
   таблицей стоимости/уязвимости по типу, не оценка реального имущества
   (`docs/limitations.md` §4).
@@ -442,10 +444,13 @@ commit `8a7ee46`, коротко и честно.
     закрыт вариантами U-Net на dev и абляцией пиксельного метода
     (`docs/tz-compliance.md` строка 17).
 15. **Прокси-ошибка посчитана, но не в `run_metadata.json` — почему?**
-    Числа есть (`eval-validation-proxy.csv`, 536 из 600 точек на validation, MAE
-    284 926 руб.), но подключение к `export`/`run_metadata.proxy_check` — отдельная
-    работа, ещё не сделанная: поле несёт `status=planned` с причиной, не скрыто
-    (`docs/limitations.md` §5).
+    Это уже исправлено (обновление после отклика жюри — на момент формулировки
+    вопроса подключение не было сделано). С #107 (`export/assemble.py::proxy_check`,
+    `tests/export/test_proxy_check.py`) поле берёт числа из сводки `eval-<часть>`
+    того же чипа: на демо-чипе `Sri-Lanka_713926` (часть validation) `status` всё
+    равно остаётся `planned`, потому что независимой считается только test
+    (D-012/D-016), но `result.estimated=True` и MAE 274 285,66 руб. уже в файле, не
+    в отдельном отчёте (`docs/tz-compliance.md` строка 12).
 
 ## Воспроизведение чисел этого документа
 
