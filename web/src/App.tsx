@@ -74,10 +74,11 @@ const TERRITORY_RU: Record<string, string> = {
   USA: "США Соединённые Штаты",
 };
 const countryMatches = (territory: string, query: string) => {
-  const needle = query.trim().toLocaleLowerCase("ru");
+  const needle = query.trim().toLocaleLowerCase("ru").replaceAll("ё", "е");
   if (!needle) return true;
   return `${territory} ${territory.replaceAll("-", " ")} ${TERRITORY_RU[territory] ?? ""}`
     .toLocaleLowerCase("ru")
+    .replaceAll("ё", "е")
     .includes(needle);
 };
 const assetName = (feature: Feature) =>
@@ -406,6 +407,7 @@ export default function App() {
   }, [scene?.territory]);
   const selectScene = useCallback((selected: SceneSummary) => {
     setPanelOpen(true);
+    setPanelCollapsed(false);
     setSearchOpen(false);
     setAssetId(null);
     setZoneId(null);
@@ -460,7 +462,7 @@ export default function App() {
     } else remainingScenes.push(item);
   }
   const filtered = (query ? matchingScenes : [...firstByTerritory, ...remainingScenes])
-    .slice(0, query ? 30 : 10);
+    .slice(0, query ? undefined : 10);
   const analysisLocations = scenes.filter((item) => countryMatches(item.territory, analysisQuery));
   const locationGroups = [...new Set(analysisLocations.map((item) => item.territory))]
     .sort((left, right) => left.localeCompare(right, "ru"))
@@ -620,11 +622,13 @@ export default function App() {
               setAssetId(id);
               setZoneId(null);
               setPanelOpen(true);
+              setPanelCollapsed(false);
             }}
             onSelectZone={(id) => {
               setZoneId(id);
               setAssetId(null);
               setPanelOpen(true);
+              setPanelCollapsed(false);
             }}
             onIssue={setMapIssue}
             onSelectMessage={setMessage}
@@ -668,7 +672,7 @@ export default function App() {
                 <span>{query ? "Результаты поиска" : "Все сцены"}</span>
                 <span className="search-count">
                   {query
-                    ? `${filtered.length}${filtered.length === 30 ? "+" : ""}`
+                    ? `${filtered.length}`
                     : scenes.length}
                 </span>
                 <ChevronDown size={16} />
@@ -1169,6 +1173,7 @@ export default function App() {
                     </div>
                     <details className="analysis-explain">
                       <summary>Что означает неопределённость карты?</summary>
+                      {String(activeSession.metadata.uncertainty?.method ?? "").startsWith("entropy_p") ? (<>
                       <p>
                         Насколько модель сомневается, есть ли вода в точке объекта. Считается по
                         вероятности воды p (энтропия, в битах от 0 до 1): 0 — модель уверена
@@ -1176,7 +1181,7 @@ export default function App() {
                       </p>
                       <p>
                         Высокая неопределённость — повод подтвердить объект осмотром или
-                        дополнительным снимком; такие объекты — кандидаты в план съёмки C.
+                        дополнительным снимком; снимок там может изменить решение «ехать / не ехать», поэтому такие объекты чаще попадают в план съёмки C (он выбирает по цене ошибки решения).
                       </p>
                       <p>
                         Диапазон вероятности по пяти моделям ансамбля (от минимума до максимума) показывает, как
@@ -1184,6 +1189,10 @@ export default function App() {
                         точке неустойчива.
                       </p>
                       <p>Это свойство карты воды в точке объекта: оно не подтверждает затопление и не показывает ущерб.</p>
+                      </>) : (<>
+                        <p>{activeSession.metadata.uncertainty?.meaning ?? "Методика неопределённости не указана в комплекте."}</p>
+                        {activeSession.metadata.uncertainty?.units && <p>Единицы: {activeSession.metadata.uncertainty.units}.</p>}
+                      </>)}
                     </details>
                     <div className="table-scroll">
                       <table>

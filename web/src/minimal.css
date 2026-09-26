@@ -1746,6 +1746,7 @@ tbody tr.selected,
   .sensitivity-panel .sensitivity-all { padding: 16px 14px; }
 }
 
+@media (min-width: 701px) {
 /* Scene list stays inside the window (#UI-fixes 26.09): the left column runs from its top to
    24px above the bottom and the panel shrinks to it, so the list scrolls instead of running
    under the browser edge. Computed in the column's own (zoomed) coordinates, so the nested
@@ -1787,5 +1788,6 @@ tbody tr.selected,
 .back-to-globe:hover { background: #ffffff1a; }
 details.context-foot { padding: 0 22px 18px; }
 details.context-foot summary { cursor: pointer; margin-bottom: 6px; }
-.analysis-head > button { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
 .context-panel.collapsed { bottom: auto; height: auto; overflow: hidden; }
+}
+.analysis-head > button { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
