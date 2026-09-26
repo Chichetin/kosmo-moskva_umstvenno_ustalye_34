@@ -647,7 +647,8 @@ def test_off_grid_extra_raster_is_dropped_from_the_set_with_a_warning(env):
     assert not (dest / "uncertainty.tif").exists()
     assert (work / "uncertainty.tif").exists()  # the work dir of the stages is not touched
     meta = _meta(dest)
-    assert [w for w in meta["warnings"] if "uncertainty.tif" in w and "сетк" in w]
+    assert [w for w in meta["warnings"] if "uncertainty.tif" in w and "сетк" in w
+            and "make predict" in w]
     assert meta["uncertainty"]["raster"] is None
     assert _failing(validate_run(dest)) == set()
 

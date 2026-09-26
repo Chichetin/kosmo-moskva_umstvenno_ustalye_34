@@ -145,7 +145,7 @@ def _same_grid(path: Path, ref: Path) -> bool:
             return (a.crs == b.crs and (a.width, a.height) == (b.width, b.height)
                     and np.allclose(tuple(a.transform)[:6], tuple(b.transform)[:6],
                                     rtol=0.0, atol=GRID_ATOL))
-    except rasterio.errors.RasterioIOError:
+    except rasterio.errors.RasterioError:
         return False
 
 
@@ -178,7 +178,11 @@ def _rejected_extras(chip_id: str, work: Path, warnings: list[str]) -> set[str]:
         if not _same_grid(work / name, work / F.FLOOD_PROBABILITY):
             rejected.add(name)
             warnings.append(f"{name}: сетка не совпадает с {F.FLOOD_PROBABILITY} (устаревший "
-                            f"растр другого чипа или запуска) — в комплект не взят")
+                            f"растр другого чипа или запуска) — в комплект не взят" + (
+                            "; ссылка prediction.json (uncertainty) на него недействительна, "
+                            "p_low/p_high/uncertainty в asset_loss.csv не перепроверить — "
+                            f"перезапустить make predict/assets CHIP={chip_id}"
+                            if name in ("uncertainty.tif", "flood_probability_range.tif") else ""))
     return rejected
 
 
