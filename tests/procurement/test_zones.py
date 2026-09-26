@@ -238,3 +238,19 @@ def test_el_share_boundary_inclusive():
             {"asset_id": "A02", "status": "ok", "expected_loss_rub": "1"}]
     high, _ = zones.el_clusters(ASSETS, loss, share=0.9)
     assert high == ["A01"]
+
+
+def test_coverage_at_later_deadline_uses_geometry_of_excluded_positions():
+    """Каталог построен при коротком сроке (T0 + 6 ч): W-CHIP (S1N, +9 ч) исключена и её
+    covers_asset_ids пуст (D-048). При сроке T0 + 12 ч она пригодна и должна давать охват по
+    контуру (inside_geometry_asset_ids) — иначе чувствительность к сроку занижает охват."""
+    from datetime import timedelta
+
+    from floodvalue.procurement import strategies
+    cat = catalog(loss=LOSS, decision_deadline=T0 + timedelta(hours=6))
+    w = by_id(cat)["W-CHIP"]["properties"]
+    assert w["exclusion_reason"] is not None and w["covers_asset_ids"] == []
+    ok = {a["asset_id"] for a in ASSETS}
+    cov, elig = strategies.coverage_at(cat, ok, T0 + timedelta(hours=12))
+    assert "W-CHIP" in elig
+    assert cov["W-CHIP"] == sorted(ok)
