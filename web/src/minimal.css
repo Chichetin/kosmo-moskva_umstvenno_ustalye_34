@@ -860,3 +860,23 @@ tbody tr.selected,
     transition: none;
   }
 }
+
+.hint-note {
+  color: #a1a1a8;
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 8px 0 0;
+}
+.export-note {
+  color: #a1a1a8;
+  font-size: 11px;
+  margin-left: 6px;
+}
+.zone-excluded {
+  color: #d6a86b;
+}
+@media (max-width: 720px) {
+  .export-note {
+    display: none;
+  }
+}

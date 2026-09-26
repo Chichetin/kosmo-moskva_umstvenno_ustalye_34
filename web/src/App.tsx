@@ -17,6 +17,16 @@ const money = (value: unknown) =>
     : new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(
         Number(value),
       );
+const dateTimeUtc = (value: string | null | undefined) =>
+  value
+    ? `${new Intl.DateTimeFormat("ru-RU", {
+        day: "numeric",
+        month: "long",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "UTC",
+      }).format(new Date(value))} UTC`
+    : "—";
 const pct = (value: number | null | undefined) =>
   value == null ? "—" : `${Math.round(value * 100)}%`;
 const date = (value: string | null | undefined) =>
@@ -101,6 +111,7 @@ type LayerFlags = {
   s1: boolean;
   probability: boolean;
   mask: boolean;
+  uncertainty: boolean;
   assets: boolean;
   zones: boolean;
 };
@@ -108,6 +119,7 @@ const defaults: LayerFlags = {
   s1: true,
   probability: false,
   mask: false,
+  uncertainty: false,
   assets: true,
   zones: true,
 };
@@ -315,9 +327,18 @@ export default function App() {
         </nav>
         <span className="top-spacer" />
         {exportUrl && (
-          <a className="top-export" href={exportUrl}>
+          <a
+            className="top-export"
+            href={exportUrl}
+            title="Комплект файлов из make all; для другого бюджета — make all CHIP=… BUDGET=…"
+          >
             <ArrowDownToLine size={16} />
             <span>Выгрузить комплект</span>
+            {activeSession && (
+              <small className="export-note">
+                при бюджете {money(activeSession.metadata.budget.budget_rub)} ₽
+              </small>
+            )}
           </a>
         )}
       </header>
@@ -446,6 +467,7 @@ export default function App() {
               <button
                 className={baseMap === "optical" ? "active" : ""}
                 onClick={() => setBaseMap("optical")}
+                title="Мозаика EOX 2019 — снята после события; только ориентир, в p, ущерб и план не входит"
               >
                 Спутник
               </button>
@@ -533,7 +555,24 @@ export default function App() {
                         </small>
                       </span>
                     </label>
-                    {(layers.probability || layers.mask) && (
+                    <label className="layer-row">
+                      <input
+                        type="checkbox"
+                        checked={layers.uncertainty}
+                        disabled={!activeSession.layers.uncertainty}
+                        onChange={() => toggle("uncertainty")}
+                      />
+                      <span>
+                        Неопределённость
+                        <small>Энтропия p · 0–1 бит</small>
+                      </span>
+                    </label>
+                    <p className="hint-note">
+                      Подложка «Карта / Спутник» (OpenStreetMap, EOX 2019) снята
+                      после события — только для ориентира, в p, ущерб и план не
+                      входит.
+                    </p>
+                    {(layers.probability || layers.mask || layers.uncertainty) && (
                       <label className="opacity-control">
                         Прозрачность наложения{" "}
                         <b>{Math.round(opacity * 100)}%</b>
@@ -624,6 +663,12 @@ export default function App() {
                       <span>Цена ошибки решения в зонах · сценарий</span>
                       <strong>{pct(chosen?.decision_risk_share)}</strong>
                     </div>
+                    <p className="hint-note">
+                      Цены по сценарной ставке Б ={" "}
+                      {activeSession.metadata.pricing?.base_rate_rub_km2 ?? "—"}{" "}
+                      ₽/км² (scenario), не тариф. Срок решения —{" "}
+                      {dateTimeUtc(activeSession.metadata.budget.decision_deadline)}.
+                    </p>
                     {planError && <p className="inline-error">{planError}</p>}
                     <button
                       className="analysis-link"
@@ -880,7 +925,13 @@ export default function App() {
                         1−p) — сценарий: доля там, где снимок может изменить
                         решение «ехать / не ехать» (D-049); снижение потерь не
                         заявляется. C не снимает объекты, где по карте почти
-                        наверняка вода: они сразу идут на осмотр.
+                        наверняка вода: они сразу идут на осмотр. Цены — по
+                        сценарной ставке Б ={" "}
+                        {activeSession.metadata.pricing?.base_rate_rub_km2 ?? "—"}{" "}
+                        ₽/км² (scenario), не тариф. «Выгрузить комплект» отдаёт
+                        файлы make all при бюджете{" "}
+                        {money(activeSession.metadata.budget.budget_rub)} ₽; для
+                        другого бюджета — make all CHIP=… BUDGET=….
                       </div>
                     </section>
                     <section className="analysis-card">
@@ -936,6 +987,12 @@ export default function App() {
                                     String(item.properties.available_at ?? ""),
                                   )}
                                 </small>
+                                {item.properties.exclusion_reason ? (
+                                  <small className="zone-excluded">
+                                    исключена:{" "}
+                                    {String(item.properties.exclusion_reason)}
+                                  </small>
+                                ) : null}
                               </span>
                               <strong>
                                 {money(item.properties.solo_cost_rub)} ₽

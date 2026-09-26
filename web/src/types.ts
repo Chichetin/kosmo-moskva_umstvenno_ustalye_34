@@ -22,7 +22,7 @@ export type Session = {
       decision_at: string;
       decision_deadline: string;
     };
-    pricing?: { base_rate_status?: string };
+    pricing?: { base_rate_status?: string; base_rate_rub_km2?: number };
     uncertainty?: { meaning?: string };
     [key: string]: unknown;
   };
@@ -36,7 +36,7 @@ export type Session = {
     crs: string | null;
   };
   layer_rasters: Record<
-    "s1" | "probability" | "mask",
+    "s1" | "probability" | "mask" | "uncertainty",
     {
       bounds: [number, number, number, number] | null;
       corners:

@@ -9,8 +9,6 @@ import math
 import os
 import zipfile
 from functools import lru_cache
-from datetime import date
-from decimal import Decimal
 from pathlib import Path
 
 import numpy as np
@@ -23,10 +21,9 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
-from floodvalue.data.split import EVENT_PARTS
+from floodvalue.data.split import EVENT_PARTS  # exception (D-050): test sealing, as floodvalue.context
 from floodvalue.paths import REPO_ROOT, data_dir, output_dir
-from floodvalue.procurement.pricing import load_pricing, price_basket
-from floodvalue.procurement.run import plan
+from floodvalue.procurement import plan  # public contract §10
 
 STATIC_DIR = Path(__file__).parent / "static"
 REQUIRED = (
@@ -64,11 +61,6 @@ def _available_runs() -> list[Path]:
             chip_id = str(metadata.get("chip_id", path.name))
             by_observation[(chip_id, _observation_date(path, metadata))] = path
         return sorted(by_observation.values(), key=lambda item: (item / "run_metadata.json").stat().st_mtime, reverse=True)
-    manifest = data_dir() / "interim" / "source_manifest_s1.json"
-    if manifest.is_file() and any((data_dir() / "raw" / "HandLabeled" / "S1Hand" /
-                                   Path(str(source.get("file", ""))).name).is_file()
-                                  for source in _json(manifest).get("sources", [])):
-        return []
     return []
 
 
@@ -204,18 +196,17 @@ def session(run_id: str | None = None):
     for feature in assets["features"]:
         feature["properties"].update(losses.get(feature["properties"]["asset_id"], {}))
     candidates = _json(run_dir / "candidate_orders.geojson")
-    pricing = load_pricing()
-    as_of = date.fromisoformat(metadata["budget"]["decision_at"][:10])
     for feature in candidates["features"]:
-        props = feature["properties"]
-        item = {**props, "area_km2": Decimal(str(props["area_km2"]))}
-        props["solo_cost_rub"] = float(price_basket([item], pricing, as_of=as_of)[0]["cost_rub"])
+        # Price of the zone ordered alone — already in the catalog (candidate_orders.geojson).
+        feature["properties"]["solo_cost_rub"] = feature["properties"].get("single_order_cost_rub")
     s1_name = metadata.get("source", {}).get("s1_files", [""])[0]
     s1_path = data_dir() / "raw" / "HandLabeled" / "S1Hand" / Path(s1_name).name
     layer_rasters = {
         "s1": _raster_info(s1_path) if s1_path.is_file() else None,
         "probability": _raster_info(run_dir / "flood_probability.tif"),
         "mask": _raster_info(run_dir / "flood_mask.tif"),
+        "uncertainty": (_raster_info(run_dir / "uncertainty.tif")
+                        if (run_dir / "uncertainty.tif").is_file() else None),
     }
     return {
         "run_id": metadata.get("run_id", run_dir.name),
