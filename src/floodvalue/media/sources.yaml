@@ -5,6 +5,30 @@
 # секреты — только в переменных окружения сервера (.env.example).
 # kind: news — публикации СМИ; bulletin — специализированные сводки (не журналистика).
 sources:
+  - source_id: cems_floods
+    name: "Copernicus EMS — активации спутникового картирования паводков"
+    kind: bulletin
+    adapter: cems
+    url: https://rapidmapping.emergency.copernicus.eu/
+    enabled: true
+    terms_status: checked
+    terms_url: https://emergency.copernicus.eu/mapping/ems/terms-and-conditions-use-products
+    terms_checked: "2026-09-26"
+    # Политика данных Copernicus — Регламент (ЕС) № 1159/2013: «free, full and open access»
+    # к данным и информации сервисов Copernicus, с указанием источника. Атрибуция EMS:
+    # «© European Union, Copernicus Emergency Management Service». Храним название активации,
+    # страны, время и центроид — метаданные публичного списка активаций.
+    attribution: "© European Union, Copernicus Emergency Management Service"
+    content_storage_policy: summary
+    poll_interval_s: 1800
+    config:
+      endpoint: https://rapidmapping.emergency.copernicus.eu/backend/dashboard-api/public-activations-info/
+      allowed_hosts: [rapidmapping.emergency.copernicus.eu]
+      min_interval_s: 2
+      lookback_days: 90
+      page_size: 100
+      max_pages: 3
+
   - source_id: gdacs_floods
     name: "GDACS — сводки о наводнениях"
     kind: bulletin

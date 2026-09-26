@@ -143,3 +143,33 @@ def test_budget_stops_requests(public_dns, monkeypatch):
     f.get("https://www.gdacs.org/x")
     with pytest.raises(BudgetExceeded):
         f.get("https://www.gdacs.org/x")
+
+
+def test_cems_keeps_only_flood_activations_with_centroid(public_dns, monkeypatch):
+    from floodvalue.media.sources import fetch_cems
+    from datetime import UTC, datetime
+    body = (FIXTURES / "cems_activations_2026-09-26.json").read_bytes()
+    calls = []
+    monkeypatch.setattr(netfetch.requests, "get",
+                        lambda url, **k: calls.append(url) or FakeResp(200, body))
+    f = fetcher(hosts=("rapidmapping.emergency.copernicus.eu",))
+    items, _ = fetch_cems(f, {"endpoint": "https://rapidmapping.emergency.copernicus.eu/x/",
+                              "lookback_days": 90}, None, now=datetime(2026, 9, 26, tzinfo=UTC))
+    assert [i["external_id"] for i in items] == ["EMSR927", "EMSR926"]
+    assert len(calls) == 1 and items  # "next" is null in the saved answer
+    nepal = next(i for i in items if i["external_id"] == "EMSR927")
+    assert nepal["structured"]["place"]["geometry"]["coordinates"] == [85.35376299877846, 28.212231792029492]
+    assert nepal["structured"]["report_type"] == "occurred"
+    assert nepal["published_at"] == "2026-08-26T09:53:00Z"
+    assert all("Wildfire" not in i["title"] for i in items)
+
+
+def test_cems_stops_at_activations_older_than_lookback(public_dns, monkeypatch):
+    from floodvalue.media.sources import fetch_cems
+    from datetime import UTC, datetime
+    body = (FIXTURES / "cems_activations_2026-09-26.json").read_bytes()
+    monkeypatch.setattr(netfetch.requests, "get", lambda url, **k: FakeResp(200, body))
+    f = fetcher(hosts=("rapidmapping.emergency.copernicus.eu",))
+    items, _ = fetch_cems(f, {"endpoint": "https://rapidmapping.emergency.copernicus.eu/x/",
+                              "lookback_days": 1}, None, now=datetime(2026, 9, 26, tzinfo=UTC))
+    assert items == []
