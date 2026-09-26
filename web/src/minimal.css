@@ -1094,7 +1094,8 @@ tbody tr.selected,
   align-self: start;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 106px);
+  /* vh inside a zoomed element is multiplied by the zoom: divide it back out. */
+  height: calc(100vh / var(--ui-zoom) - 106px);
   margin-top: 96px;
   overflow: hidden;
   border: 0;
@@ -1624,39 +1625,35 @@ tbody tr.selected,
   line-height: 1.35;
 }
 
-/* Interface scale on the globe screen. Only overlays are scaled: MapLibre's canvas and its
-   popups stay unscaled so pointer coordinates remain exact. Larger screens get a larger step. */
-.map-top-left,
-.map-top-center,
-.search-panel,
-.search-toggle,
-.reopen-panel,
-.context-panel,
-.basemap-switch,
-.maplibregl-ctrl-bottom-right,
-.maplibregl-ctrl-bottom-left {
+:root {
   --ui-zoom: 1;
 }
 
 @media (min-width: 1100px) {
-  .topbar, .map-top-left, .map-top-center, .reopen-panel,
-  .context-panel, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
-    zoom: 1.2;
-  }
+  :root { --ui-zoom: 1.2; }
 }
 
 @media (min-width: 1800px) {
-  .topbar, .map-top-left, .map-top-center, .reopen-panel,
-  .context-panel, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
-    zoom: 1.35;
-  }
+  :root { --ui-zoom: 1.35; }
 }
 
 @media (min-width: 2300px) {
-  .topbar, .map-top-left, .map-top-center, .reopen-panel,
-  .context-panel, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
-    zoom: 1.5;
-  }
+  :root { --ui-zoom: 1.5; }
+}
+
+/* Interface scale: one step for the globe screen and the analysis page, so switching
+   Земля ↔ Анализ does not jump in size. Only top-level overlays are zoomed (never an element
+   inside another zoomed one); MapLibre's canvas and its popups stay unscaled so pointer
+   coordinates remain exact. Larger screens get a larger step. */
+.topbar,
+.map-top-left,
+.map-top-center,
+.reopen-panel,
+.context-panel,
+.maplibregl-ctrl-bottom-right,
+.maplibregl-ctrl-bottom-left,
+.analysis-shell {
+  zoom: var(--ui-zoom);
 }
 
 /* Logo: larger and heavier than the navigation. */
@@ -1986,5 +1983,31 @@ details.context-foot summary { cursor: pointer; margin-bottom: 6px; }
   }
   .search-box {
     margin: 0 0 6px;
+  }
+}
+
+/* Map notice («Часть картографических данных недоступна…»): on the grid axis, above the
+   basemap switch instead of over it. It is not zoomed itself, so the zoomed rails and the
+   switch height (bottom 26 + ~40 px) are multiplied by --ui-zoom here. */
+.map-issue {
+  left: calc(var(--grid-rail-left) * var(--ui-zoom));
+  right: 0;
+  bottom: calc(66px * var(--ui-zoom) + 12px);
+  width: fit-content;
+  max-width: 420px;
+  margin: 0 auto;
+  transform: none;
+}
+
+.scene-mode .map-issue {
+  right: calc(var(--grid-rail-right) * var(--ui-zoom));
+}
+
+@media (max-width: 700px) {
+  .map-issue,
+  .scene-mode .map-issue {
+    left: 12px;
+    right: 12px;
+    bottom: 64px;
   }
 }
