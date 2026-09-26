@@ -2281,3 +2281,12 @@ th .hint { margin-left: 4px; }
   cursor: pointer;
 }
 .scene-results .scene-more:hover, .scene-results .scene-more:focus-visible { background: #ffffff16; }
+
+/* before a run: the budget is not asked here — it is set once, on the analysis page */
+.analysis-job .analysis-budget-note {
+  display: block;
+  margin: 0 0 0.625rem;
+  color: #9ba8ad;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}

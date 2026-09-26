@@ -40,12 +40,19 @@ def test_unknown_argument_rejected(bare_repo: Path) -> None:
     assert "неизвестный аргумент" in res.stderr
 
 
-@pytest.mark.parametrize("args", [(), ("--verify",), ("--code-only",)])
-def test_known_modes_stop_on_missing_token(bare_repo: Path, args: tuple[str, ...]) -> None:
-    res = _run(bare_repo, *args)
+def test_verify_stops_on_missing_token(bare_repo: Path) -> None:
+    res = _run(bare_repo, "--verify")
     assert res.returncode != 0
     assert "GITVERSE_TOKEN не задан" in res.stderr
     assert "неизвестный аргумент" not in res.stderr
+
+
+@pytest.mark.parametrize("args", [(), ("--code-only",)])
+def test_push_modes_refused_after_stop_code(bare_repo: Path, args: tuple[str, ...]) -> None:
+    """GitVerse заморожен с 27.09.2026 01:00 МСК: push-режимы отказывают до чтения токена."""
+    res = _run(bare_repo, *args)
+    assert res.returncode == 1
+    assert "GitVerse заморожен" in res.stderr
 
 
 def test_no_git_tracing_enabled() -> None:

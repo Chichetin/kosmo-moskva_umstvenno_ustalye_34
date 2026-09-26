@@ -23,6 +23,11 @@ case "${1:-}" in
   *) echo "неизвестный аргумент: $1 (есть --verify, --code-only)" >&2; exit 2 ;;
 esac
 
+# GitVerse заморожен с 27.09.2026 01:00 МСК (стоп-код): push запрещён, разрешена только сверка.
+if [ "$mode" != verify ]; then
+  echo "GitVerse заморожен с 27.09.2026 01:00 МСК (стоп-код) — push запрещён; доступно только --verify" >&2
+  exit 1
+fi
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 [ -f .env ] && { set -a; . ./.env; set +a; }
