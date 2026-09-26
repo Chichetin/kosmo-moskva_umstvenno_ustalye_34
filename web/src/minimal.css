@@ -1712,3 +1712,36 @@ tbody tr.selected,
 .search-toggle { white-space: nowrap; font-size: 15px; }
 .search-toggle > span:first-child { white-space: nowrap; }
 .search-panel li, .search-panel button { white-space: nowrap; }
+
+.sensitivity-panel .sensitivity-intro,
+.sensitivity-panel .sensitivity-section,
+.sensitivity-panel .sensitivity-all { padding: 18px 22px; }
+.sensitivity-panel .sensitivity-intro { margin: 0; color: #afbbc0; font-size: 14px; line-height: 1.5; }
+.sensitivity-panel .sensitivity-section,
+.sensitivity-panel .sensitivity-all { border-top: 1px solid #ffffff18; }
+.sensitivity-panel .sensitivity-section h3 { margin: 0 0 6px; color: #edf3f5; font-size: 17px; font-weight: 620; }
+.sensitivity-panel .sensitivity-section > p,
+.sensitivity-panel .sensitivity-all > p { max-width: 90ch; margin: 0 0 16px; color: #aab8be; font-size: 14px; line-height: 1.5; }
+.sensitivity-panel .table-scroll { max-height: 440px; overflow: auto; scrollbar-width: thin; }
+.sensitivity-panel table { min-width: 740px; }
+.sensitivity-panel th { position: sticky; top: 0; z-index: 1; background: #15191c; border-bottom: 1px solid #ffffff24; }
+.sensitivity-panel td { border-top: 1px solid #ffffff13; }
+.sensitivity-panel th,
+.sensitivity-panel td { padding: 11px 14px; font-size: 14px; vertical-align: top; }
+.sensitivity-panel th:first-child,
+.sensitivity-panel td:first-child { padding-left: 0; }
+.sensitivity-panel .numeric { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sensitivity-panel tbody tr:hover { background: #ffffff09; }
+.sensitivity-panel .sensitivity-baseline { background: #ffffff0d; color: #edf3f5; }
+.sensitivity-panel td small { display: block; margin-top: 3px; color: #91a0a7; font-size: 12px; white-space: normal; }
+.sensitivity-panel .sensitivity-all summary { width: fit-content; color: #d6e3e9; font-size: 14px; cursor: pointer; }
+.sensitivity-panel .sensitivity-all summary:focus-visible { outline: 2px solid #d6e7ef; outline-offset: 4px; }
+.sensitivity-panel .sensitivity-all > p { margin: 12px 0; }
+.sensitivity-panel .sensitivity-all .table-scroll { max-height: 460px; }
+.sensitivity-panel .sensitivity-empty { color: #aab8be; }
+
+@media (max-width: 700px) {
+  .sensitivity-panel .sensitivity-intro,
+  .sensitivity-panel .sensitivity-section,
+  .sensitivity-panel .sensitivity-all { padding: 16px 14px; }
+}

@@ -59,7 +59,7 @@ export function formatScenarioLabel(row: SensitivityRow): string {
   if (budget != null) return `Бюджет ${formatRub(budget)}`;
 
   const rate = finite(changed.base_rate_rub_km2);
-  if (rate != null) return `Сценарная ставка съёмки ${formatNumber(rate)} ₽/км²`;
+  if (rate != null) return `Сценарная ставка съёмки ${formatNumber(rate, 2)} ₽/км²`;
 
   const names: Array<[string, string, boolean]> = [
     ["p_flood", "Вероятности воды", true],
@@ -73,10 +73,11 @@ export function formatScenarioLabel(row: SensitivityRow): string {
       ? ` · ${changed.asset_id}` : "";
     const change = multiplier === 0.5 ? "уменьшены вдвое"
       : `× ${formatNumber(multiplier, 2)}`;
-    return `${name} ${change}${bounded && multiplier > 1 ? " (не выше 1)" : ""}${scope}`;
+    return `${name} ${change}${bounded && multiplier > 1 ? " (не выше 1)" : ""}${scope}${Array.isArray(changed.plan_C_fixed) ? " · зоны C без пересчёта" : ""}`;
   }
 
   if (changed.rule_C === "by_EL") return "План C: ущерб на рубль стоимости данных";
+  if (changed.social_constraint === true) return "Социальные объекты обязательны в плане C";
   if (typeof changed.deadline_hours_after_decision === "number") {
     return `Срок решения через ${formatNumber(changed.deadline_hours_after_decision)} ч`;
   }

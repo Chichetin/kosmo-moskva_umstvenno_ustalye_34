@@ -12,13 +12,12 @@ import Backdrop from "./Backdrop";
 import MapPanel from "./MapPanel";
 import { WorldLocator } from "./WorldLocator";
 import MessagePanel, { type SelectedMessage } from "./MessagePanel";
+import SensitivityPanel from "./SensitivityPanel";
 import {
   formatExactProbability,
   formatNumber as money,
   formatProbability,
   formatRub,
-  formatScenarioAmount,
-  formatScenarioLabel,
   formatShare as pct,
 } from "./format";
 import type { Feature, MediaMap, Plan, SceneSummary, Session } from "./types";
@@ -1392,48 +1391,11 @@ export default function App() {
                     </section>
                   </div>
                 </div>
-                <section className="analysis-card sensitivity">
-                  <div className="card-title">
-                    <h2>Проверка устойчивости</h2>
-                    <span>Сценарии из комплекта</span>
-                  </div>
-                  <div className="sensitivity-grid">
-                    <div>
-                      <h3>Бюджет и ставка</h3>
-                      {activeSession.sensitivity
-                        .filter(
-                          (item) =>
-                            item.strategy === "C" &&
-                            /^(budget|rate)_/.test(item.scenario_id),
-                        )
-                        .map((item) => (
-                          <div className="scenario" key={item.scenario_id}>
-                            <span>{formatScenarioLabel(item)}</span>
-                            <b>{formatScenarioAmount(item)} охват</b>
-                          </div>
-                        ))}
-                    </div>
-                    <div>
-                      <h3>Вероятность и ущерб</h3>
-                      {activeSession.sensitivity
-                        .filter(
-                          (item) =>
-                            item.strategy === "A" &&
-                            /^[pVq]_portfolio_x[0-9.]+$/.test(item.scenario_id),
-                        )
-                        .map((item) => (
-                          <div className="scenario" key={item.scenario_id}>
-                            <span>{formatScenarioLabel(item)}</span>
-                            <b>{formatScenarioAmount(item)}</b>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                  <div className="card-foot">
-                    Чувствительность не пересчитывает карту вероятности воды и
-                    не меняет портфель.
-                  </div>
-                </section>
+                <SensitivityPanel
+                  rows={activeSession.sensitivity}
+                  baseBudget={activeSession.metadata.budget.budget_rub}
+                  baseLoss={totalLoss}
+                />
               </div>
             )}
               </div>
