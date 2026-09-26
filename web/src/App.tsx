@@ -678,6 +678,7 @@ export default function App() {
             onIssue={setMapIssue}
             onSelectMessage={setMessage}
             focus={messageFocus}
+            newsOpen={newsOpen}
           />
           {message && (
             <MessagePanel

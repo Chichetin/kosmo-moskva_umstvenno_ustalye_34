@@ -746,6 +746,12 @@ def _news_place(pub, event, exact: bool) -> dict | None:
             "bbox": [round(v, 6) for v in bbox] if bbox else None, "precision": precision}
 
 
+def _event_time(event, key: str, exact: bool) -> str | None:
+    if event is None:
+        return None
+    return event[key] if exact else _coarse_time(event[key])
+
+
 def _news_items(conn, limit: int, include_demo: bool, exact: bool) -> list[dict]:
     sql = ("SELECT p.*, s.name AS source_name, s.kind AS source_kind, s.attribution "
            "FROM publications p JOIN sources s USING(source_id)")
@@ -774,8 +780,9 @@ def _news_items(conn, limit: int, include_demo: bool, exact: bool) -> list[dict]
             "extraction_method": pub["extraction_method"],
             "extraction_status": pub["extraction_status"], "is_demo": pub["is_demo"],
             "event_id": event["event_id"] if event is not None else None,
-            "event_time_start": event["event_time_start"] if event is not None else None,
-            "event_time_end": event["event_time_end"] if event is not None else None,
+            # an event's time may be an eyewitness's observed_at: public → the hour, as on the map
+            "event_time_start": _event_time(event, "event_time_start", exact),
+            "event_time_end": _event_time(event, "event_time_end", exact),
             "place": _news_place(pub, event, exact), "observations": observations})
     return out
 

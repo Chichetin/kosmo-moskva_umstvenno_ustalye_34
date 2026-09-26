@@ -308,7 +308,7 @@ export default function NewsPanel({
                     <button type="button" onClick={() => onOpenScene(scene)}>Открыть</button>
                   </div>
                 )) : (
-                  <p className="news-scene none">Снимка этой территории в каталоге наблюдений нет — повод заказать съёмку.</p>
+                  <p className="news-scene none">Снимка этой территории в каталоге сцен стенда нет — повод заказать съёмку.</p>
                 )
               )}
               {item.observations && item.observations.length > 0 && (

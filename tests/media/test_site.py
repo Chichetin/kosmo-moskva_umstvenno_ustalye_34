@@ -3,6 +3,7 @@ to go public without an analyst token; /api/media/map gives the operator layer w
 
 import importlib.util
 from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -21,6 +22,11 @@ FORM = {"category": "flooding", "description": "Вода у дома 5, звон
         "observed_precision": "unknown", "place_text": "ул. Речная, 5, кв. 12",
         "idempotency_key": "b" * 24}
 PRIVATE = ("+7 900", "Вода у дома", "Речная", "37.618765", "55.751234")
+# an observation time with a minute: the public feed must show only its hour
+_SEEN = datetime.now(UTC).replace(second=39, microsecond=0) - timedelta(hours=2)
+_SEEN = _SEEN.replace(minute=30)
+OBSERVED_AT = _SEEN.isoformat()
+OBSERVED_MINUTE = _SEEN.strftime("T%H:30")
 
 
 @pytest.mark.parametrize("path,media", [
@@ -172,7 +178,10 @@ def _news_on_eyewitness_event(app, settings) -> int:
     from floodvalue.media import events as ev
     from floodvalue.media.store import connect, transaction
 
-    rid = _submit(app)
+    r = call(app, "POST", "/api/media/reports", data={**FORM, "observed_at": OBSERVED_AT,
+                                                      "observed_precision": "hour"})
+    assert r.status == 201, r.body
+    rid = r.json()["report_id"]
     auth = {"Authorization": f"Bearer {TOKEN}", "X-FloodValue-Media": "1"}
     eid = call(app, "POST", f"/api/media/reports/{rid}/moderate", json_body={"decision": "accept"},
                headers=auth, client=REMOTE).json()["event_id"]
@@ -185,6 +194,8 @@ def _news_on_eyewitness_event(app, settings) -> int:
         pid = c.execute("SELECT last_insert_rowid()").fetchone()[0]
         ev.link(c, eid, origin="news", is_original=True, link_kind="auto", actor="system",
                 publication_id=pid, report_type="occurred", facts={})
+        stored = c.execute("SELECT event_time_start FROM events WHERE event_id=?", (eid,)).fetchone()[0]
+    assert stored and stored[14:16] != "00"  # the event carries the eyewitness's minute
     return eid
 
 
@@ -210,6 +221,8 @@ def test_public_news_feed_shows_publications_without_eyewitness_data(settings, c
     assert news["event_id"] == eid and not news["is_demo"]
     assert news["place"] == {"label": None, "center": [37.62, 55.75], "bbox": None,
                              "precision": "coarsened"}
+    assert news["event_time_start"].endswith(":00:00Z")  # the hour, as on the public map
+    assert OBSERVED_MINUTE not in body
     demo = [p for p in items if p["is_demo"]]
     assert len(demo) == len(DEMO_ITEMS)
     assert all(p["place"]["center"] and p["event_time_start"] for p in demo)
@@ -225,6 +238,7 @@ def test_news_feed_follows_the_map_access(settings):
     assert exact.status == 200 and exact.json()["exact_locations"] is True
     (item,) = exact.json()["publications"]
     assert item["place"]["center"] == [37.618765, 55.751234]
+    assert OBSERVED_MINUTE in item["event_time_start"]
 
 
 def test_demo_loads_once_and_stays_off_test(settings, conn):
