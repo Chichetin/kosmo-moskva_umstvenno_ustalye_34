@@ -361,6 +361,9 @@ def write_outputs(run_dir: Path, budget_rub: float) -> dict[str, Any]:
             "coverage_rule": ("polygon.covers(point) по объектам status=ok, уникально по "
                               "asset_id; только data_role=event_observation, available_at ≤ "
                               "decision_deadline и без неподтверждённой облачности"),
+            "excluded_covers_rule": ("у позиций с exclusion_reason covers_asset_ids = [] (к сроку "
+                                     "решения ничего не наблюдают); объекты внутри их контура — "
+                                     "inside_geometry_asset_ids, это не охват (D-047)"),
         },
         "rule_B": strategies.RULE_B,
         "rule_C": strategies.RULE_C,

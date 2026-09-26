@@ -393,7 +393,7 @@ def build_catalog(assets: Iterable[Mapping[str, Any]],
                     # An excluded position observes nothing by the deadline: no coverage;
                     # assets inside its contour are kept under a separate name.
                     props["covers_asset_ids"] = []
-                    props["inside_geometry_asset_ids"] = covers
+                    props["inside_geometry_asset_ids"] = list(covers)
             feats.append({"type": "Feature", "geometry": mapping(poly), "properties": props})
     return {"type": "FeatureCollection", "features": feats, "build": build}
 
