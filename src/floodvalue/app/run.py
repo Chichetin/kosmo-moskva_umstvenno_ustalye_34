@@ -470,10 +470,15 @@ _job_queue: queue.Queue[str] = queue.Queue()
 _worker: threading.Thread | None = None
 
 
-def _analysis_commands(chip_id: str, out: Path) -> list[list[str]]:
+def _analysis_commands(chip_id: str, out: Path, budget: str | None = None) -> list[list[str]]:
+    """budget — the operator's data budget asked before the run (rub, 2 decimals); None keeps
+    configs/run.yaml. The baseline mask and validate take no budget."""
     commands = []
     for _, (module, *extra) in ANALYSIS_STEPS:
-        chip = [] if module == "floodvalue" and extra == ["validate"] else ["--chip", chip_id]
+        validate = module == "floodvalue" and extra == ["validate"]
+        chip = [] if validate else ["--chip", chip_id]
+        if budget is not None and module == "floodvalue" and not validate:
+            chip += ["--budget", budget]
         commands.append([sys.executable, "-m", module, *extra, *chip, "--out", str(out)])
     return commands
 
@@ -507,7 +512,8 @@ def _run_stages(job_id: str) -> None:
         job = _jobs[job_id]
         job.update(status="running", started_at=time.time())
     for index, (command, (label, _)) in enumerate(
-            zip(_analysis_commands(job["chip_id"], Path(job["out"])), ANALYSIS_STEPS), start=1):
+            zip(_analysis_commands(job["chip_id"], Path(job["out"]), job.get("budget")),
+                ANALYSIS_STEPS), start=1):
         with _jobs_lock:
             job.update(step=index, step_label=label)
         try:
@@ -550,8 +556,10 @@ def _forget_old_jobs() -> None:
 
 
 @app.post("/api/analyses")
-def start_analysis(chip_id: str = Query(min_length=1, max_length=120)):
-    """Queue the analysis of one catalog observation; an existing analysis is returned as is."""
+def start_analysis(chip_id: str = Query(min_length=1, max_length=120),
+                   budget: Annotated[float | None, Query(ge=0, le=UNLIMITED_BUDGET_RUB)] = None):
+    """Queue the analysis of one catalog observation; an existing analysis is returned as is.
+    budget — the data budget the operator sets before the run (plan A/B/C of the bundle)."""
     if os.environ.get("FLOODVALUE_APP_RUN_DIR"):
         raise HTTPException(409, "Открыт один комплект (make app OUT=…): запуск анализа недоступен")
     for path in _available_runs():  # a finished analysis (a test chip too, after eval-test)
@@ -578,6 +586,8 @@ def start_analysis(chip_id: str = Query(min_length=1, max_length=120)):
         job = {"job_id": job_id, "chip_id": chip_id, "status": "queued", "step": 0,
                "steps": len(ANALYSIS_STEPS), "step_label": None, "run_id": None, "error": None,
                "detail": None, "created_at": time.time(),
+               "budget": None if budget is None else str(
+                   Decimal(str(budget)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
                "out": str(output_dir() / f"{chip_id}_ui_{job_id}")}
         _jobs[job_id] = job
     _job_queue.put(job_id)

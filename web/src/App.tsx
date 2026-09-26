@@ -16,6 +16,9 @@ import { WorldLocator } from "./WorldLocator";
 import MessagePanel, { type SelectedMessage } from "./MessagePanel";
 import SensitivityPanel from "./SensitivityPanel";
 import NewsPanel from "./NewsPanel";
+import Hint, { HINTS } from "./Hint";
+import PlanZones from "./PlanZones";
+import { pointInZone } from "./geometry";
 import {
   formatExactProbability,
   formatNumber as money,
@@ -90,23 +93,6 @@ const assetSortValue = (feature: Feature, key: AssetSort): number | string | nul
   if (key === "name") return assetName(feature);
   const raw = feature.properties[key === "probability" ? "p_flood" : key === "loss" ? "expected_loss_rub" : "uncertainty"];
   return raw == null || raw === "" || feature.properties.status === "no_data" ? null : Number(raw);
-};
-const pointInZone = (asset: Feature, zone: Feature) => {
-  if (asset.geometry.type !== "Point" || zone.geometry.type !== "Polygon")
-    return false;
-  const [x, y] = asset.geometry.coordinates as number[];
-  const rings = zone.geometry.coordinates as number[][][];
-  const inside = (ring: number[][]) => {
-    let hit = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const [xi, yi] = ring[i],
-        [xj, yj] = ring[j];
-      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi)
-        hit = !hit;
-    }
-    return hit;
-  };
-  return !!rings[0] && inside(rings[0]) && !rings.slice(1).some(inside);
 };
 const parseRoute = () => {
   const match = /^#\/(earth|scene|analysis)(?:\/([^/]+))?/.exec(location.hash);
@@ -193,6 +179,8 @@ export default function App() {
   const [analysisJob, setAnalysisJob] = useState<AnalysisJob | null>(null);
   const [analysisStarting, setAnalysisStarting] = useState<string | null>(null);
   const [analysisJobError, setAnalysisJobError] = useState<string | null>(null);
+  // Data budget the operator sets before the run: plan A/B/C of the bundle is built for it.
+  const [analysisBudget, setAnalysisBudget] = useState(5_000);
   const [readyAnalysisNotice, setReadyAnalysisNotice] = useState<{ chipId: string; territory: string } | null>(null);
   const [searchOpen, setSearchOpen] = useState(() => window.innerWidth >= 700);
   const [panelOpen, setPanelOpen] = useState(true);
@@ -342,8 +330,11 @@ export default function App() {
       throw new Error("Расчёт завершён, но результат ещё не появился в каталоге. Обновите его повторно.");
     }
     if (parseRoute().chipId === finished.chip_id) {
+      // Results appear in the side panel; «Подробный анализ» is the operator's own step.
       setReadyAnalysisNotice(null);
-      navigate("analysis", finished.chip_id);
+      setPanelOpen(true);
+      setPanelCollapsed(false);
+      navigate("scene", finished.chip_id);
     } else {
       setReadyAnalysisNotice({ chipId: finished.chip_id, territory: target.territory.replaceAll("-", " ") });
     }
@@ -353,7 +344,7 @@ export default function App() {
     setAnalysisJobError(null);
     try {
       const result = await json<AnalysisJob>(
-        `/api/analyses?chip_id=${encodeURIComponent(target.chip_id)}`,
+        `/api/analyses?chip_id=${encodeURIComponent(target.chip_id)}&budget=${analysisBudget}`,
         undefined,
         { method: "POST" },
       );
@@ -364,7 +355,7 @@ export default function App() {
     } finally {
       setAnalysisStarting(null);
     }
-  }, [openFinishedAnalysis]);
+  }, [openFinishedAnalysis, analysisBudget]);
   useEffect(() => {
     if (!analysisJob?.job_id || !["queued", "running"].includes(analysisJob.status)) return;
     let stopped = false;
@@ -416,6 +407,16 @@ export default function App() {
     setPlan(null);
     navigate("scene", selected.chip_id);
   }, []);
+  // Leave the observation: the scene overlay folds back into its point, all points
+  // return; the camera keeps its place and zoom (no overviewRequest).
+  const leaveScene = () => {
+    setAssetId(null);
+    setZoneId(null);
+    setPlan(null);
+    setPanelCollapsed(false);
+    setSearchOpen(window.innerWidth >= 700);
+    navigate("earth");
+  };
   const overview = () => {
     navigate("earth");
     setSearchOpen(true);
@@ -483,15 +484,38 @@ export default function App() {
     const statusText = errorText ?? (current?.status === "queued" ? "В очереди · ожидает запуска"
       : current?.status === "running" ? `Шаг ${current.step} из ${current.steps} · ${current.step_label}`
       : null);
+    const asking = !running && current?.status !== "done";
     return (
       <div className="analysis-job">
+        {asking && (
+          <label className="analysis-budget-ask">
+            <span>Бюджет на дополнительную съёмку, ₽</span>
+            <input
+              type="number"
+              min="0"
+              max="1000000000"
+              step="100"
+              value={analysisBudget}
+              disabled={analysisStarting === target.chip_id}
+              onChange={(event) =>
+                setAnalysisBudget(Math.min(1_000_000_000, Math.max(0, Number(event.target.value) || 0)))
+              }
+            />
+            <small>
+              Карта воды и ущерб считаются по уже полученному снимку S1 — за него не платим.
+              Бюджет ограничивает только дозаказ снимков: под него строится план C. После
+              расчёта бюджет можно изменить.
+            </small>
+          </label>
+        )}
         <button
           className="analysis-start"
           disabled={running || analysisStarting === target.chip_id}
           onClick={() => void startAnalysis(target)}
         >
           {running ? "Анализ выполняется" : analysisStarting === target.chip_id
-            ? "Отправляем запрос…" : current?.status === "failed" ? "Повторить анализ" : "Запустить анализ"}
+            ? "Отправляем запрос…" : current?.status === "failed" ? "Повторить анализ"
+            : `Запустить анализ · ${formatRub(analysisBudget)}`}
         </button>
         {statusText && <p className={errorText ? "inline-error" : undefined} role="status" aria-live="polite">{statusText}</p>}
         {current?.status === "failed" && current.detail && (
@@ -551,7 +575,7 @@ export default function App() {
   return (
     <div className="app">
       <Backdrop paused={!mapActive || !!scene} ocean={baseMap === "optical"} />
-      <header className={`topbar ${mapVisible ? "topbar-map" : "topbar-analysis"}`}>
+      <header className={`topbar ${mapVisible ? "topbar-map" : "topbar-analysis"}${scene ? " topbar-scene" : ""}`}>
         <button className="brand" onClick={overview} aria-label="Митрандир — обзор Земли">
           <svg className="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M3.5 18.5V5.5L12 14l8.5-8.5v13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -607,7 +631,28 @@ export default function App() {
         {exportError}
         <button onClick={() => setExportError(null)} aria-label="Скрыть ошибку выгрузки"><X size={14} /></button>
       </div>}
-      {newsOpen && <NewsPanel onClose={() => setNewsOpen(false)} />}
+      {newsOpen && (
+        <NewsPanel
+          onClose={() => setNewsOpen(false)}
+          scenes={scenes}
+          onShowOnMap={(lngLat, zoom) => {
+            // leave a scene or the analysis first, then fly (the scene exit moves the camera too)
+            const leaving = route.view !== "map" || !!route.chipId || sourceViewerOpen;
+            setSourceViewerOpen(false);
+            if (leaving) navigate("earth");
+            if (window.innerWidth < 700) setNewsOpen(false);
+            window.setTimeout(
+              () => setMessageFocus((f) => ({ lngLat, zoom, request: (f?.request ?? 0) + 1 })),
+              leaving ? 700 : 0,
+            );
+          }}
+          onOpenScene={(selected) => {
+            setNewsOpen(false);
+            setSourceViewerOpen(false);
+            selectScene(selected);
+          }}
+        />
+      )}
       <main className="workspace">
         <div
           className={`map-screen ${mapVisible ? "" : "map-hidden"} ${scene ? "scene-mode" : ""} ${baseMap === "optical" ? "optical-mode" : ""}`}
@@ -644,6 +689,7 @@ export default function App() {
             onIssue={setMapIssue}
             onSelectMessage={setMessage}
             focus={messageFocus}
+            newsOpen={newsOpen}
           />
           {message && (
             <MessagePanel
@@ -784,9 +830,9 @@ export default function App() {
                     {panelCollapsed ? <ChevronDown size={17} /> : <ChevronUp size={17} />}
                   </button>
                   <button
-                    onClick={() => setPanelOpen(false)}
-                    aria-label="Скрыть панель"
-                    title="Скрыть"
+                    onClick={leaveScene}
+                    aria-label="Закрыть наблюдение"
+                    title="Закрыть наблюдение"
                   >
                     <X size={17} />
                   </button>
@@ -832,7 +878,7 @@ export default function App() {
                     onChange={() => toggle("s1")}
                   />
                   <span>
-                    Радарный снимок S1
+                    Радарный снимок S1<Hint text={HINTS.s1} />
                     <small>{date(scene.observation_date)} · VV/VH</small>
                   </span>
                 </label>
@@ -845,7 +891,7 @@ export default function App() {
                         onChange={() => toggle("probability")}
                       />
                       <span>
-                        Вероятность воды<small>Оценка модели · 0–100%</small>
+                        Вероятность воды<Hint text={HINTS.probability} /><small>Оценка модели · 0–100%</small>
                       </span>
                     </label>
                     <label className="layer-row">
@@ -855,7 +901,7 @@ export default function App() {
                         onChange={() => toggle("mask")}
                       />
                       <span>
-                        Бинарная маска
+                        Бинарная маска<Hint text={HINTS.mask} />
                         <small>
                           Порог ≥ {activeSession.metadata.threshold}
                         </small>
@@ -869,7 +915,7 @@ export default function App() {
                         onChange={() => toggle("uncertainty")}
                       />
                       <span>
-                        Неопределённость
+                        Неопределённость<Hint text={HINTS.uncertainty} />
                         <small>Энтропия p · 0–1 бит</small>
                       </span>
                     </label>
@@ -907,7 +953,7 @@ export default function App() {
                         onChange={() => toggle("assets")}
                       />
                       <span>
-                        Объекты<small>{assets.length} точек</small>
+                        Объекты<Hint text={HINTS.assets} /><small>{assets.length} точек</small>
                       </span>
                     </label>
                     <label className="layer-row">
@@ -917,7 +963,7 @@ export default function App() {
                         onChange={() => toggle("zones")}
                       />
                       <span>
-                        Зоны съёмки
+                        Зоны съёмки<Hint text={HINTS.zones} />
                         <small>
                           {zones.length} кандидатов · план C выделен синим
                         </small>
@@ -969,11 +1015,11 @@ export default function App() {
                       <strong>{formatRub(chosen?.data_cost_rub)}</strong>
                     </div>
                     <div className="plan-summary">
-                      <span>Охват ожидаемого ущерба</span>
+                      <span>Охват ожидаемого ущерба<Hint text={HINTS.coverage} /></span>
                       <strong>{pct(chosen?.coverage_share)}</strong>
                     </div>
                     <div className="plan-summary">
-                      <span>Доля адресуемой цены ошибки · сценарий</span>
+                      <span>Доля адресуемой цены ошибки · сценарий<Hint text={HINTS.decisionRisk} /></span>
                       <strong>{pct(chosen?.decision_risk_share)}</strong>
                     </div>
                     <p className="hint-note">
@@ -986,7 +1032,10 @@ export default function App() {
                       : !currentPlan && <p role="status">Пересчитываем план…</p>}
                     <button
                       className="analysis-link"
-                      onClick={() => navigate("analysis", scene.chip_id)}
+                      onClick={() => {
+                        setSourceViewerOpen(false);
+                        navigate("analysis", scene.chip_id);
+                      }}
                     >
                       Подробный анализ <BarChart3 size={17} />
                     </button>
@@ -1055,11 +1104,6 @@ export default function App() {
             <div className="map-issue" role="status">
               {mapIssue}
             </div>
-          )}
-          {sourceViewerOpen && scene && (
-            <button className="source-viewer-return" onClick={() => setSourceViewerOpen(false)}>
-              <ArrowLeft size={16} /> К результату анализа
-            </button>
           )}
         </div>
           <div className={`analysis-screen ${mapVisible ? "analysis-hidden" : ""}`} aria-hidden={mapVisible} inert={mapVisible}>
@@ -1172,14 +1216,27 @@ export default function App() {
             {activeSession && (
               <div className="analysis-body">
                 <div className="analysis-metrics" aria-label="Краткое резюме плана C">
-                  <div><span>Зон в плане C</span><strong>{currentPlan ? currentPlan.plans.C.length : "—"}</strong></div>
-                  <div><span>Стоимость данных</span><strong>{formatRub(chosen?.data_cost_rub)}</strong></div>
-                  <div><span>Охват ожидаемого ущерба</span><strong>{pct(chosen?.coverage_share)}</strong></div>
+                  <div><span>Зон в плане C<Hint text={HINTS.zonesInPlan} align="center" /></span><strong>{currentPlan ? currentPlan.plans.C.length : "—"}</strong></div>
+                  <div><span>Стоимость данных<Hint text={HINTS.dataCost} align="center" /></span><strong>{formatRub(chosen?.data_cost_rub)}</strong></div>
+                  <div><span>Охват ожидаемого ущерба<Hint text={HINTS.coverage} align="center" /></span><strong>{pct(chosen?.coverage_share)}</strong></div>
                 </div>
+                <PlanZones
+                  session={activeSession}
+                  plan={currentPlan}
+                  budget={budget}
+                  assets={assets}
+                  selectedZone={zoneId}
+                  onSelectZone={(id) => {
+                    setZoneId(id);
+                    setAssetId(null);
+                  }}
+                  assetName={assetName}
+                  observationDate={date(scene?.observation_date ?? activeSession.observation_date)}
+                />
                 <div className="analysis-columns">
                   <section className="analysis-card">
                     <div className="card-title">
-                      <h2>Приоритет осмотра</h2>
+                      <h2>Приоритет осмотра<Hint text={HINTS.inspection} /></h2>
                       <span>{assets.length} объектов · ожидаемый ущерб {formatRub(totalLoss)}</span>
                     </div>
                     <details className="analysis-explain">
@@ -1219,6 +1276,9 @@ export default function App() {
                                 <button className="asset-sort" onClick={() => toggleAssetSort(key)}>
                                   {label}<span aria-hidden="true">{assetSort.key === key ? assetSort.descending ? "↓" : "↑" : "↕"}</span>
                                 </button>
+                                {key === "probability" && <Hint text={HINTS.probability} align="center" />}
+                                {key === "loss" && <Hint text={HINTS.expectedLoss} align="center" />}
+                                {key === "uncertainty" && <Hint text={HINTS.uncertainty} align="end" />}
                               </th>
                             ))}
                           </tr>
@@ -1344,6 +1404,7 @@ export default function App() {
                                 : row.strategy === "B"
                                   ? "Сплошная съёмка"
                                   : "Приоритетный заказ"}
+                              <Hint text={row.strategy === "A" ? HINTS.strategyA : row.strategy === "B" ? HINTS.strategyB : HINTS.strategyC} />
                             </strong>
                             <div className="strategy-values">
                               <span>Данные <strong>{formatRub(row.data_cost_rub)}</strong></span>
@@ -1476,7 +1537,9 @@ export default function App() {
         <div className="analysis-ready-notice">
           <span role="status" aria-live="polite">Анализ {readyAnalysisNotice.territory} готов</span>
           <button onClick={() => {
-            navigate("analysis", readyAnalysisNotice.chipId);
+            setPanelOpen(true);
+            setPanelCollapsed(false);
+            navigate("scene", readyAnalysisNotice.chipId);
             setReadyAnalysisNotice(null);
           }}>Открыть</button>
           <button

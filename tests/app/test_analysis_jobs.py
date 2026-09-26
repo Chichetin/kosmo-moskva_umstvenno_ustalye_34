@@ -66,6 +66,23 @@ def test_job_runs_the_make_all_stages_in_order(catalog, monkeypatch):
     assert len({c[c.index("--out") + 1] for c in calls}) == 1  # one bundle directory
 
 
+def test_budget_set_before_the_run_reaches_the_budgeted_stages(catalog, monkeypatch):
+    calls = _fake_stages(monkeypatch)
+    job_id = json.loads(run.start_analysis("Synthetic_000001", budget=12345.675).body)["job_id"]
+    run._run_job(job_id)
+    budgets = {(c[3] if c[2] == "floodvalue" else c[2]):
+               (c[c.index("--budget") + 1] if "--budget" in c else None) for c in calls}
+    assert budgets == {"predict": "12345.68", "floodvalue.baseline.predict": None,
+                       "assets": "12345.68", "procure": "12345.68", "export": "12345.68",
+                       "validate": None}  # ROUND_HALF_UP to kopecks, as the bundle download
+
+
+def test_without_budget_the_stages_keep_the_configured_one(catalog, monkeypatch):
+    calls = _fake_stages(monkeypatch)
+    run._run_job(json.loads(run.start_analysis("Synthetic_000001").body)["job_id"])
+    assert not any("--budget" in c for c in calls)
+
+
 def test_failed_stage_is_reported_and_stops_the_job(catalog, monkeypatch):
     calls = _fake_stages(monkeypatch, fail_at="procure")
     job_id = json.loads(run.start_analysis("Synthetic_000001").body)["job_id"]
