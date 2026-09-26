@@ -32,7 +32,12 @@ p ≥ 0,5, до калибровки. Валидный пиксель: S1 кон
 - **Inference**: сеть полностью свёрточная. Обучение идёт на кропах 256, применение — на
   целом чипе 512×512; размер, не кратный 16, дополняется нулями как невалидные пиксели.
   Вероятность = sigmoid(логит) каждого члена, p = среднее по 5 членам. NaN в S1 дают NaN в p.
-  Маска `flood_mask.tif` = p ≥ `threshold` из `config.json`: пока 0,5, заменит #20.
+  Маска `flood_mask.tif` = калиброванная p ≥ `threshold` из `models/unet/calibration.json`:
+  0,37 (Platt, порог выбран на validation, D-029; `threshold_status` «calibrated (platt) and
+  chosen on validation, D-029»). Тот же порог пишут `prediction.json` и `run_metadata.threshold`
+  (`make all CHIP=Sri-Lanka_713926 BUDGET=5000` → `threshold 0.37`). `threshold` 0,5 в
+  `config.json` — сырой порог до калибровки: `predict` берёт его, только если
+  `calibration.json` нет (`src/floodvalue/model/predict.py`).
 - **Только S1**: код читает лишь `S1Hand` (`floodvalue.data.io.load_s1`). Каналы S2, DEM и
   JRC нигде не подаются; метки нужны только для потерь и метрик.
 - **Итоговая модель**: ансамбль из 5 seed (20260925, 1, 2, 3, 4) одной конфигурации;

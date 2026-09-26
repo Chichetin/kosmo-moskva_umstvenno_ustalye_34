@@ -6,6 +6,7 @@ from rasterio.transform import from_origin
 
 from floodvalue.assets.portfolio import (
     PROB_NODATA,
+    Asset,
     assess_assets,
     binary_entropy,
     expected_loss,
@@ -35,6 +36,38 @@ def test_expected_loss_control_example():
 def test_expected_loss_not_zeroed_below_mask_threshold():
     # p = 0.1 is below any sensible mask threshold, EL still = p*V*q
     assert expected_loss(0.1, 20_000_000, 0.40) == pytest.approx(800_000)
+
+
+def test_expected_loss_is_rounded_half_up_to_the_kopeck():
+    # #127: float product 28478.587199999998 was written as is; now ROUND_HALF_UP to 0.01
+    assert 0.017799117 * 8_000_000 * 0.20 == 28478.587199999998
+    assert expected_loss(0.017799117, 8_000_000, 0.20) == 28478.59
+    # exact half kopeck in the written factors: p*V*q = 28478.585 -> 28478.59
+    assert expected_loss(0.017799115625, 8_000_000, 0.20) == 28478.59
+    # ... and where the float product is 28481.58499.. in binary, so round(x, 2) goes down
+    assert round(0.017800990625 * 8_000_000 * 0.20, 2) == 28481.58
+    assert expected_loss(0.017800990625, 8_000_000, 0.20) == 28481.59
+    assert expected_loss(0.4, 10_000_000, 0.25) == 1_000_000.0  # task.md control, exact
+
+
+def test_rank_follows_the_written_kopeck_el_and_ties_break_by_asset_id():
+    # A02 is 0.004 rub above A01 before rounding; written EL are equal, so the rank that the
+    # validator recomputes from asset_loss.csv (max EL, then asset_id) puts A01 first.
+    a01 = Asset("A01", "warehouse", 10_000_000, 0.25, 0, 0, 81.0, 7.0)
+    a02 = Asset("A02", "substation", 20_000_000, 0.40, 0, 1, 81.0, 7.0)
+    prob = np.array([[0.0004, 1000.004 / 8_000_000]], dtype="float64")
+    rows = {r["asset_id"]: r for r in assess_assets([a01, a02], prob)}
+    assert rows["A01"]["expected_loss_rub"] == rows["A02"]["expected_loss_rub"] == 1000.0
+    assert (rows["A01"]["rank"], rows["A02"]["rank"]) == (1, 2)
+
+
+def test_el_range_is_rounded_half_up_to_the_kopeck():
+    a = Asset("A01", "facility", 8_000_000, 0.20, 0, 0, 81.0, 7.0)
+    prob = np.array([[0.02]], dtype="float64")
+    lo = np.array([[0.017800990625]], dtype="float64")  # half kopeck, binary below it
+    hi = np.array([[0.017799117]], dtype="float64")
+    row = assess_assets([a], prob, p_range=(lo, hi))[0]
+    assert (row["el_low_rub"], row["el_high_rub"]) == (28481.59, 28478.59)
 
 
 # --- config ------------------------------------------------------------------------
