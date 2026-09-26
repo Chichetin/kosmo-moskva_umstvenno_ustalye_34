@@ -45,14 +45,14 @@ input:focus-visible,
 .brand {
   gap: 10px;
   color: #eef1f2;
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 650;
   letter-spacing: -0.035em;
 }
 
 .brand-mark {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   color: #e6ecee;
   background: none;
   border: 0;
@@ -64,13 +64,13 @@ input:focus-visible,
 }
 
 .top-nav {
-  gap: 26px;
+  gap: 30px;
 }
 
 .topbar-map .top-nav {
   position: absolute;
   top: 77px;
-  left: calc(50% + (clamp(30px, 3.6vw, 58px) + 286px) / 2);
+  left: calc(50% + (clamp(30px, 3.6vw, 58px) + 320px) / 2);
   height: auto;
   transform: translateX(-50%);
 }
@@ -82,13 +82,13 @@ input:focus-visible,
 .top-nav button,
 .top-nav button.active {
   position: relative;
-  height: 30px;
+  height: 34px;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: none;
   color: #838e94;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 550;
   transition: color 200ms ease;
 }
@@ -185,14 +185,15 @@ input:focus-visible,
   left: clamp(30px, 3.6vw, 58px);
   top: clamp(160px, calc(13vh + 56px), 182px);
   bottom: auto;
-  width: 286px;
+  width: 320px;
   display: block;
   z-index: 4;
 }
 
 .search-panel {
   height: auto;
-  max-height: min(488px, calc(100vh - 225px));
+  max-height: min(540px, calc(100vh - 225px));
+  padding: 0 20px;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -207,13 +208,13 @@ input:focus-visible,
 
 .scene-library-head {
   flex: none;
-  padding: 19px 0 16px;
+  padding: 22px 0 16px;
 }
 
 .scene-library-head h1 {
   margin: 0;
   color: #f0f3f4;
-  font-size: 20px;
+  font-size: 22px;
   line-height: 1.25;
   font-weight: 610;
   letter-spacing: -0.035em;
@@ -221,9 +222,9 @@ input:focus-visible,
 
 .search-box {
   flex: none;
-  height: 39px;
-  margin: 0 8px 13px 0;
-  padding: 0 1px;
+  height: 44px;
+  margin: 0 0 12px;
+  padding: 0;
   border: 0;
   border-bottom: 1px solid #ffffff36;
   border-radius: 0;
@@ -237,7 +238,7 @@ input:focus-visible,
 
 .search-box input {
   color: #e8edef;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .search-box input::placeholder {
@@ -246,14 +247,14 @@ input:focus-visible,
 
 .search-toggle {
   flex: none;
-  min-height: 42px;
-  padding: 0 8px 0 0;
+  min-height: 46px;
+  padding: 0;
   border: 0;
   background: none;
   color: #c4cdd1;
   justify-content: flex-start;
   gap: 8px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 560;
 }
 
@@ -277,7 +278,8 @@ input:focus-visible,
   min-height: 0;
   max-height: none;
   overflow: auto;
-  padding: 2px 8px 12px 0;
+  margin: 0 -10px;
+  padding: 2px 10px 14px;
   border: 0;
   scrollbar-width: none;
 }
@@ -287,14 +289,26 @@ input:focus-visible,
 }
 
 .scene-results > button {
-  min-height: 64px;
-  gap: 8px;
-  padding: 10px 0;
+  position: relative;
+  width: calc(100% + 20px);
+  min-height: 70px;
+  gap: 10px;
+  margin: 0 -10px;
+  padding: 11px 10px;
   border: 0;
-  border-bottom: 1px solid #ffffff14;
-  border-radius: 0;
+  border-radius: 8px;
   color: #e4e9eb;
   transition: background 180ms ease;
+}
+
+.scene-results > button::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 1px;
+  background: #ffffff14;
 }
 
 .scene-results > button:hover,
@@ -309,7 +323,7 @@ input:focus-visible,
 
 .scene-results strong {
   color: #e8edef;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 610;
   white-space: nowrap;
   overflow: hidden;
@@ -322,13 +336,13 @@ input:focus-visible,
   gap: 6px;
   margin-top: 5px;
   color: #96a2a8;
-  font: 12px/1.4 "Noto Sans", Arial, sans-serif;
+  font: 13px/1.4 "Noto Sans", Arial, sans-serif;
 }
 
 .scene-results small code {
   display: none;
   color: #8a969c;
-  font: 10px ui-monospace, SFMono-Regular, Consolas, monospace;
+  font: 11px ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
 .scene-results > button:hover code,
@@ -340,12 +354,12 @@ input:focus-visible,
 .scene-results em {
   flex: none;
   align-self: center;
-  padding: 3px 6px;
+  padding: 4px 8px;
   border: 1px solid #aebdc34d;
-  border-radius: 3px;
+  border-radius: 5px;
   background: none;
   color: #b9c7cd;
-  font-size: 10px;
+  font-size: 12px;
   font-style: normal;
   font-weight: 560;
 }
@@ -353,16 +367,16 @@ input:focus-visible,
 .scene-results p,
 .search-hint {
   color: #929fa5;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.55;
-  padding: 10px 13px;
+  padding: 10px 0;
 }
 
 .map-top-center,
 .scene-mode .map-top-center {
   top: auto;
   bottom: 26px;
-  left: calc(50% + (clamp(30px, 3.6vw, 58px) + 286px) / 2);
+  left: calc(50% + (clamp(30px, 3.6vw, 58px) + 320px) / 2);
   right: auto;
   transform: translateX(-50%);
   z-index: 5;
@@ -373,7 +387,7 @@ input:focus-visible,
 }
 
 .basemap-switch {
-  gap: 22px;
+  gap: 26px;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -386,11 +400,11 @@ input:focus-visible,
 .basemap-switch button {
   position: relative;
   min-width: 0;
-  height: 36px;
-  padding: 0 0 5px;
+  height: 40px;
+  padding: 0 0 6px;
   border-radius: 0;
   color: #929da2;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 550;
 }
 
@@ -431,8 +445,8 @@ input:focus-visible,
 }
 
 .maplibregl-ctrl-group button {
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
 }
 
 .maplibregl-ctrl-attrib.maplibregl-compact {
@@ -464,20 +478,24 @@ input:focus-visible,
 }
 
 .map-preview {
-  max-width: 220px;
-  padding: 10px 13px;
+  max-width: 260px;
+  padding: 12px 15px;
 }
 
 .map-preview strong {
   padding: 0;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 590;
 }
 
 .map-preview span {
   padding: 3px 0 0;
   color: #a8b3b7;
-  font-size: 11px;
+  font-size: 13px;
+}
+
+.map-preview small {
+  font-size: 12px;
 }
 
 .scene-mode .map-top-left {
@@ -491,14 +509,14 @@ input:focus-visible,
 }
 
 .scene-mode .scene-results {
-  max-height: 225px;
+  max-height: 250px;
 }
 
 .context-panel {
   top: 80px;
   right: 28px;
   bottom: 24px;
-  width: 342px;
+  width: 372px;
   border: 1px solid #ffffff1c;
   border-radius: 18px;
   background: #171a1d;
@@ -515,26 +533,26 @@ input:focus-visible,
 
 .context-heading small {
   color: #9eaaaf;
-  font: 11px "Noto Sans", Arial, sans-serif;
+  font: 12px "Noto Sans", Arial, sans-serif;
   font-weight: 600;
   letter-spacing: 0.07em;
 }
 
 .context-heading h1 {
   margin: 10px 0 8px;
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 610;
   letter-spacing: -0.04em;
 }
 
 .context-heading p {
   color: #a4b0b5;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .context-heading button {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   border: 0;
   border-radius: 8px;
   background: #ffffff0d;
@@ -551,7 +569,7 @@ input:focus-visible,
   border: 0;
   background: none;
   color: #bcc7cb;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .context-section {
@@ -560,14 +578,14 @@ input:focus-visible,
 }
 
 .context-section h2 {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 610;
 }
 
 .layer-row {
   gap: 11px;
-  padding: 9px 0;
-  font-size: 13px;
+  padding: 10px 0;
+  font-size: 15px;
 }
 
 .layer-row input,
@@ -579,7 +597,35 @@ input:focus-visible,
 .layer-row small,
 .context-foot {
   color: #929da2;
-  font-size: 11px;
+  font-size: 12.5px;
+}
+
+/* Scene-panel controls whose base sizes live in app.css: one step up with the rest of the globe screen. */
+.opacity-control,
+.budget-field,
+.inline-error {
+  font-size: 13px;
+}
+
+.prob-legend {
+  font-size: 12px;
+}
+
+.budget-field input {
+  font-size: 20px;
+}
+
+.plan-summary,
+.focus-section p {
+  font-size: 14px;
+}
+
+.analysis-link {
+  font-size: 15px;
+}
+
+.focus-section strong {
+  font-size: 16px;
 }
 
 .budget-field input {
@@ -606,7 +652,7 @@ input:focus-visible,
   border: 1px solid #ffffff20;
   border-radius: 9px;
   background: #171a1d;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .map-issue {
@@ -804,10 +850,10 @@ tbody tr.selected,
   }
   .topbar-map .top-nav,
   .map-top-center {
-    left: calc(50% + (clamp(30px, 3.6vw, 58px) + 286px) / 2);
+    left: calc(50% + (clamp(30px, 3.6vw, 58px) + 320px) / 2);
   }
   .context-panel {
-    width: 320px;
+    width: 340px;
   }
   .analysis-columns {
     grid-template-columns: 1fr;
@@ -820,11 +866,11 @@ tbody tr.selected,
     padding: 0 14px;
   }
   .brand {
-    font-size: 13px;
+    font-size: 15px;
   }
   .brand-mark {
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
   }
   .topbar-map .top-nav {
     top: 58px;
@@ -836,7 +882,7 @@ tbody tr.selected,
     gap: 12px;
   }
   .top-nav button {
-    font-size: 12px;
+    font-size: 14px;
   }
   .top-export {
     display: none;
@@ -858,16 +904,17 @@ tbody tr.selected,
   .scene-mode .search-panel {
     height: auto;
     max-height: min(345px, 43vh);
+    padding: 0 16px;
     border-radius: 15px;
   }
   .scene-library-head {
     padding: 16px 0 10px;
   }
   .scene-library-head h1 {
-    font-size: 17px;
+    font-size: 19px;
   }
   .search-box {
-    margin: 0 8px 6px 0;
+    margin: 0 0 6px;
   }
   .scene-results {
     max-height: 190px;
@@ -882,6 +929,15 @@ tbody tr.selected,
   }
   .map-top-center .basemap-switch {
     transform: none;
+  }
+  .map-top-center {
+    gap: 22px;
+  }
+  .basemap-switch {
+    gap: 18px;
+  }
+  .basemap-switch button {
+    font-size: 14px;
   }
   .context-panel {
     left: 12px;
@@ -921,7 +977,7 @@ tbody tr.selected,
 
 .hint-note {
   color: #a1a1a8;
-  font-size: 11px;
+  font-size: 12.5px;
   line-height: 1.45;
   margin: 8px 0 0;
 }
@@ -941,7 +997,7 @@ tbody tr.selected,
 
 /* «Сообщения» toggle and card (/api/media/map) */
 .map-top-center {
-  gap: 30px;
+  gap: 34px;
 }
 
 .media-switch button {
@@ -1030,7 +1086,7 @@ tbody tr.selected,
 .media-preview {
   display: grid;
   gap: 4px;
-  max-width: 260px;
+  max-width: 300px;
 }
 
 .media-preview small {
