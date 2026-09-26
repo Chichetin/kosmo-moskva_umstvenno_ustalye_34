@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import Backdrop from "./Backdrop";
 import MapPanel from "./MapPanel";
+import { WorldLocator } from "./WorldLocator";
 import MessagePanel, { type SelectedMessage } from "./MessagePanel";
 import {
   formatExactProbability,
@@ -1060,6 +1061,13 @@ export default function App() {
                 >
                   <Layers3 size={16} /> Исходный снимок и слои
                 </button>
+              )}
+              {scene?.bounds && (
+                <WorldLocator
+                  lon={(scene.bounds[0] + scene.bounds[2]) / 2}
+                  lat={(scene.bounds[1] + scene.bounds[3]) / 2}
+                  label={scene.territory.replaceAll("-", " ")}
+                />
               )}
             </div>
             {!activeSession && (

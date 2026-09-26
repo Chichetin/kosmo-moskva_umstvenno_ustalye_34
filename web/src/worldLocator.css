@@ -59,6 +59,18 @@
   color: #e9edef;
 }
 
+/* In the analysis header: the last item of the row, right of «Исходный снимок и слои». */
+.analysis-head .world-locator {
+  flex: none;
+  width: 200px;
+}
+
+@media (max-width: 900px) {
+  .analysis-head .world-locator {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .world-locator-pulse { animation: none; opacity: 0; }
 }
