@@ -68,3 +68,20 @@ def test_page_fonts_are_served_with_licence(app):
         r = call(app, "GET", f"/media/static/fonts/{name}")
         assert r.status == 200 and r.headers["content-type"] == "font/woff2", name
         assert (STATIC / "fonts" / (name.split("-")[0] + "-OFL.txt")).is_file(), name
+
+
+def test_pages_follow_operator_visual_system():
+    """#247: the public pages share the operator console's look — one typeface, dark only,
+    corners only through the 2 px / 0 tokens (dots may be round), no decorative scene."""
+    css = (STATIC / "report.css").read_text(encoding="utf-8")
+    assert "--radius: 2px" in css and "--radius-panel: 0" in css
+    assert "Science Gothic" in css and "prefers-color-scheme" not in css
+    assert "gradient(" not in css
+    shadows = re.findall(r"box-shadow:\s*([^;}]+)", css)
+    assert all(s.strip().startswith(("none", "0 0 0")) for s in shadows), shadows  # rings only
+    radii = re.findall(r"border-radius:\s*([^;!}]+)", css)
+    assert radii and all(r.strip().startswith("var(--radius") or r.strip() == "50%" for r in radii), radii
+    for name in ("report.html", "status.html"):
+        html = (STATIC / name).read_text(encoding="utf-8")
+        assert 'class="scene"' not in html and "wave" not in html, name
+        assert 'content="dark"' in html, name
