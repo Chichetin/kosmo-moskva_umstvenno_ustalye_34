@@ -332,6 +332,61 @@ def covered_expected_loss(zones: list, points: dict[str, Point], el: dict[str, f
     return sum(v for aid, v in el.items() if any(z.covers(points[aid]) for z in zones))
 
 
+def decision_risk_from_el(el: float, p: float) -> float:
+    """Expected cost of a wrong decision R = V·q·min(p, 1−p), rub. (scenario, D-049), from the
+    written EL and p of asset_loss.csv (V·q = EL/p), exactly as procurement does: EL rounded to
+    the kopeck would otherwise drift from V·q·min(p, 1−p) by up to 0,005 per asset (#146)."""
+    if p <= 0.5:
+        return el
+    return el * (1.0 - p) / p
+
+
+def _optional_number(extra: dict, field: str) -> tuple[bool, float | None]:
+    """(present, value) of an optional CSV column; empty cell -> None."""
+    if field not in extra:
+        return False, None
+    raw = extra[field]
+    return True, None if raw in (None, "") else float(raw)
+
+
+def _check_decision_risk(report: "_Report", name: str, row, used: list | None,
+                         by_id: dict, risk_by_id: dict[str, float], meta) -> None:
+    """Optional columns of strategy_comparison.csv (D-049, #142): addressed_decision_risk_rub =
+    Σ R of ok assets covered by the strategy's zones usable by the deadline (same zones as
+    covered_expected_loss_rub), decision_risk_share = that / Σ R of the portfolio, empty at 0."""
+    extra = row.model_extra or {}
+    try:
+        has_r, addressed = _optional_number(extra, "addressed_decision_risk_rub")
+        has_share, share = _optional_number(extra, "decision_risk_share")
+    except ValueError:
+        report.add(name, f"{row.strategy}: addressed_decision_risk_rub/decision_risk_share — не число")
+        return
+    s = row.strategy
+    if has_r and addressed is None:
+        report.add(name, f"{s}: addressed_decision_risk_rub пуст")
+    if used is None or not (has_r or has_share):
+        return
+    a_declared = s == "A" and meta and (meta.strategies.model_extra or {}).get("coverage_A")
+    if a_declared:  # A's coverage is declared separately: check only share ↔ addressed below
+        expected = addressed
+    else:
+        expected = covered_expected_loss(used, {a: by_id[a][1] for a in risk_by_id}, risk_by_id)
+    if has_r and addressed is not None and not a_declared and abs(expected - addressed) > EL_TOL:
+        report.add(name, f"{s}: addressed_decision_risk_rub={addressed} ≠ пересчёту {expected:.2f} "
+                         "(Σ R = EL·min(p, 1−p)/p ok-объектов, покрытых зонами к сроку)")
+    if not has_share or expected is None:
+        return
+    addressed = expected if addressed is None else addressed
+    total = sum(risk_by_id.values())
+    if total > 0 and share is None:
+        report.add(name, f"{s}: decision_risk_share пуст при ненулевой Σ R портфеля")
+    elif total <= 0 and share is not None:
+        report.add(name, f"{s}: decision_risk_share={share} при Σ R портфеля = 0 (должно быть пусто)")
+    elif share is not None and abs(share - addressed / total) > 1e-4:
+        report.add(name, f"{s}: decision_risk_share={share} ≠ addressed_decision_risk_rub / Σ R "
+                         f"= {addressed / total:.6f}")
+
+
 METRICS_FIELDS = ("method", "split", "event", "iou", "f1", "precision", "recall", "tp", "fp",
                   "fn", "tn", "n_pixels", "threshold", "valid_mask_sha256")
 
@@ -490,6 +545,7 @@ def validate_run(run_dir: Path, assets_config: Path | None = None,
     losses = guarded(F.ASSET_LOSS, lambda: _load_csv(
         report, run_dir, F.ASSET_LOSS, F.ASSET_LOSS_FIELDS, AssetLossRow))
     el_by_id: dict[str, float] = {}
+    risk_by_id: dict[str, float] = {}  # R = V·q·min(p, 1−p) of ok assets (D-049)
     if losses is not None:
         name = F.ASSET_LOSS
         ids = Counter(r.asset_id for r in losses)
@@ -507,6 +563,7 @@ def validate_run(run_dir: Path, assets_config: Path | None = None,
             p_pix = _sample(raster, pt.x, pt.y)[1] if raster is not None else None
             if r.status == "ok":
                 el_by_id[r.asset_id] = r.expected_loss_rub
+                risk_by_id[r.asset_id] = decision_risk_from_el(r.expected_loss_rub, r.p_flood)
                 expected = r.p_flood * a.asset_value_rub * a.vulnerability_coef
                 if abs(expected - r.expected_loss_rub) > EL_TOL + 1e-9 * expected:
                     report.add(name, f"{r.asset_id}: EL={r.expected_loss_rub} ≠ p·V·q={expected:.2f}")
@@ -621,6 +678,7 @@ def validate_run(run_dir: Path, assets_config: Path | None = None,
                     not (meta.strategies.model_extra or {}).get("coverage_A"):
                 report.add(name, "A: covered_expected_loss_rub ≠ 0 без strategies.coverage_A "
                                  "в run_metadata (у A нет платных зон)")
+            used = None  # zones of the strategy that observe the event by the deadline
             if s in ("B", "C") and plans is not None and cands is not None and meta and losses:
                 deadline = _utc(meta.budget.decision_deadline)
                 used = [zones[i] for i in getattr(plans, s)
@@ -631,6 +689,9 @@ def validate_run(run_dir: Path, assets_config: Path | None = None,
                 if abs(covered - r.covered_expected_loss_rub) > EL_TOL:
                     report.add(name, f"{s}: covered_expected_loss_rub={r.covered_expected_loss_rub} ≠ "
                                      f"пересчёту {covered:.2f} (covers, event_observation, ≤ deadline)")
+            elif s == "A" and losses is not None:
+                used = []  # A buys no zones
+            _check_decision_risk(report, name, r, used, by_id, risk_by_id, meta)
             if losses is not None:
                 if total_el > 0 and r.coverage_share is None:
                     report.add(name, f"{s}: coverage_share пуст при ненулевом суммарном EL")

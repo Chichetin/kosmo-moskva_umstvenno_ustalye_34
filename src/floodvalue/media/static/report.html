@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f7fafc" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#060e15" media="(prefers-color-scheme: dark)">
+<title>Сообщение о подтоплении — Митрандир</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+<link rel="preload" href="/media/static/fonts/Unbounded-Variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/media/static/fonts/Onest-Variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/media/static/report.css">
+</head>
+<body>
+<div class="scene" aria-hidden="true">
+  <svg class="wave wave-back" viewBox="0 0 2880 130" preserveAspectRatio="none" focusable="false"><path d="M0 44Q360 18 720 44T1440 44T2160 44T2880 44V130H0Z"/></svg>
+  <svg class="wave wave-mid" viewBox="0 0 2880 104" preserveAspectRatio="none" focusable="false"><path d="M0 38Q180 20 360 38T720 38T1080 38T1440 38T1800 38T2160 38T2520 38T2880 38V104H0Z"/></svg>
+  <svg class="wave wave-front" viewBox="0 0 2880 78" preserveAspectRatio="none" focusable="false"><path d="M0 30Q120 16 240 30T480 30T720 30T960 30T1200 30T1440 30T1680 30T1920 30T2160 30T2400 30T2640 30T2880 30V78H0Z"/></svg>
+  <div class="water"></div>
+</div>
+<div class="progress" aria-hidden="true"><span id="progress"></span></div>
+
+<header class="top">
+  <a class="brand" href="/report">
+    <svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true" focusable="false"><circle class="ring" cx="14" cy="14" r="12.2"/><path class="w" d="M6.5 15.5q1.9-1.6 3.75 0t3.75 0 3.75 0 3.75 0"/><path class="w" d="M8.5 19.2q1.4-1.2 2.75 0t2.75 0 2.75 0 2.75 0"/></svg>
+    Митрандир
+  </a>
+</header>
+
+<main class="page">
+  <section class="hero" aria-labelledby="title">
+    <p class="eyebrow rise">Для очевидцев</p>
+    <h1 id="title" class="rise d1">Сообщить <span class="ink">о подтоплении</span></h1>
+    <p class="lead rise d2">Четыре коротких шага: что произошло, где и&nbsp;когда — и&nbsp;фото, если есть.</p>
+
+    <div class="notice rise d3" role="note">
+      <p class="sos"><span class="sos-num" aria-hidden="true">112</span><span><strong>Это не вызов экстренных служб.</strong> Если есть угроза жизни — звоните <a href="tel:112">112</a>.</span></p>
+      <p class="fact"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3.2 19 6v5.2c0 4.3-2.9 8-7 9.6-4.1-1.6-7-5.3-7-9.6V6l7-2.8z"/><path d="m9 12 2.2 2.2L15.4 10"/></svg><span>Сообщение поступит на проверку аналитику. Отправка не подтверждает событие и не заказывает спутниковую съёмку автоматически.</span></p>
+      <p class="fact"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M10.3 4.2 2.8 17.5a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0z"/><path d="M12 9.5v4.2"/><path d="M12 17.2h.01"/></svg><span>Не подходите к воде ради фотографии.</span></p>
+      <p class="fact"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="3.6"/><path d="M5 20.2c.9-3.6 3.6-5.6 7-5.6s6.1 2 7 5.6"/></svg><span>Регистрация, имя и телефон не нужны.</span></p>
+    </div>
+  </section>
+
+  <div class="flow">
+    <p id="closed" class="card closed hidden" role="alert">Приём сообщений через интернет сейчас не открыт.</p>
+
+    <form id="form" class="flow m0" novalidate>
+      <fieldset class="card step rise d2" id="step1">
+        <legend><span class="step-kicker">Шаг 1 из 4 <span class="ok" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>готово</span></span><span class="step-title">Что произошло?</span></legend>
+        <span class="step-big" aria-hidden="true">01</span>
+        <div class="chips" id="categories" role="radiogroup" aria-label="Тип сообщения"></div>
+        <div class="error" id="err-category" aria-live="polite"></div>
+        <label for="description">Опишите, что вы видите</label>
+        <textarea id="description" name="description" maxlength="2000" required
+          placeholder="Например: вода подошла к домам на улице Речной, дорога к мосту залита"></textarea>
+        <div class="error" id="err-description" aria-live="polite"></div>
+      </fieldset>
+
+      <fieldset class="card step" id="step2">
+        <legend><span class="step-kicker">Шаг 2 из 4 <span class="ok" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>готово</span></span><span class="step-title">Где?</span></legend>
+        <span class="step-big" aria-hidden="true">02</span>
+        <p class="hint">Отметьте на карте место, где вы видели воду. Это может быть не там, где вы сейчас.</p>
+        <div id="minimap" class="minimap" role="application" aria-label="Карта: нажмите, чтобы отметить место"></div>
+        <p id="map-fallback" class="hint hidden">Карта не загрузилась — укажите название места или координаты.</p>
+        <div class="toolbar">
+          <button type="button" class="btn locate" id="geolocate"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="2.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/></svg>Использовать моё местоположение</button>
+          <button type="button" class="btn ghost" id="clear-point">Убрать точку</button>
+        </div>
+        <div class="error" id="err-place" aria-live="polite"></div>
+        <label for="place_text">Название места (населённый пункт, улица, ориентир)</label>
+        <input type="text" id="place_text" name="place_text" maxlength="200" autocomplete="off">
+        <details>
+          <summary>Ввести координаты вручную</summary>
+          <div class="row">
+            <div><label for="lat">Широта</label><input type="number" id="lat" name="lat" step="any" min="-90" max="90" inputmode="decimal"></div>
+            <div><label for="lon">Долгота</label><input type="number" id="lon" name="lon" step="any" min="-180" max="180" inputmode="decimal"></div>
+          </div>
+        </details>
+        <label for="location_precision">Насколько точно отмечено место</label>
+        <select id="location_precision" name="location_precision">
+          <option value="point">Точно в этой точке</option>
+          <option value="street">Примерно — улица</option>
+          <option value="locality">Примерно — населённый пункт</option>
+          <option value="district">Примерно — район</option>
+          <option value="unknown">Не уверен</option>
+        </select>
+      </fieldset>
+
+      <fieldset class="card step" id="step3">
+        <legend><span class="step-kicker">Шаг 3 из 4 <span class="ok" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>готово</span></span><span class="step-title">Когда заметили?</span></legend>
+        <span class="step-big" aria-hidden="true">03</span>
+        <div class="when">
+          <div>
+            <label for="observed_local">Дата и время <span id="tz" class="muted"></span></label>
+            <input type="datetime-local" id="observed_local">
+          </div>
+          <div>
+            <label for="observed_precision">Точность</label>
+            <select id="observed_precision" name="observed_precision">
+              <option value="hour">Примерно в это время (± час)</option>
+              <option value="day">В этот день</option>
+              <option value="several_days">В последние несколько дней</option>
+              <option value="unknown">Не помню</option>
+            </select>
+          </div>
+        </div>
+        <div class="error" id="err-time" aria-live="polite"></div>
+      </fieldset>
+
+      <fieldset class="card step" id="step4">
+        <legend><span class="step-kicker">Шаг 4 из 4 <span class="ok" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>готово</span></span><span class="step-title">Фото <span class="opt">(необязательно)</span></span></legend>
+        <span class="step-big" aria-hidden="true">04</span>
+        <input type="file" class="file-input" id="photos" name="photos" accept="image/jpeg,image/png,image/webp" multiple>
+        <label class="drop" for="photos">
+          <span class="drop-ico"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.6"/></svg></span>
+          <span>Добавить фото<small id="photo-hint"></small></span>
+        </label>
+        <div class="shots" id="shots"></div>
+        <div class="error" id="err-photos" aria-live="polite"></div>
+      </fieldset>
+
+      <div class="card submit-card">
+        <div class="error" id="err-form" role="alert"></div>
+        <button type="submit" class="btn primary" id="submit">Отправить сообщение</button>
+        <p class="privacy"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="10.5" width="14" height="10" rx="2.2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg><span>Сообщение хранится ограниченный срок и видно только аналитикам. Фото очищаются от метаданных (в том числе геотегов).</span></p>
+      </div>
+    </form>
+
+    <section id="done" class="card done hidden" aria-live="polite" tabindex="-1">
+      <svg class="done-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><circle cx="32" cy="32" r="29"/><path d="m20 33 8.5 8.5L45 24.5"/></svg>
+      <h2 class="done-title">Сообщение принято на проверку.</h2>
+      <p class="muted done-label">Номер обращения:</p>
+      <p class="num" id="done-number"></p>
+      <p>Статус можно посмотреть по личной ссылке — сохраните её, другой возможности её получить нет:</p>
+      <div class="btns">
+        <a id="done-link" class="btn primary" href="#" rel="noopener noreferrer">Открыть статус обращения</a>
+        <button type="button" class="btn" id="copy-link">Скопировать ссылку</button>
+      </div>
+      <p class="copied" id="copied" aria-live="polite"></p>
+      <p class="muted small">Отправка не означает подтверждение события и не заказывает спутниковую съёмку. Аналитик сопоставит сообщение с другими источниками.</p>
+      <button type="button" class="btn ghost" id="another">Отправить ещё одно сообщение</button>
+    </section>
+  </div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script src="/media/static/report.js"></script>
+</body>
+</html>

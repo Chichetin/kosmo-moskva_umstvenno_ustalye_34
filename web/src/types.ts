@@ -76,6 +76,8 @@ export type SceneSummary = {
     | null;
   status: "analyzed" | "observation_only";
   preview_url: string | null;
+  analyzable?: boolean;
+  not_analyzable_reason?: string | null;
 };
 
 export type Comparison = {
@@ -103,4 +105,11 @@ export type Plan = {
     C: Record<string, string>;
     not_selected_C: Record<string, string>;
   };
+};
+
+// GET /api/media/map (deploy/README.md): media events and pending eyewitness reports, no personal data.
+export type MediaMap = {
+  events: FeatureCollection;
+  reports: FeatureCollection;
+  exact_locations: boolean;
 };

@@ -94,7 +94,7 @@ def write_csv(path: Path, rows: list[dict]) -> None:
 
 def write_json(path: Path, obj) -> None:
     path.write_text(json.dumps(obj, ensure_ascii=False, indent=2, allow_nan=False) + "\n",
-                    encoding="utf-8")
+                    encoding="utf-8", newline="\n")
 
 
 def build(out: Path) -> None:
@@ -121,11 +121,12 @@ def build(out: Path) -> None:
         dst.write(base.astype(np.uint8), 1)
 
     # assets and losses
-    feats, asset_rows, loss_rows, points = [], [], [], {}
+    feats, asset_rows, loss_rows, points, vq = [], [], [], {}, {}
     for aid, cls, (r, c) in ASSETS:
         t = types[cls]
         lon, lat = lonlat(r, c)
         points[aid] = (lon, lat)
+        vq[aid] = t["asset_value_rub"] * t["vulnerability_coef"]
         props = {"asset_id": aid, "chip_id": CHIP, "asset_class": cls,
                  "asset_value_rub": t["asset_value_rub"], "vulnerability_coef": t["vulnerability_coef"]}
         feats.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]},
@@ -146,6 +147,9 @@ def build(out: Path) -> None:
     for i, x in enumerate(ok, start=1):
         x["rank"] = str(i)
     el = {x["asset_id"]: float(x["expected_loss_rub"]) for x in ok}
+    # decision risk R = V·q·min(p, 1−p) of ok assets (D-049), independent of procurement code
+    risk = {x["asset_id"]: vq[x["asset_id"]] * min(float(x["p_flood"]), 1 - float(x["p_flood"]))
+            for x in ok}
     write_json(out / "assets.geojson", {"type": "FeatureCollection", "features": feats})
     write_csv(out / "assets.csv", asset_rows)
     write_csv(out / "asset_loss.csv", loss_rows)
@@ -202,6 +206,7 @@ def build(out: Path) -> None:
 
     # comparison
     total_el = sum(el.values())
+    total_r = sum(risk.values())
     comp = []
     for s in ("A", "B", "C"):
         data_cost = round(sum(float(r["cost_rub"]) for r in plan_rows if r["strategy"] == s), 2)
@@ -210,6 +215,7 @@ def build(out: Path) -> None:
                 and cat[z]["available_at"] and cat[z]["available_at"] <= DEADLINE]
         from shapely.geometry import Point
         covered = round(sum(v for a, v in el.items() if any(z.covers(Point(points[a])) for z in used)), 2)
+        covered_r = sum(v for a, v in risk.items() if any(z.covers(Point(points[a])) for z in used))
         status = {"A": "baseline", "B": "not_estimated", "C": "scenario"}[s]
         resid = {"A": "0.183", "B": "", "C": "0.150"}[s]
         comp.append({"strategy": s, "data_cost_rub": f"{data_cost:.2f}", "other_cost_rub": f"{other:.2f}",
@@ -220,7 +226,9 @@ def build(out: Path) -> None:
                      "residual_uncertainty": resid, "uncertainty_status": status,
                      "uncertainty_basis": {"A": "средняя p(1−p) по 9 объектам ok",
                                            "B": "эффект новых наблюдений не оценён",
-                                           "C": "сценарий: p(1−p) обнуляется у покрытых объектов"}[s]})
+                                           "C": "сценарий: p(1−p) обнуляется у покрытых объектов"}[s],
+                     "addressed_decision_risk_rub": f"{covered_r:.2f}",
+                     "decision_risk_share": repr(round(covered_r / total_r, 6)) if total_r > 0 else ""})
     assert comp[1]["budget_feasible"] == "false" and comp[2]["budget_feasible"] == "true", comp
     write_csv(out / "strategy_comparison.csv", comp)
 

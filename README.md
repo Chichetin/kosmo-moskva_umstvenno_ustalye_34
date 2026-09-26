@@ -71,7 +71,7 @@ python3 scripts/download_sen1floods11.py            # HandLabeled + perm_water +
 | Обучение основного метода (U-Net, ансамбль 5 seed) | `make train` (GPU: `make train GPU=1`; Colab: `notebooks/train_colab.ipynb`) | готово — веса 5 членов в `models/unet/` через LFS, dev IoU 0,584 против baseline 0,391 (D-019, `docs/verification/unet-metrics.md`); команда обучения проверена смоук-прогоном (`--max-chips`, CPU и GPU, код 0), полный переобучающий прогон (~75 с/член на GPU) после обучения весов сдачи не повторялся (время и устройство — `docs/verification/unet-metrics.md` §«Воспроизведение») |
 | Калибровка и порог на validation | `make calibrate` | готово — Platt-калибровка, порог 0,37 по IoU на validation (D-029, `docs/verification/calibration-val.md`); пишет `models/unet/calibration.json`, `predict` подхватывает его автоматически без правок вызова |
 | Inference на чипе (S1-only, оба метода) | `FLOODVALUE_METHOD=unet\|baseline make predict CHIP=<chip_id>` | готово — на `Sri-Lanka_713926` (unet: `threshold 0.37, threshold_status "calibrated (platt) and chosen on validation, D-029"`, `valid_pixels 262144`; baseline: `seconds 0.0`) и на `Nigeria_1095404` (другой официальный чип, unet: `valid_pixels 262144`) |
-| Финальная оценка на part (validation/dev/test) | `make eval-test` (сырое, по умолчанию `--part test` — запечатан); `uv run --frozen python -m floodvalue eval-test --part validation` | готово, **test честно запечатан**: `make eval-test` без подтверждения → `eval-test: отказ — test is sealed (D-010): set FLOODVALUE_EVAL_TEST_CONFIRM=<sha256 of the frozen configuration>; ...`; `--part validation` реально считает 60 чипов → `docs/verification/eval-validation.md` (калиброванная модель: IoU 0,685 против baseline 0,580, ECE 0,007 по 10 корзинам, Brier 0,041, AUROC неопределённости 0,902; ECE 0,010 в `docs/verification/calibration-val.md` — та же калибровка по 15 корзинам, Brier совпадает); `docs/verification/test-log.md` по test пуст — test ещё не открывался (`eval-test` замороженной конфигурации — не позже 26.09 20:00, D-033) |
+| Финальная оценка на part (validation/dev/test) | `make eval-test` (сырое, по умолчанию `--part test` — запечатан); `uv run --frozen python -m floodvalue eval-test --part validation` | готово, **test честно запечатан**: `make eval-test` без подтверждения → `eval-test: отказ — test is sealed (D-010): set FLOODVALUE_EVAL_TEST_CONFIRM=<sha256 of the frozen configuration>; ...`; `--part validation` реально считает 60 чипов → `docs/verification/eval-validation.md` (калиброванная модель: IoU 0,685 против baseline 0,580, ECE 0,010 [CI 0,008; 0,021] в тех же 15 корзинах, что `calibration-val.md`, log-loss 0,146, Brier 0,041, AUROC неопределённости 0,902; «сырая → калиброванная p»: ECE 0,040 → 0,010, D-057); `docs/verification/test-log.md` по test пуст — test ещё не открывался (`eval-test` замороженной конфигурации — не позже 26.09 20:00, D-033) |
 | 10 объектов и ущерб | `make assets CHIP=<chip_id>` | готово — `assets: 10 объектов, оценено 10` (D-018; `pytest tests/assets`) |
 | Зоны, цена, A/B/C | `make procure BUDGET=<руб>` | готово — `procure: A/B/C` с ценой, охватом EL, ценой ошибки решения и `budget_feasible` (D-023; `pytest tests/procurement`). C покупает снимки там, где они могут изменить решение: max прироста R = V·q·min(p, 1−p) (сценарная «цена ошибки решения», не снижение потерь) на рубль корзины; объекты с почти известным исходом (p ≈ 0 или 1) не покупаются; прежнее правило «EL на рубль» — строка `C_by_EL` в `sensitivity.csv` (D-049). Поэтому доля покрытого EL у C может быть малой: объекты с исходом, почти известным по карте (p ≈ 1), идут на осмотр (D-035), а не на снимок |
 | 12 обязательных файлов | `make export && make validate` | готово — реальный комплект `make all CHIP=Sri-Lanka_713926 BUDGET=5000` → `12/12 файлов прошли проверку`, `flood_mask.tif`/`flood_probability.tif` — с калиброванным порогом 0,37, `metrics.csv` — с калиброванными метриками main (D-027, D-029; `pytest tests/contracts tests/export`); `run_metadata.warnings` пуст на чистом дереве — `make all CHIP=Sri-Lanka_713926 BUDGET=5000` на commit `89c8e4f` (26.09) → `warnings: []`, validate 12/12 (ранее было предупреждение про рассинхрон порога метрик, снято подключением калибратора в `export`) |
@@ -90,12 +90,12 @@ python3 scripts/download_sen1floods11.py            # HandLabeled + perm_water +
 `make check` (`test` + `hooks-test` + `validate`) — обязателен перед каждым push; без
 `OUT=` `validate` проверяет самый свежий комплект в `outputs/`, если он есть, иначе
 эталон `tests/fixtures/good` (12/12); `make validate OUT=<комплект>` — конкретный
-собранный комплект. Чистый клон GitVerse `6fe66f0`: `uv sync --frozen && uv run --frozen
-pytest` → 473 passed, `make all` → validate 12/12 (`docs/verification/clean-clone-gitverse.md`).
-Число 473 относится к commit `6fe66f0` (прогон из чистого клона), 646 ниже — к `89c8e4f`
-(26.09); текущее число — вывод `make check` на нужном commit.
-На commit `89c8e4f` (26.09) `make check` → 646 passed, 4 skipped, `test-hooks.sh` OK,
-`validate` 12/12. Число тестов растёт с каждым PR.
+собранный комплект. Чистый клон GitVerse `93c27f2` (26.09, прогон 4): `uv sync --frozen && uv run
+--frozen pytest` → 898 passed, 1 skipped; `make all`, `make all BUDGET=20000` и
+`make all CHIP=Nigeria_1095404` → validate 12/12; sha256 `flood_probability.tif`/`flood_mask.tif`
+и порог 0,37 при смене бюджета не меняются; `make app` отвечает
+(`docs/verification/clean-clone-gitverse.md`). Число тестов относится к этому commit и растёт
+с каждым PR; текущее — вывод `make check` на нужном commit.
 
 ## Интерфейс оператора
 
@@ -146,6 +146,18 @@ D-049); B сверх бюджета помечена контрфактичес�
 и `cd web && npm install && npm run dev` в другом, затем откройте
 `http://127.0.0.1:5173`. Скриншоты текущей сборки (headless Chromium, комплект `Sri-Lanka_713926`):
 [сцена](docs/verification/ui-scene.png), [анализ](docs/verification/ui-analysis.png).
+
+**Митрандир — интерфейс оператора FloodValue.** Один адрес с формой очевидца и
+сообщениями СМИ: `make site` поднимает на
+`http://127.0.0.1:8000` интерфейс оператора (`/`), форму очевидца (`/report`) и страницу
+аналитика (`/media/analyst`); слой «Сообщения» для карты — `/api/media/map`. Развёртывание на
+домене (Caddy, systemd, токен аналитика) — `deploy/README.md` (D-054).
+
+**Анализ новой сцены из интерфейса:** для наблюдения из каталога без готового комплекта
+`POST /api/analyses?chip_id=<чип>` ставит в очередь те же этапы, что `make all` (predict →
+маска baseline → assets → procure → export → validate), по одной сцене за раз; статус и шаг —
+`GET /api/analyses/<job_id>`. Чипы test запечатаны до `eval-test` (403); бюджет — из
+`configs/run.yaml`, другой бюджет пересчитывается в интерфейсе без переобучения.
 
 ## Основной метод (критерий 3)
 

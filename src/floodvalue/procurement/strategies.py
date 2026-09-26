@@ -90,6 +90,11 @@ def other_cost(n_zones: int, other_cfg: Mapping[str, Any]) -> Decimal:
             + Decimal(str(other_cfg["review_per_zone_rub"])) * n_zones).quantize(Decimal("0.01"))
 
 
+def _el_sum(values: Iterable[float]) -> float:
+    """EL are to the kopeck (asset_loss.csv, #127): exact decimal sum, no float tail in files."""
+    return float(sum((Decimal(repr(v)) for v in values), Decimal(0)))
+
+
 def decision_risk_rub(p: float, value_rub: float, vulnerability: float) -> float:
     """Ожидаемая цена ошибки решения R = V·q·min(p, 1−p), руб. (сценарий, D-049).
 
@@ -223,7 +228,7 @@ def _run_c(items: Mapping[str, Mapping[str, Any]], cov: Mapping[str, list[str]],
     while (b := best_candidate("ratio")):
         take(b, "")
     return {"chosen": chosen, "reasons": reasons, "social": social, "total": total,
-            "covered_el": sum(el[a]["el"] for a in covered),
+            "covered_el": _el_sum(el[a]["el"] for a in covered),
             "covered_risk": sum(el[a]["risk"] for a in covered)}
 
 
@@ -279,8 +284,8 @@ def comparison_row(strategy: str, ids: list[str], rows: list[Mapping[str, Any]],
     data = basket_total(rows)
     other = other_cost(len(ids), other_cfg)
     covered = sorted(a for a in {x for c in ids for x in cov.get(c, ())} if a in el)
-    covered_el = sum(el[a]["el"] for a in covered)
-    denom = sum(v["el"] for v in el.values())
+    covered_el = _el_sum(el[a]["el"] for a in covered)
+    denom = _el_sum(v["el"] for v in el.values())
     covered_r = sum(el[a]["risk"] for a in covered)
     denom_r = sum(v["risk"] for v in el.values())
     uncs = {a: v["unc"] for a, v in el.items()}

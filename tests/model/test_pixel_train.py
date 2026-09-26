@@ -159,7 +159,7 @@ def test_check_against_baseline_detects_mismatch(tmp_path):
     bad = {**row, "fp": 3}
     assert train.check_against_baseline([bad], ref) == ["dev/ALL fp: 3 != 2"]
     assert train.check_against_baseline([{**row, "valid_mask_sha256": "x"}], ref)
-    with open(ref, newline="") as fh:
+    with open(ref, newline="", encoding="utf-8") as fh:
         assert next(csv.DictReader(fh))["tp"] == "1"
 
 

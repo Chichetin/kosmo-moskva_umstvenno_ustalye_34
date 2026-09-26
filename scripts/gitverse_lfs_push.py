@@ -311,4 +311,6 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    for stream in (sys.stdout, sys.stderr):  # Windows pipes default to cp1251, which has no "→"
+        stream.reconfigure(encoding="utf-8")
     sys.exit(main())
