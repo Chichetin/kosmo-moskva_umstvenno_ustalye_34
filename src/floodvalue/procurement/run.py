@@ -14,10 +14,11 @@ from __future__ import annotations
 import csv
 import json
 import math
+from collections.abc import Iterable
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from floodvalue.contracts import load_run_config
 from floodvalue.contracts.kopeck import kopeck_sum, ok_rows

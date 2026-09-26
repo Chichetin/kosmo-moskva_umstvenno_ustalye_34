@@ -3,8 +3,9 @@
 Public API for the operator interface (D-013): :func:`plan` recomputes A/B/C for a new
 budget from the files of a results directory, without touching p, mask, threshold or portfolio.
 """
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 
 def plan(run_dir: Path, budget_rub: float, social: bool | None = None) -> dict[str, Any]:
