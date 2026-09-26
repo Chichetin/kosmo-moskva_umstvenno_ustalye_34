@@ -2,8 +2,8 @@
   width: 220px;
   margin: 0;
   padding: 10px 12px 8px;
-  border: 1px solid rgba(233, 237, 239, 0.1);
-  border-radius: 12px;
+  border: 0;
+  border-radius: var(--radius-panel);
   background: rgba(18, 21, 24, 0.82);
 }
 
