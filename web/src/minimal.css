@@ -1416,3 +1416,38 @@ tbody tr.selected,
   color: #929da2;
   line-height: 1.35;
 }
+
+/* Interface scale on the globe screen. Only overlays are scaled: MapLibre's canvas and its
+   popups stay unscaled so pointer coordinates remain exact. Larger screens get a larger step. */
+.map-top-left,
+.map-top-center,
+.search-panel,
+.search-toggle,
+.reopen-panel,
+.context-panel,
+.basemap-switch,
+.maplibregl-ctrl-bottom-right,
+.maplibregl-ctrl-bottom-left {
+  --ui-zoom: 1;
+}
+
+@media (min-width: 1100px) {
+  .map-top-left, .map-top-center, .search-panel, .search-toggle, .reopen-panel,
+  .context-panel, .basemap-switch, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
+    zoom: 1.2;
+  }
+}
+
+@media (min-width: 1800px) {
+  .map-top-left, .map-top-center, .search-panel, .search-toggle, .reopen-panel,
+  .context-panel, .basemap-switch, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
+    zoom: 1.35;
+  }
+}
+
+@media (min-width: 2300px) {
+  .map-top-left, .map-top-center, .search-panel, .search-toggle, .reopen-panel,
+  .context-panel, .basemap-switch, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
+    zoom: 1.5;
+  }
+}
