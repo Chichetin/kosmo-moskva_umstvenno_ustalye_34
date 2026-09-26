@@ -13,7 +13,8 @@ T0 = datetime(2017, 5, 30, 12, tzinfo=UTC)
 DEADLINE = datetime(2017, 5, 31, 0, tzinfo=UTC)
 ASSETS = [{"asset_id": f"A{i:02d}", "longitude": 80.0 + 0.02 * i, "latitude": 7.0}
           for i in range(1, 11)]  # 2 км между объектами — буферы не перекрываются
-LOSS = [{"asset_id": a["asset_id"], "status": "ok",
+# p = 0,5: цена ошибки решения R = V·q·min(p, 1−p) = EL — порядок C как по EL (D-048)
+LOSS = [{"asset_id": a["asset_id"], "status": "ok", "p_flood": "0.5",
          "expected_loss_rub": str(1_000_000 * (11 - i)), "uncertainty": "0.5"}
         for i, a in enumerate(ASSETS, 1)]
 OTHER = {"compute_rub": 1000, "review_per_zone_rub": 500}
@@ -265,7 +266,7 @@ def test_selection_uses_repriced_basket_not_sum_of_singles():
 
 def test_overlapping_zones_do_not_double_count():
     cov = {"x": ["A01", "A02"], "y": ["A02"]}
-    el = {"A01": {"el": 10.0, "unc": 0.1}, "A02": {"el": 5.0, "unc": 0.2}}
+    el = {"A01": {"el": 10.0, "unc": 0.1, "risk": 10.0}, "A02": {"el": 5.0, "unc": 0.2, "risk": 5.0}}
     row = strategies.comparison_row("B", ["x", "y"], [], Decimal(0), cov, el, OTHER)
     assert row["covered_expected_loss_rub"] == 15.0
     assert row["covered_asset_ids"] == "A01 A02"
@@ -299,7 +300,7 @@ def test_tie_break_by_candidate_id_prefers_smaller_id():
                  "area_km2": Decimal("1.44"), "available_at": "2017-05-30T21:00:00+00:00"}
              for c in ("Z-A01", "Z-A01-X")}
     cov = {"Z-A01": ["A01"], "Z-A01-X": ["A01"]}
-    el = {"A01": {"el": 1.0, "unc": 0.1}}
+    el = {"A01": {"el": 1.0, "unc": 0.1, "risk": 1.0}}
     chosen, _, _ = strategies.select_c(items, cov, el, Decimal(10000), CFG, AS_OF)
     assert chosen == ["Z-A01"]
 
@@ -353,8 +354,8 @@ def test_c_best_single_start_beats_myopic_greedy():
     помещается: 11 < 12. Проход со стартом с наибольшего EL выбирает BIG."""
     items = {"BIG": _item("BIG", "3.000"), "S1": _item("S1", "1.440"), "S2": _item("S2", "1.440")}
     cov = {"BIG": ["A01", "A02", "A03"], "S1": ["A01"], "S2": ["A02"]}
-    el = {"A01": {"el": 10.0, "unc": 0}, "A02": {"el": 1.0, "unc": 0},
-          "A03": {"el": 1.0, "unc": 0}}
+    el = {"A01": {"el": 10.0, "unc": 0, "risk": 10.0}, "A02": {"el": 1.0, "unc": 0, "risk": 1.0},
+          "A03": {"el": 1.0, "unc": 0, "risk": 1.0}}
     chosen, reasons, info = strategies.select_c(items, cov, el, Decimal("5200"), CFG, AS_OF)
     assert chosen == ["BIG"] and info["variant"] == "start:BIG"
     assert info["alternatives"]["greedy"]["chosen"] == ["S1", "S2"]
@@ -374,7 +375,7 @@ def test_c_best_single_start_beats_myopic_greedy():
 def test_social_phase_takes_cheapest_cover_of_required():
     items = {"BIG": _item("BIG", "3.000"), "S1": _item("S1", "1.440")}
     cov = {"BIG": ["A01", "A02"], "S1": ["A01"]}
-    el = {"A01": {"el": 1.0, "unc": 0}, "A02": {"el": 1.0, "unc": 0}}
+    el = {"A01": {"el": 1.0, "unc": 0, "risk": 1.0}, "A02": {"el": 1.0, "unc": 0, "risk": 1.0}}
     chosen, reasons, info = strategies.select_c(items, cov, el, Decimal("10000"), CFG, AS_OF,
                                                 required=["A01"])
     assert chosen[0] == "S1" and "социальное" in reasons["S1"]  # дешевле BIG на объект A01
@@ -400,7 +401,7 @@ def test_uncertainty_tie_break_prefers_larger_uncertainty():
     """Равные EL на рубль и цена: берётся позиция с большей неопределённостью новых объектов."""
     items = {"P": _item("P", "1.440"), "Q": _item("Q", "1.440")}
     cov = {"P": ["A01"], "Q": ["A02"]}
-    el = {"A01": {"el": 5.0, "unc": 0.1}, "A02": {"el": 5.0, "unc": 0.9}}
+    el = {"A01": {"el": 5.0, "unc": 0.1, "risk": 5.0}, "A02": {"el": 5.0, "unc": 0.9, "risk": 5.0}}
     chosen, _, _ = strategies.select_c(items, cov, el, Decimal("2452.98"), CFG, AS_OF)
     assert chosen == ["Q"]
 
@@ -410,7 +411,7 @@ def test_social_phase_cost_per_required_not_el_ratio():
     берёт S1; без ограничения берётся BIG."""
     items = {"BIG": _item("BIG", "3.000"), "S1": _item("S1", "1.440")}
     cov = {"BIG": ["A01", "A02"], "S1": ["A01"]}
-    el = {"A01": {"el": 1.0, "unc": 0}, "A02": {"el": 100.0, "unc": 0}}
+    el = {"A01": {"el": 1.0, "unc": 0, "risk": 1.0}, "A02": {"el": 100.0, "unc": 0, "risk": 100.0}}
     chosen, _, _ = strategies.select_c(items, cov, el, Decimal("5200"), CFG, AS_OF,
                                        required=["A01"])
     assert chosen == ["S1"]
@@ -445,6 +446,7 @@ def test_deadline_rows_name_scenario_timing_and_why():
     """Скептик D-047: сроки доступности — сценарные; пустая B к сроку объясняет, когда
     доступна W-CHIP; более поздний срок называет доступную, но не дающую охвата оптику."""
     rows = sens_rows(budgets=[], rates=[], decision_at=T0, deadline_hours=[6, 48])
+    rows = [r for r in rows if r["scenario_id"].startswith("deadline_")]
     assert len(rows) == 4
     for r in rows:
         assert "сроки доступности предложений сценарные" in r["interpretation"]

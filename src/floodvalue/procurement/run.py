@@ -36,7 +36,8 @@ PLAN_FIELDS = ["strategy", "candidate_id", "area_km2", "base_rate_rub_km2", "bas
 COMPARISON_FIELDS = ["strategy", "data_cost_rub", "other_cost_rub", "decision_cost_rub",
                      "budget_rub", "budget_feasible", "covered_expected_loss_rub",
                      "coverage_share", "residual_uncertainty", "uncertainty_status",
-                     "uncertainty_basis", "covered_asset_ids"]
+                     "uncertainty_basis", "covered_asset_ids", "addressed_decision_risk_rub",
+                     "decision_risk_share"]
 SENS_FIELDS = ["scenario_id", "strategy", "changed_inputs_json", "decision_cost_rub",
                "covered_expected_loss_rub", "result_status", "interpretation"]
 
@@ -187,14 +188,19 @@ def _not_selected_reason(cid: str, ctx: dict[str, Any], res: dict[str, Any]) -> 
     if cid in ctx["excluded"]:
         return ctx["excluded"][cid]
     covered = {a for c in res["plans"]["C"] for a in ctx["cov"].get(c, ())}
-    own = [a for a in ctx["cov"].get(cid, ()) if a in {r["asset_id"] for r in ctx["loss"]
-                                                        if r["status"] == "ok"}]
+    el = strategies.assessed(ctx["loss"])
+    own = [a for a in ctx["cov"].get(cid, ()) if a in el]
     if not own:
         return "не покрывает ни одного оценённого объекта (status=ok)"
     if set(own) <= covered:
-        return f"объекты {', '.join(own)} уже покрыты выбранными позициями C — EL не добавляет"
-    return ("не выбрана в C: хуже по EL на рубль прироста цены корзины или не помещается в "
-            "остаток бюджета при пересчёте всей корзины")
+        return f"объекты {', '.join(own)} уже покрыты выбранными позициями C — R и EL не добавляет"
+    new = [a for a in own if a not in covered]
+    if sum(el[a]["risk"] for a in new) <= 0:
+        return (f"низкая ценность информации: исход по объекту почти известен ({', '.join(new)}: "
+                f"p = 0 или 1, цена ошибки решения R = V·q·min(p, 1−p) = 0) — снимок решения "
+                f"не меняет (D-048)")
+    return ("не выбрана в C: хуже по цене ошибки решения на рубль прироста цены корзины или не "
+            "помещается в остаток бюджета при пересчёте всей корзины")
 
 
 def _plan(ctx: dict[str, Any], budget_rub: float, social: bool | None = None) -> dict[str, Any]:
@@ -332,6 +338,15 @@ def write_outputs(run_dir: Path, budget_rub: float) -> dict[str, Any]:
         },
         "rule_B": strategies.RULE_B,
         "rule_C": strategies.RULE_C,
+        "rule_C_by_EL": strategies.RULE_C_BY_EL,
+        "decision_risk": {
+            "formula": "R = V·q·min(p, 1−p) = EL·min(p, 1−p)/p, руб. (сценарий), D-048",
+            "status": "scenario",
+            "meaning": ("адресуемая съёмкой ожидаемая цена ошибки решения (EVPI при бинарном "
+                        "решении, симметричной цене ошибки V·q, идеальном снимке и "
+                        "откалиброванной p); не фактическое снижение потерь"),
+            "columns": "strategy_comparison.csv: addressed_decision_risk_rub, decision_risk_share",
+            "excluded": "объекты partial/no_data в R не входят (p нет)"},
         "social_constraint": {**ctx["rc"]["social_constraint"],
                               "asset_ids": ctx["social_ids"], "result": res["social_constraint"],
                               "note": ("отдельное ограничение покрытия C, не множитель рублей EL "
@@ -382,6 +397,7 @@ def run(args) -> int:
         print(f"procure: {r['strategy']}: данные {r['data_cost_rub']} руб., "
               f"бюджет {r['budget_rub']}, в бюджете {r['budget_feasible']}, "
               f"охват EL {r['covered_expected_loss_rub']:.2f} руб., "
+              f"цена ошибки решения {r['addressed_decision_risk_rub']:.2f} руб., "
               f"зоны {res['plans'][r['strategy']]}")
     print(f"procure: файлы в {out}")
     return 0
