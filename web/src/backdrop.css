@@ -1,0 +1,29 @@
+/* Backdrop.tsx: the background around the globe (the analysis screen stays flat). Graphite only —
+   this is the operator console. The canvas draws pools, drift, parallax and caustic in one pass;
+   the CSS gradient under it is the former static look, shown when WebGL is unavailable. */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(1200px 900px at 68% 38%, #262b30 0%, transparent 62%),
+    radial-gradient(900px 700px at 12% 92%, #171b1f 0%, transparent 60%),
+    linear-gradient(180deg, #0b0d10 0%, #050607 100%);
+}
+
+.backdrop-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Static grain at full resolution hides banding in the upscaled canvas. */
+.backdrop-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
