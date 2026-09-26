@@ -1,0 +1,121 @@
+/* Tokens follow the operator interface (web/src/minimal.css): graphite surfaces, calm accent. */
+:root {
+  --bg: #08090b;
+  --surface: #121518;
+  --surface-2: #171b1e;
+  --line: #262c30;
+  --text: #e9edef;
+  --muted: #929da2;
+  --accent: #c7d4da;
+  --warn: #d9b36c;
+  --bad: #e08a7e;
+  --ok: #9cc3a4;
+  --focus: #c7d4da;
+  color-scheme: dark;
+  font-family: "Noto Sans", "Adwaita Sans", system-ui, Arial, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; background: var(--bg); }
+body { line-height: 1.45; font-size: 16px; }
+a { color: var(--accent); }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+.topbar { display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+  border-bottom: 1px solid var(--line); }
+.brand { font-weight: 650; letter-spacing: -0.02em; }
+.brand small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+.muted { color: var(--muted); }
+.small { font-size: 14px; }
+.hidden { display: none !important; }
+.tag { display: inline-block; padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px;
+  font-size: 12px; color: var(--muted); margin-right: 4px; white-space: nowrap; }
+.tag.demo { color: var(--warn); border-color: #5a4a2c; }
+.tag.warn { color: var(--warn); }
+.tag.bad { color: var(--bad); }
+.tag.ok { color: var(--ok); }
+
+.btn { border: 1px solid var(--line); background: var(--surface-2); border-radius: 10px;
+  padding: 10px 14px; cursor: pointer; }
+.btn:hover { border-color: #3a4247; }
+.btn.primary { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+.btn.small { padding: 5px 10px; font-size: 14px; border-radius: 8px; }
+
+label { display: block; font-size: 14px; color: var(--muted); margin: 10px 0 4px; }
+input[type=text], input[type=number], input[type=datetime-local], input[type=password],
+select, textarea { width: 100%; background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 12px; }
+textarea { min-height: 110px; resize: vertical; }
+input[aria-invalid=true], textarea[aria-invalid=true] { border-color: var(--bad); }
+.error { color: var(--bad); font-size: 14px; margin-top: 4px; }
+fieldset { border: 0; margin: 0; padding: 0; }
+legend { font-weight: 600; font-size: 18px; margin-bottom: 4px; }
+
+/* public form */
+.report { max-width: 640px; margin: 0 auto; padding: 16px 16px 48px; }
+.notice { background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 14px; font-size: 14px; }
+.notice strong { color: var(--text); }
+.step { margin-top: 26px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.chips label { margin: 0; }
+.chips input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.chips span { display: inline-block; padding: 9px 14px; border: 1px solid var(--line);
+  border-radius: 999px; background: var(--surface-2); color: var(--text); cursor: pointer; }
+.chips input:checked + span { border-color: var(--text); background: #252b2f; }
+.chips input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
+.minimap { height: 240px; border-radius: 12px; border: 1px solid var(--line); margin-top: 8px;
+  background: var(--surface); }
+.row { display: flex; gap: 10px; }
+.row > * { flex: 1; }
+.actions { margin-top: 28px; display: flex; flex-direction: column; gap: 10px; }
+.done { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.done .num { font-size: 22px; font-weight: 650; letter-spacing: .02em; }
+.leaflet-container { background: #111 !important; }
+
+/* analyst */
+.layout { display: grid; grid-template-columns: 380px 1fr; height: calc(100vh - 53px); }
+.side { overflow: auto; border-right: 1px solid var(--line); padding: 12px; }
+.main { display: grid; grid-template-rows: 46% 54%; min-height: 0; }
+#map { min-height: 0; }
+.card { overflow: auto; padding: 14px 18px; border-top: 1px solid var(--line); }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 12px; margin-bottom: 12px; }
+.panel h2 { font-size: 15px; margin: 0 0 8px; font-weight: 650; }
+.list { list-style: none; padding: 0; margin: 0; }
+.list li { padding: 8px 6px; border-top: 1px solid var(--line); cursor: pointer; }
+.list li:first-child { border-top: 0; }
+.list li:hover, .list li[aria-current=true] { background: var(--surface-2); }
+.filters { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.filters label { margin: 0; }
+.checks { display: flex; flex-wrap: wrap; gap: 10px; font-size: 14px; margin-top: 6px; }
+.checks label { display: inline-flex; gap: 4px; align-items: center; color: var(--text); margin: 0; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 5px 6px; border-top: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 500; }
+.kv { display: grid; grid-template-columns: 170px 1fr; gap: 3px 12px; font-size: 14px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.thumbs img { width: 96px; height: 72px; object-fit: cover; border-radius: 6px; margin: 4px 4px 0 0;
+  border: 1px solid var(--line); }
+.section-title { font-size: 15px; font-weight: 650; margin: 18px 0 6px; }
+.toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; height: auto; }
+  .main { grid-template-rows: 320px auto; }
+  .side { border-right: 0; }
+}
+.m0 { margin: 0; }
+.mb6 { margin: 0 0 6px; }
+.mt2 { margin: 2px 0 0; }
+.mt18 { margin-top: 18px; }
+.summary { margin-top: 10px; cursor: pointer; }
+/* OSM raster tiles darkened to sit in the graphite interface (no extra tile provider). */
+.leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.6); }
+.report .done { margin-top: 16px; }
