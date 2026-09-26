@@ -334,6 +334,25 @@ export default function MapPanel(props: Props) {
       return;
     }
     mapRef.current = map;
+    // Trackpad: two-finger swipe pans, pinch (wheel with ctrlKey) zooms.
+    map.scrollZoom.disable();
+    map.getCanvasContainer().addEventListener(
+      "wheel",
+      (event) => {
+        event.preventDefault();
+        if (event.ctrlKey) {
+          const rect = map.getCanvasContainer().getBoundingClientRect();
+          const around = map.unproject([event.clientX - rect.left, event.clientY - rect.top]);
+          const step = event.deltaY * (event.deltaMode === 1 ? 0.16 : 0.01);
+          map.zoomTo(map.getZoom() - step, { around, duration: 0 });
+        } else {
+          // Line-mode deltas (Firefox mouse wheel) are ~3 per notch.
+          const scale = event.deltaMode === 1 ? 16 : 1;
+          map.panBy([event.deltaX * scale, event.deltaY * scale], { duration: 0 });
+        }
+      },
+      { passive: false },
+    );
     map.setPadding(props.scene ? noPadding() : overviewPadding());
     map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
     const attribution = host.current.querySelector<HTMLDetailsElement>(
