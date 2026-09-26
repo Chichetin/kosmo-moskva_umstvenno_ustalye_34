@@ -630,7 +630,28 @@ export default function App() {
         {exportError}
         <button onClick={() => setExportError(null)} aria-label="Скрыть ошибку выгрузки"><X size={14} /></button>
       </div>}
-      {newsOpen && <NewsPanel onClose={() => setNewsOpen(false)} />}
+      {newsOpen && (
+        <NewsPanel
+          onClose={() => setNewsOpen(false)}
+          scenes={scenes}
+          onShowOnMap={(lngLat, zoom) => {
+            // leave a scene or the analysis first, then fly (the scene exit moves the camera too)
+            const leaving = route.view !== "map" || !!route.chipId || sourceViewerOpen;
+            setSourceViewerOpen(false);
+            if (leaving) navigate("earth");
+            if (window.innerWidth < 700) setNewsOpen(false);
+            window.setTimeout(
+              () => setMessageFocus((f) => ({ lngLat, zoom, request: (f?.request ?? 0) + 1 })),
+              leaving ? 700 : 0,
+            );
+          }}
+          onOpenScene={(selected) => {
+            setNewsOpen(false);
+            setSourceViewerOpen(false);
+            selectScene(selected);
+          }}
+        />
+      )}
       <main className="workspace">
         <div
           className={`map-screen ${mapVisible ? "" : "map-hidden"} ${scene ? "scene-mode" : ""} ${baseMap === "optical" ? "optical-mode" : ""}`}
@@ -667,6 +688,7 @@ export default function App() {
             onIssue={setMapIssue}
             onSelectMessage={setMessage}
             focus={messageFocus}
+            newsOpen={newsOpen}
           />
           {message && (
             <MessagePanel
