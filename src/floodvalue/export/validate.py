@@ -373,7 +373,7 @@ def _check_decision_risk(report: "_Report", name: str, row, used: list | None,
         expected = covered_expected_loss(used, {a: by_id[a][1] for a in risk_by_id}, risk_by_id)
     if has_r and addressed is not None and not a_declared and abs(expected - addressed) > EL_TOL:
         report.add(name, f"{s}: addressed_decision_risk_rub={addressed} ≠ пересчёту {expected:.2f} "
-                         "(Σ V·q·min(p, 1−p) ok-объектов, покрытых зонами к сроку)")
+                         "(Σ R = EL·min(p, 1−p)/p ok-объектов, покрытых зонами к сроку)")
     if not has_share or expected is None:
         return
     addressed = expected if addressed is None else addressed
