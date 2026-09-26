@@ -2163,3 +2163,42 @@ details.context-foot summary { cursor: pointer; margin-bottom: 0.375rem; }
   background: none;
   accent-color: #cbd4d8;
 }
+
+/* Tiling with every right-hand window (news, the messages list, a message card): the bottom switch
+   keeps between the scene card and the window; --tile-right is that window's inset (App.tsx). */
+@media (min-width: 701px) {
+  .map-screen.tiled .map-top-center {
+    right: var(--tile-right, 26.5rem);
+  }
+}
+
+/* Colour of the two feeds in the navigation: news green, eyewitness messages amber (as on the map). */
+.top-nav .nav-news::before,
+.top-nav .nav-messages::before {
+  content: "";
+  display: inline-block;
+  flex: none;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  margin-right: 0.4375rem;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.top-nav .nav-news::before {
+  background: #39ff88;
+  box-shadow: 0 0 0.375rem #39ff88;
+}
+
+.top-nav .nav-messages::before {
+  background: #f0b85a;
+  box-shadow: 0 0 0.375rem #f0b85a;
+}
+
+.top-nav .nav-news.active::after {
+  background: #39ff88;
+}
+
+.top-nav .nav-messages.active::after {
+  background: #f0b85a;
+}

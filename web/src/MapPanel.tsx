@@ -81,7 +81,9 @@ const markers = (scenes: SceneSummary[]): FeatureCollection<Point> => ({
 });
 // «Сообщения» layer (/api/media/map): a reason to look at a territory, never an input to p or EL.
 const NEWS_COLOR = "#39ff88";  // news: events from bulletins and media (neon green)
-const REPORT_COLOR = "#f0b85a";  // eyewitness reports (amber)
+const REPORT_COLOR = "#f0b85a";  // eyewitness messages (amber)
+// An event known only from eyewitnesses is a message (amber); any news/bulletin source makes it news.
+const EVENT_COLOR = ["case", ["==", ["get", "source_kinds"], "citizen"], REPORT_COLOR, NEWS_COLOR] as unknown as string;
 const mediaFeatures = (items: Feature[]): FeatureCollection => ({
   type: "FeatureCollection",
   features: items.flatMap((item) =>
@@ -188,6 +190,7 @@ export default function MapPanel(props: Props) {
       "media-area": showMessages && !!messages,
       "media-event-glow": showMessages && !!messages,
       "media-event": showMessages && !!messages,
+      "media-report-glow": showMessages && !!messages,
       "media-report": showMessages && !!messages,
     };
     for (const [id, visible] of Object.entries(show)) {
@@ -604,14 +607,14 @@ export default function MapPanel(props: Props) {
         type: "line",
         source: "media-events",
         filter: ["!=", ["geometry-type"], "Point"],
-        paint: { "line-color": NEWS_COLOR, "line-width": 1.4, "line-opacity": 0.8, "line-dasharray": [2, 2] },
+        paint: { "line-color": EVENT_COLOR, "line-width": 1.4, "line-opacity": 0.8, "line-dasharray": [2, 2] },
       });
       map.addLayer({
         id: "media-event-glow",
         type: "circle",
         source: "media-events",
         filter: ["==", ["geometry-type"], "Point"],
-        paint: { "circle-radius": 15, "circle-color": NEWS_COLOR, "circle-opacity": 0.4, "circle-blur": 0.8 },
+        paint: { "circle-radius": 15, "circle-color": EVENT_COLOR, "circle-opacity": 0.4, "circle-blur": 0.8 },
       });
       map.addLayer({
         id: "media-event",
@@ -620,7 +623,7 @@ export default function MapPanel(props: Props) {
         filter: ["==", ["geometry-type"], "Point"],
         paint: {
           "circle-radius": 7,
-          "circle-color": NEWS_COLOR,
+          "circle-color": EVENT_COLOR,
           "circle-opacity": ["case", ["==", ["get", "review_state"], "reviewed"], 1, 0.9],
           // light outline: readable over dark forest on the «Спутник» basemap too
           "circle-stroke-color": "#f2fff6",
@@ -628,15 +631,21 @@ export default function MapPanel(props: Props) {
         },
       });
       map.addLayer({
+        id: "media-report-glow",
+        type: "circle",
+        source: "media-reports",
+        paint: { "circle-radius": 15, "circle-color": REPORT_COLOR, "circle-opacity": 0.4, "circle-blur": 0.8 },
+      });
+      map.addLayer({
         id: "media-report",
         type: "circle",
         source: "media-reports",
         paint: {
-          "circle-radius": 6,
+          "circle-radius": 7,
           "circle-color": REPORT_COLOR,
-          "circle-opacity": 0.12,
-          "circle-stroke-color": REPORT_COLOR,
-          "circle-stroke-width": 2,
+          "circle-opacity": 0.95,
+          "circle-stroke-color": "#fff6e3",
+          "circle-stroke-width": 1.8,
         },
       });
       updateScene();
