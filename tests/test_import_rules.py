@@ -14,8 +14,8 @@ Not seen by the walk (D-057): what a caller does with a module it got from a reg
 importlib (calibration -> `model.predict.METHODS`, bounded by D-041; model.eval_test ->
 `baseline.predict`), module names built by f-strings, and a FILES name re-exported through
 another file of the same module (imports inside a module are always allowed). A new
-cross-module import fails
-here until its line is added to ALLOWED (and FILES, if narrowed) with a D-… record.
+cross-module import fails here until its line is added to ALLOWED (and FILES, if narrowed)
+with a D-… record.
 The older AST tests stay: tests/baseline/test_baseline_imports.py,
 tests/calibration/test_calibration_imports.py, tests/context/test_firewall.py (D-042),
 tests/media/test_media_firewall.py (D-051).
@@ -80,6 +80,9 @@ ALLOWED: dict[str, set[str]] = {
     "app": BASE | {
         "floodvalue.procurement.plan",  # contracts.md §10, D-005, D-050
         SPLIT + "EVENT_PARTS",  # D-050: test chips stay sealed in the catalog
+        # D-046, D-057: `python -m floodvalue.baseline.predict --mask-only` as a subprocess
+        # step of the analysis queue (a CLI call writing a file, not an import)
+        "floodvalue.baseline.predict",
     },
     "context": BASE | {
         IO + "layer_path", IO + "raw_dir", IO + "parse_chip_id",  # D-057
@@ -102,7 +105,8 @@ FILES: dict[str, set[str]] = {
     SPLIT + "event_of": {"model/eval_test.py"},
     "floodvalue.cli.main": {"model/eval_test.py", "__main__.py"},
     "floodvalue.baseline.predict": {"model/predict.py",  # METHODS registry, contracts §3
-                                    "model/unet/report.py"},  # U-Net vs baseline report
+                                    "model/unet/report.py",  # U-Net vs baseline report
+                                    "app/run.py"},  # subprocess `-m ... --mask-only`, D-046
 }
 
 MODULE_STRING = re.compile(r"floodvalue(\.[A-Za-z_]\w*)+")

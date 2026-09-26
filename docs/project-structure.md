@@ -53,6 +53,8 @@
     `model/unet/report.py` (сравнение с baseline) (D-057, пересмотреть после `eval-test`);
   - `model/eval_test.py` → `cli.main` (стадия assets через CLI, D-030);
   - `app` → `procurement.plan` (§10 контрактов, D-050) и `data.split.EVENT_PARTS` (D-050);
+    `app/run.py` запускает `python -m floodvalue.baseline.predict --mask-only` подпроцессом
+    (D-046, D-057 — вызов CLI, не импорт, но строка-путь модуля в таблице);
   - `media` — только `floodvalue.paths` (D-051); `context` никто из этапов не импортирует
     (D-042, `tests/context/test_firewall.py`);
   - `cli.py` импортирует модули этапов лениво по имени этапа (`STAGES`), `__main__` —
