@@ -1,0 +1,129 @@
+{
+  "config": {
+    "channels": [
+      "vv",
+      "vh",
+      "vv_minus_vh"
+    ],
+    "base": 16,
+    "dropout": 0.1,
+    "batch": 16,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "dice_weight": 0.5,
+    "db_jitter": 1.0,
+    "epochs": 60,
+    "crop": 256,
+    "seed": 20260925,
+    "steps_mult": 1,
+    "tta": false,
+    "weak_weight": 0.5,
+    "finetune_epochs": 20,
+    "finetune_lr_mult": 0.3
+  },
+  "eval_epochs": [
+    19,
+    60
+  ],
+  "max_chips": 0,
+  "baseline_shipped": {
+    "threshold_db": -23.0,
+    "fitted_on": "train"
+  },
+  "folds": [
+    {
+      "event": "Ghana",
+      "mean": [
+        -10.521741556670136,
+        -17.439326010137602,
+        6.9171189546871155
+      ],
+      "std": [
+        4.012814878786705,
+        4.50282372852614,
+        3.488323713467653
+      ],
+      "baseline_fold_t": -23.7,
+      "baseline_fold_train_iou": 0.3835504848282421,
+      "steps_per_epoch": 177,
+      "seconds": 513,
+      "valid_mask_sha256": "7a501301f60ba68eeb5aa7b100ca52cab22a6ce15baf4bc981cb3cdd0fc56ce3",
+      "ranking": {
+        "unet_e19": {
+          "ap": 0.7084655041404737,
+          "oracle_iou": 0.5917333573119923,
+          "oracle_score_gt": 0.07
+        },
+        "unet_e60": {
+          "ap": 0.6812040974743251,
+          "oracle_iou": 0.5679211510542601,
+          "oracle_score_gt": 0.03
+        },
+        "unet_eft": {
+          "ap": 0.6455753760770185,
+          "oracle_iou": 0.5569178704253365,
+          "oracle_score_gt": 0.02
+        },
+        "baseline": {
+          "ap": 0.5683298964915017,
+          "oracle_iou": 0.43103492240732566,
+          "oracle_score_gt": 21.4
+        }
+      },
+      "train_chips": 258,
+      "held_out_chips": 48
+    },
+    {
+      "event": "India",
+      "mean": [
+        -10.692372114662138,
+        -17.534172725049434,
+        6.840474557920811
+      ],
+      "std": [
+        3.590138313360597,
+        4.190162321018113,
+        3.4494063743662156
+      ],
+      "baseline_fold_t": -24.2,
+      "baseline_fold_train_iou": 0.36083280438495285,
+      "steps_per_epoch": 139,
+      "seconds": 331,
+      "valid_mask_sha256": "8633298e4ce220d601eb244d11ca6b3a626ab04fe72e88dd15e97d3d68358905",
+      "ranking": {
+        "unet_e19": {
+          "ap": 0.7537213005261915,
+          "oracle_iou": 0.5175573907013074,
+          "oracle_score_gt": 0.23
+        },
+        "unet_e60": {
+          "ap": 0.7507870817119887,
+          "oracle_iou": 0.5330036022360071,
+          "oracle_score_gt": 0.19
+        },
+        "unet_eft": {
+          "ap": 0.7471756486961947,
+          "oracle_iou": 0.5372340675113945,
+          "oracle_score_gt": 0.27
+        },
+        "baseline": {
+          "ap": 0.6854827298052942,
+          "oracle_iou": 0.49319604122746347,
+          "oracle_score_gt": 21.5
+        }
+      },
+      "train_chips": 238,
+      "held_out_chips": 68
+    }
+  ],
+  "seconds": 845,
+  "split_sha256": "0098346e0f87297501409a1a8522afab6209e35f56e8cf1b68996909c8b63c75",
+  "device": "NVIDIA GeForce RTX 4080",
+  "versions": {
+    "python": "3.12.13",
+    "torch": "2.11.0+cu128",
+    "numpy": "2.5.3"
+  },
+  "command": "python -m floodvalue.model.unet.loeo --epochs 60 --eval-epochs 19,60 --crop 256 --seed 20260925 --base 16 --batch 16 --dropout 0.1 --lr 0.001 --weight-decay 0.0001 --dice-weight 0.5 --db-jitter 1.0 --steps-mult 1 --weak-weight 0.5 --finetune-epochs 20 --finetune-lr-mult 0.3",
+  "commit": "0296438de1d4b1864af23a94bcf5cf6e6145b216"
+}
