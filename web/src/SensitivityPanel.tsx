@@ -46,7 +46,7 @@ const scenarioResult = (row: Row) => row.strategy === "A"
 export default function SensitivityPanel({ rows, baseBudget, baseLoss }: {
   rows: Session["sensitivity"];
   baseBudget: number;
-  baseLoss: number;
+  baseLoss: number | null;
 }) {
   const planRows = rows.filter(planScenario);
   const portfolioRows = rows.filter(portfolioScenario);
@@ -81,7 +81,7 @@ export default function SensitivityPanel({ rows, baseBudget, baseLoss }: {
             <tr className="sensitivity-baseline"><td>Исходная оценка</td><td className="numeric">{rubExact(baseLoss)}</td><td className="numeric">—</td></tr>
             {portfolioRows.map((row) => {
               const value = numeric(scenarioInputs(row).portfolio_expected_loss_rub);
-              const difference = value == null ? null : Math.round((value - baseLoss) * 100) / 100;
+              const difference = value == null || baseLoss == null ? null : Math.round((value - baseLoss) * 100) / 100;
               return <tr key={`${row.scenario_id}-${row.strategy}`}>
                 <td>{formatScenarioLabel(row)}</td>
                 <td className="numeric">{rubExact(value)}</td>
