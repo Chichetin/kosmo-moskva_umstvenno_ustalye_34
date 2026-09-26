@@ -137,6 +137,36 @@ input:focus-visible,
   color: #fff;
 }
 
+.top-export:disabled {
+  color: #778187;
+  cursor: wait;
+}
+
+.export-error {
+  position: fixed;
+  z-index: 60;
+  top: 64px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 12px 14px;
+  border: 1px solid #bd8b6470;
+  border-radius: 8px;
+  background: #241d19;
+  color: #e4c4aa;
+  font-size: 13px;
+}
+
+.export-error button {
+  display: flex;
+  padding: 2px;
+  border: 0;
+  background: none;
+  color: inherit;
+}
+
 .analysis-screen {
   background-color: #050607;
   background-image:
@@ -602,6 +632,13 @@ input:focus-visible,
   accent-color: #cad4d8;
 }
 
+.budget-saturation {
+  margin: 7px 0 14px;
+  color: #aab5ba;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .layer-row small,
 .context-foot {
   color: #929da2;
@@ -787,6 +824,85 @@ input:focus-visible,
 
 .card-title > span {
   display: none;
+}
+
+.analysis-budget {
+  display: grid;
+  gap: 10px;
+  padding: 0 22px 19px;
+  border-bottom: 1px solid #ffffff18;
+}
+
+.analysis-budget label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #bac5c9;
+  font-size: 14px;
+}
+
+.analysis-budget label span {
+  white-space: nowrap;
+}
+
+.analysis-budget input[type="number"] {
+  width: 116px;
+  padding: 7px 9px;
+  border: 1px solid #ffffff2d;
+  border-radius: 6px;
+  background: #0d1012;
+  color: #edf2f3;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.analysis-budget input[type="range"] {
+  width: 100%;
+  accent-color: #cbd4d8;
+}
+
+.analysis-budget p {
+  margin: 0;
+  color: #a4b0b5;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.analysis-plan-loading {
+  margin: 16px 22px;
+  color: #aeb9be;
+}
+
+.analysis-plan-totals {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px 18px;
+  padding: 20px 22px 13px;
+}
+
+.analysis-plan-totals div {
+  display: grid;
+  gap: 4px;
+}
+
+.analysis-plan-totals span {
+  color: #a3afb4;
+  font-size: 12px;
+}
+
+.analysis-plan-totals strong {
+  color: #edf2f3;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.analysis-compare-title {
+  margin: 12px 22px 4px;
+  color: #c4cdd1;
+  font-size: 13px;
+  font-weight: 590;
 }
 
 th {
