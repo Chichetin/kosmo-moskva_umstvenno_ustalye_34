@@ -342,8 +342,11 @@ export default function App() {
       throw new Error("Расчёт завершён, но результат ещё не появился в каталоге. Обновите его повторно.");
     }
     if (parseRoute().chipId === finished.chip_id) {
+      // Results appear in the side panel; «Подробный анализ» is the operator's own step.
       setReadyAnalysisNotice(null);
-      navigate("analysis", finished.chip_id);
+      setPanelOpen(true);
+      setPanelCollapsed(false);
+      navigate("scene", finished.chip_id);
     } else {
       setReadyAnalysisNotice({ chipId: finished.chip_id, territory: target.territory.replaceAll("-", " ") });
     }
@@ -416,6 +419,16 @@ export default function App() {
     setPlan(null);
     navigate("scene", selected.chip_id);
   }, []);
+  // Leave the observation: the scene overlay folds back into its point, all points
+  // return; the camera keeps its place and zoom (no overviewRequest).
+  const leaveScene = () => {
+    setAssetId(null);
+    setZoneId(null);
+    setPlan(null);
+    setPanelCollapsed(false);
+    setSearchOpen(window.innerWidth >= 700);
+    navigate("earth");
+  };
   const overview = () => {
     navigate("earth");
     setSearchOpen(true);
@@ -551,7 +564,7 @@ export default function App() {
   return (
     <div className="app">
       <Backdrop paused={!mapActive || !!scene} ocean={baseMap === "optical"} />
-      <header className={`topbar ${mapVisible ? "topbar-map" : "topbar-analysis"}`}>
+      <header className={`topbar ${mapVisible ? "topbar-map" : "topbar-analysis"}${scene ? " topbar-scene" : ""}`}>
         <button className="brand" onClick={overview} aria-label="Митрандир — обзор Земли">
           <svg className="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M3.5 18.5V5.5L12 14l8.5-8.5v13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -805,9 +818,9 @@ export default function App() {
                     {panelCollapsed ? <ChevronDown size={17} /> : <ChevronUp size={17} />}
                   </button>
                   <button
-                    onClick={() => setPanelOpen(false)}
-                    aria-label="Скрыть панель"
-                    title="Скрыть"
+                    onClick={leaveScene}
+                    aria-label="Закрыть наблюдение"
+                    title="Закрыть наблюдение"
                   >
                     <X size={17} />
                   </button>
@@ -1497,7 +1510,9 @@ export default function App() {
         <div className="analysis-ready-notice">
           <span role="status" aria-live="polite">Анализ {readyAnalysisNotice.territory} готов</span>
           <button onClick={() => {
-            navigate("analysis", readyAnalysisNotice.chipId);
+            setPanelOpen(true);
+            setPanelCollapsed(false);
+            navigate("scene", readyAnalysisNotice.chipId);
             setReadyAnalysisNotice(null);
           }}>Открыть</button>
           <button

@@ -120,14 +120,18 @@ const reducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const minimumZoom = () => (window.innerWidth < 700 ? 0.9 : 1.15);
 const overviewZoom = () => (window.innerWidth < 700 ? 1.15 : 2.05);
-const overviewPadding = () => ({
-  top: 0,
-  right: 0,
-  bottom: 0,
-  left: window.innerWidth < 700
-    ? 0
-    : Math.round(Math.min(58, Math.max(30, window.innerWidth * 0.036)) + 320), // .map-top-left width
-});
+// The globe sits on the layout grid axis (minimal.css «Layout grid»): the centre of the area
+// right of the search panel. The offset is the panel's rendered edge, so the CSS zoom step
+// and gutter are accounted for exactly as the navigation above the globe sees them.
+const overviewPadding = () => {
+  const rail = document.querySelector(".map-top-left")?.getBoundingClientRect().right ?? 0;
+  return {
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: window.innerWidth <= 700 ? 0 : Math.max(0, Math.round(rail)),
+  };
+};
 const noPadding = () => ({ top: 0, right: 0, bottom: 0, left: 0 });
 
 export default function MapPanel(props: Props) {
@@ -137,6 +141,7 @@ export default function MapPanel(props: Props) {
   current.current = props;
   const popup = useRef<maplibregl.Popup | null>(null);
   const lastScene = useRef<string | null>(null);
+  const lastOverview = useRef(0);
   const [ready, setReady] = useState(0);
   const [unavailable, setUnavailable] = useState<string | null>(null);
 
@@ -856,9 +861,12 @@ export default function MapPanel(props: Props) {
   }, [props.active]);
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready || !props.active || props.scene ||
-        (!props.overviewRequest && !lastScene.current)) return;
+    if (!map || !ready || !props.active || props.scene) return;
+    // Leaving a scene without an overview request keeps the camera where it is.
+    const requested = props.overviewRequest !== lastOverview.current;
+    lastOverview.current = props.overviewRequest;
     lastScene.current = null;
+    if (!requested) return;
     map.stop();
     map.setPadding(overviewPadding());
     map.easeTo({
