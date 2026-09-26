@@ -4,7 +4,9 @@
 D-004): `files.py` (имена, обязательные поля, спецификация растров), `schemas.py` (строки
 CSV, свойства GeoJSON, `run_metadata.json`, `source_manifest.json`, `configs/run.yaml`),
 `geo.py` (ROUND_HALF_UP, площадь EPSG:6933, произведение цены в Decimal), `io.py` (чтение
-CSV/JSON с отказом на NaN/Inf). Валидатор — `floodvalue.export.validate` (§11, D-014).
+CSV/JSON с отказом на NaN/Inf), `kopeck.py` (копеечная арифметика `asset_loss.csv`: точная
+сумма EL, фильтр `status=ok`, R из EL и p по D-049 — одна реализация для procurement, assets
+и validate, #232). Валидатор — `floodvalue.export.validate` (§11, D-014).
 Изменение — отдельный PR с перечнем потребителей (`docs/project-structure.md`), merge
 после вердикта `reviewer`, проверившего каждого. Эталонный комплект —
 `tests/fixtures/good/` (синтетический чип, собирается `tests/contracts/build_fixture.py`).
