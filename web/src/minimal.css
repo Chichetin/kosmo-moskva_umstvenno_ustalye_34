@@ -1793,6 +1793,22 @@ html {
 }
 .analysis-head > button { display: inline-flex; align-items: center; gap: 0.4375rem; white-space: nowrap; }
 
+/* Scene list: the list scrolls inside the panel — make that visible (thin scrollbar, soft fade
+   at the bottom edge) instead of rows cut off mid-line with no hint; a bit more air below. */
+@media (min-width: 701px) {
+  .map-top-left,
+  .scene-mode .map-top-left { bottom: 40px; }
+  .scene-results {
+    scrollbar-width: thin;
+    scrollbar-color: #ffffff4d transparent;
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  }
+  .scene-results::-webkit-scrollbar { display: block; width: 6px; }
+  .scene-results::-webkit-scrollbar-thumb { border-radius: 3px; background: #ffffff4d; }
+  .search-panel { padding-bottom: 6px; }
+}
+
 /* Layout grid (map screen). One column axis for the globe, the navigation and the
    basemap switch: the centre of the free area between the side panels. Panels and the
    centred groups are all in rem, so the rails are written in the same
@@ -1982,6 +1998,49 @@ html {
     margin: 0 0 0.375rem;
   }
 }
+
+/* Micro-explanations: an "i" next to a label, the text on hover or keyboard focus. */
+.hint {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  margin-left: 6px;
+  border: 1px solid #ffffff4d;
+  border-radius: 50%;
+  color: #aab4b8;
+  font: 600 10px/1 system-ui, sans-serif;
+  font-style: normal;
+  letter-spacing: 0;
+  text-transform: none;
+  vertical-align: middle;
+  cursor: help;
+}
+.hint:hover, .hint:focus-visible { color: #fff; border-color: #ffffffa0; outline: none; }
+.hint-bubble {
+  display: none;
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 6px);
+  left: -8px;
+  width: 250px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #1b2124;
+  color: #e3e8ea;
+  font: 400 12.5px/1.45 system-ui, sans-serif;
+  text-align: left;
+  white-space: normal;
+  box-shadow: 0 10px 28px #000a;
+  pointer-events: none;
+}
+.hint-center .hint-bubble { left: 50%; transform: translateX(-50%); }
+.hint-end .hint-bubble { left: auto; right: -8px; }
+.hint.open .hint-bubble { display: block; }
+.context-panel .hint-bubble { width: 230px; }
+th .hint { margin-left: 4px; }
 
 /* Map notice («Часть картографических данных недоступна…»): on the grid axis, above the
    basemap switch instead of over it (switch: bottom 26 + ~40). */

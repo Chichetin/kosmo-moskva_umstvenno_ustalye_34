@@ -26,21 +26,6 @@
 
 <div id="app" class="layout hidden">
   <aside class="side">
-    <section class="panel" aria-labelledby="h-sources">
-      <h2 id="h-sources">Источники</h2>
-      <div id="sources"></div>
-      <div class="toolbar">
-        <button class="btn small" id="ingest">Запустить сбор сейчас</button>
-        <label class="checks"><span><input type="checkbox" id="monitoring"> мониторинг по расписанию</span></label>
-      </div>
-    </section>
-
-    <section class="panel" aria-labelledby="h-reports">
-      <h2 id="h-reports">Новые обращения очевидцев <span id="reports-count" class="tag"></span></h2>
-      <p class="muted small m0">Не опубликованы. Попадают в события только после решения аналитика.</p>
-      <ul class="list" id="reports"></ul>
-    </section>
-
     <section class="panel" aria-labelledby="h-events">
       <h2 id="h-events">Сообщения</h2>
       <div class="filters">
@@ -59,6 +44,20 @@
       <p class="section-title">Без точного места — нужно уточнить</p>
       <ul class="list" id="events-nogeo"></ul>
     </section>
+    <section class="panel" aria-labelledby="h-reports">
+      <h2 id="h-reports">Новые обращения очевидцев <span id="reports-count" class="tag"></span></h2>
+      <p class="muted small m0">Не опубликованы. Попадают в события только после решения аналитика.</p>
+      <ul class="list" id="reports"></ul>
+    </section>
+
+    <details class="panel fold" id="sources-box">
+      <summary><h2 id="h-sources">Источники и сбор</h2> <span id="sources-summary" class="tag"></span></summary>
+      <div id="sources"></div>
+      <div class="toolbar">
+        <button class="btn small" id="ingest">Запустить сбор сейчас</button>
+        <label class="checks"><span><input type="checkbox" id="monitoring"> мониторинг по расписанию</span></label>
+      </div>
+    </details>
   </aside>
 
   <main class="main">

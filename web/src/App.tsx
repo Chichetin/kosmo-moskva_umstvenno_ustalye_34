@@ -19,6 +19,7 @@ import SensitivityPanel from "./SensitivityPanel";
 import RiskMatrix from "./RiskMatrix";
 import { finiteNumber, riskAsset } from "./riskAssets";
 import NewsPanel from "./NewsPanel";
+import Hint, { HINTS } from "./Hint";
 import PlanZones from "./PlanZones";
 import { pointInZone } from "./geometry";
 import {
@@ -971,7 +972,7 @@ export default function App() {
                     onChange={() => toggle("s1")}
                   />
                   <span>
-                    Радарный снимок S1
+                    Радарный снимок S1<Hint text={HINTS.s1} />
                     <small>{date(scene.observation_date)} · VV/VH</small>
                   </span>
                 </label>
@@ -984,7 +985,7 @@ export default function App() {
                         onChange={() => toggle("probability")}
                       />
                       <span>
-                        Вероятность воды<small>Оценка модели · 0–100%</small>
+                        Вероятность воды<Hint text={HINTS.probability} /><small>Оценка модели · 0–100%</small>
                       </span>
                     </label>
                     <label className="layer-row">
@@ -994,7 +995,7 @@ export default function App() {
                         onChange={() => toggle("mask")}
                       />
                       <span>
-                        Бинарная маска
+                        Бинарная маска<Hint text={HINTS.mask} />
                         <small>
                           Порог ≥ {activeSession.metadata.threshold}
                         </small>
@@ -1008,7 +1009,7 @@ export default function App() {
                         onChange={() => toggle("uncertainty")}
                       />
                       <span>
-                        Неопределённость
+                        Неопределённость<Hint text={HINTS.uncertainty} />
                         <small>Энтропия p · 0–1 бит</small>
                       </span>
                     </label>
@@ -1046,7 +1047,7 @@ export default function App() {
                         onChange={() => toggle("assets")}
                       />
                       <span>
-                        Объекты<small>{assets.length} точек</small>
+                        Объекты<Hint text={HINTS.assets} /><small>{assets.length} точек</small>
                       </span>
                     </label>
                   </>
@@ -1097,11 +1098,11 @@ export default function App() {
                       <strong>{formatRub(chosen?.data_cost_rub)}</strong>
                     </div>
                     <div className="plan-summary">
-                      <span>Охват ожидаемого ущерба</span>
+                      <span>Охват ожидаемого ущерба<Hint text={HINTS.coverage} /></span>
                       <strong>{pct(chosen?.coverage_share)}</strong>
                     </div>
                     <div className="plan-summary">
-                      <span>Доля адресуемой цены ошибки · сценарий</span>
+                      <span>Доля адресуемой цены ошибки · сценарий<Hint text={HINTS.decisionRisk} /></span>
                       <strong>{pct(chosen?.decision_risk_share)}</strong>
                     </div>
                     <p className="hint-note">
@@ -1282,9 +1283,9 @@ export default function App() {
             {activeSession && (
               <div className="analysis-body">
                 <div className="analysis-metrics" aria-label="Краткое резюме плана C">
-                  <div><span>Зон в плане C</span><strong>{currentPlan ? currentPlan.plans.C.length : "—"}</strong></div>
-                  <div><span>Стоимость данных</span><strong>{formatRub(chosen?.data_cost_rub)}</strong></div>
-                  <div><span>Охват ожидаемого ущерба</span><strong>{pct(chosen?.coverage_share)}</strong></div>
+                  <div><span>Зон в плане C<Hint text={HINTS.zonesInPlan} align="center" /></span><strong>{currentPlan ? currentPlan.plans.C.length : "—"}</strong></div>
+                  <div><span>Стоимость данных<Hint text={HINTS.dataCost} align="center" /></span><strong>{formatRub(chosen?.data_cost_rub)}</strong></div>
+                  <div><span>Охват ожидаемого ущерба<Hint text={HINTS.coverage} align="center" /></span><strong>{pct(chosen?.coverage_share)}</strong></div>
                 </div>
                 <PlanZones
                   session={activeSession}
@@ -1312,7 +1313,7 @@ export default function App() {
                 <div className="analysis-columns">
                   <section className="analysis-card">
                     <div className="card-title">
-                      <h2>Приоритет осмотра</h2>
+                      <h2>Приоритет осмотра<Hint text={HINTS.inspection} /></h2>
                       <span>{assets.length - unassessed.length} из {assets.length} оценено · ущерб {formatRub(totalLoss)}</span>
                     </div>
                     <details className="analysis-explain">
@@ -1355,6 +1356,9 @@ export default function App() {
                                 <button className="asset-sort" onClick={() => toggleAssetSort(key)}>
                                   {label}<span aria-hidden="true">{assetSort.key === key ? assetSort.descending ? "↓" : "↑" : "↕"}</span>
                                 </button>
+                                {key === "probability" && <Hint text={HINTS.probability} align="center" />}
+                                {key === "loss" && <Hint text={HINTS.expectedLoss} align="center" />}
+                                {key === "uncertainty" && <Hint text={HINTS.uncertainty} align="end" />}
                               </th>
                             ))}
                           </tr>
@@ -1491,6 +1495,7 @@ export default function App() {
                                 : row.strategy === "B"
                                   ? "Сплошная съёмка"
                                   : "Приоритетный заказ"}
+                              <Hint text={row.strategy === "A" ? HINTS.strategyA : row.strategy === "B" ? HINTS.strategyB : HINTS.strategyC} />
                             </strong>
                             <div className="strategy-values">
                               <span>Данные <strong>{formatRub(row.data_cost_rub)}</strong></span>
