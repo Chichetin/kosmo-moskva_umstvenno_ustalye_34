@@ -9,6 +9,8 @@ attributes used on it (`io.load_s1` -> `floodvalue.data.io.load_s1`), so a narro
 narrow. Names that open raw files or serve only eval-test are further limited to the files
 that use them (FILES): e.g. `data.io.layer_path` could reach LabelHand around the sealed
 `load_label` (D-010, D-015), so a new caller must be a reviewed line here.
+A `python -m <module>` command run as a subprocess (CLI and file, D-005) is allowed as a
+string literal only, through CLI_ONLY; importing the same module stays a violation.
 
 Not seen by the walk (D-057): what a caller does with a module it got from a registry through
 importlib (calibration -> `model.predict.METHODS`, bounded by D-041; model.eval_test ->
@@ -80,9 +82,6 @@ ALLOWED: dict[str, set[str]] = {
     "app": BASE | {
         "floodvalue.procurement.plan",  # contracts.md §10, D-005, D-050
         SPLIT + "EVENT_PARTS",  # D-050: test chips stay sealed in the catalog
-        # D-046, D-057: `python -m floodvalue.baseline.predict --mask-only` as a subprocess
-        # step of the analysis queue (a CLI call writing a file, not an import)
-        "floodvalue.baseline.predict",
     },
     "context": BASE | {
         IO + "layer_path", IO + "raw_dir", IO + "parse_chip_id",  # D-057
@@ -105,8 +104,14 @@ FILES: dict[str, set[str]] = {
     SPLIT + "event_of": {"model/eval_test.py"},
     "floodvalue.cli.main": {"model/eval_test.py", "__main__.py"},
     "floodvalue.baseline.predict": {"model/predict.py",  # METHODS registry, contracts §3
-                                    "model/unet/report.py",  # U-Net vs baseline report
-                                    "app/run.py"},  # subprocess `-m ... --mask-only`, D-046
+                                    "model/unet/report.py"},  # U-Net vs baseline report
+}
+
+# Module paths allowed only as a string literal in these files: a `python -m <module>` command
+# run as a subprocess (a CLI call that writes a file, D-005), never an import. D-057.
+CLI_ONLY: dict[str, set[str]] = {
+    # D-046: `python -m floodvalue.baseline.predict --mask-only`, analysis queue of make all
+    "floodvalue.baseline.predict": {"app/run.py"},
 }
 
 MODULE_STRING = re.compile(r"floodvalue(\.[A-Za-z_]\w*)+")
@@ -123,18 +128,19 @@ def _package_of(path: Path) -> str:
     return ".".join(("floodvalue", *parts))
 
 
-def imports_of(text: str, package: str) -> list[tuple[int, str, bool]]:
-    """(line, dotted name, is a whole-module import) of every floodvalue reference in `text`.
+def imports_of(text: str, package: str) -> list[tuple[int, str, str]]:
+    """(line, dotted name, kind) of every floodvalue reference in `text`; kind is "name",
+    "whole" (a whole module imported) or "string" (a module path in a string literal).
 
     `package` is the dotted package of the file, used for relative imports. A whole module
     bound to a name is returned once as the import itself and once per attribute used on it."""
     tree = ast.parse(text)
-    out: list[tuple[int, str, bool]] = []
+    out: list[tuple[int, str, str]] = []
     aliases: dict[str, str] = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for a in node.names:
-                out.append((node.lineno, a.name, False))
+                out.append((node.lineno, a.name, "name"))
                 if a.asname and _is_module(a.name):
                     aliases[a.asname] = a.name
         elif isinstance(node, ast.ImportFrom):
@@ -145,22 +151,22 @@ def imports_of(text: str, package: str) -> list[tuple[int, str, bool]]:
             for a in node.names:
                 name = f"{base}.{a.name}"
                 whole = name.startswith("floodvalue.") and _is_module(name)
-                out.append((node.lineno, name, whole))
+                out.append((node.lineno, name, "whole" if whole else "name"))
                 if whole:
                     aliases[a.asname or a.name] = name
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
             if MODULE_STRING.fullmatch(node.value):
-                out.append((node.lineno, node.value, False))
+                out.append((node.lineno, node.value, "string"))
     attr_bases = set()
     for node in ast.walk(tree):
         if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
                 and node.value.id in aliases):
             attr_bases.add(id(node.value))
-            out.append((node.lineno, f"{aliases[node.value.id]}.{node.attr}", False))
+            out.append((node.lineno, f"{aliases[node.value.id]}.{node.attr}", "name"))
     for node in ast.walk(tree):
         if (isinstance(node, ast.Name) and node.id in aliases and id(node) not in attr_bases
                 and isinstance(node.ctx, ast.Load)):
-            out.append((node.lineno, aliases[node.id], False))  # module passed around bare
+            out.append((node.lineno, aliases[node.id], "name"))  # module passed around bare
     return [(ln, n, w) for ln, n, w in out if n == "floodvalue" or n.startswith("floodvalue.")]
 
 
@@ -168,10 +174,13 @@ def top_of(path: Path) -> str:
     return path.relative_to(PKG).parts[0].removesuffix(".py")
 
 
-def allowed(top: str, name: str, whole: bool, rel: str = "") -> bool:
-    """`rel` is the file path relative to src/floodvalue, checked against FILES."""
+def allowed(top: str, name: str, kind: str, rel: str = "") -> bool:
+    """`rel` is the file path relative to src/floodvalue, checked against FILES/CLI_ONLY."""
     if name.split(".")[1:2] == [top]:
         return True  # inside its own module
+    if kind == "string" and rel in CLI_ONLY.get(name, ()):
+        return True
+    whole = kind == "whole"
     for a in ALLOWED[top]:
         if name == a or name.startswith(a + "."):
             if a in FILES and rel not in FILES[a]:
@@ -186,8 +195,8 @@ def violations(path: Path, text: str | None = None) -> list[str]:
     text = path.read_text(encoding="utf-8") if text is None else text
     top, rel = top_of(path), path.relative_to(PKG).as_posix()
     found = sorted(set(imports_of(text, _package_of(path))))
-    return [f"floodvalue/{rel}:{ln} {name}" for ln, name, whole in found
-            if not allowed(top, name, whole, rel)]
+    return [f"floodvalue/{rel}:{ln} {name}" for ln, name, kind in found
+            if not allowed(top, name, kind, rel)]
 
 
 def _files() -> list[Path]:
@@ -208,8 +217,8 @@ def test_every_exception_is_still_used():
     used = {top: set() for top in ALLOWED}
     for p in _files():
         top = top_of(p)
-        for _, name, whole in imports_of(p.read_text(encoding="utf-8"), _package_of(p)):
-            if whole:
+        for _, name, kind in imports_of(p.read_text(encoding="utf-8"), _package_of(p)):
+            if kind == "whole":
                 continue
             used[top] |= {a for a in ALLOWED[top] if name == a or name.startswith(a + ".")}
     unused = {top: sorted(ALLOWED[top] - used[top] - BASE) for top in ALLOWED}
@@ -220,12 +229,38 @@ def test_every_file_limit_is_used_and_listed():
     used = set()
     for p in _files():
         rel = p.relative_to(PKG).as_posix()
-        for _, name, whole in imports_of(p.read_text(encoding="utf-8"), _package_of(p)):
+        for _, name, kind in imports_of(p.read_text(encoding="utf-8"), _package_of(p)):
             used |= {(a, rel) for a in FILES
-                     if not whole and (name == a or name.startswith(a + "."))}
+                     if kind != "whole" and (name == a or name.startswith(a + "."))}
     declared = {(a, rel) for a, rels in FILES.items() for rel in rels}
     assert declared - used == set()
     assert all(any(a in ALLOWED[top] for top in ALLOWED) for a in FILES)
+
+
+def test_every_cli_only_path_is_used():
+    used = set()
+    for p in _files():
+        rel = p.relative_to(PKG).as_posix()
+        used |= {(name, rel) for _, name, kind in
+                 imports_of(p.read_text(encoding="utf-8"), _package_of(p)) if kind == "string"}
+    declared = {(m, rel) for m, rels in CLI_ONLY.items() for rel in rels}
+    assert declared - used == set()
+
+
+def test_cli_only_path_is_not_an_import():
+    """app runs baseline --mask-only as a subprocess (D-046); importing it stays a violation."""
+    path = PKG / "app" / "run.py"
+    cmd = 'STEPS = [["floodvalue.baseline.predict", "--mask-only"]]\n'
+    assert violations(path, cmd) == []
+    assert violations(PKG / "app" / "other.py", cmd) == [
+        "floodvalue/app/other.py:1 floodvalue.baseline.predict"]
+    imp = "from floodvalue.baseline.predict import predict_proba\n"
+    assert violations(path, imp) == [
+        "floodvalue/app/run.py:1 floodvalue.baseline.predict.predict_proba"]
+    imp = "import floodvalue.baseline.predict as bp\nx = bp.to_rasters\n"
+    assert violations(path, imp) == [
+        "floodvalue/app/run.py:1 floodvalue.baseline.predict",
+        "floodvalue/app/run.py:2 floodvalue.baseline.predict.to_rasters"]
 
 
 def test_lazy_relative_aliased_and_registry_imports_are_seen():
