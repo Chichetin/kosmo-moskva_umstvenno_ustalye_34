@@ -73,9 +73,9 @@ python3 scripts/download_sen1floods11.py            # HandLabeled + perm_water +
 | Inference на чипе (S1-only, оба метода) | `FLOODVALUE_METHOD=unet\|baseline make predict CHIP=<chip_id>` | готово — на `Sri-Lanka_713926` (unet: `threshold 0.37, threshold_status "calibrated (platt) and chosen on validation, D-029"`, `valid_pixels 262144`; baseline: `seconds 0.0`) и на `Nigeria_1095404` (другой официальный чип, unet: `valid_pixels 262144`) |
 | Финальная оценка на part (validation/dev/test) | `make eval-test` (сырое, по умолчанию `--part test` — запечатан); `uv run --frozen python -m floodvalue eval-test --part validation` | готово, **test честно запечатан**: `make eval-test` без подтверждения → `eval-test: отказ — test is sealed (D-010): set FLOODVALUE_EVAL_TEST_CONFIRM=<sha256 of the frozen configuration>; ...`; `--part validation` реально считает 60 чипов → `docs/verification/eval-validation.md` (калиброванная модель: IoU 0,685 против baseline 0,580, ECE 0,007, Brier 0,041, AUROC неопределённости 0,902); `docs/verification/test-log.md` по test пуст — test ещё не открывался (`eval-test` замороженной конфигурации — не позже 26.09 20:00, D-033) |
 | 10 объектов и ущерб | `make assets CHIP=<chip_id>` | готово — `assets: 10 объектов, оценено 10` (D-018; `pytest tests/assets`) |
-| Зоны, цена, A/B/C | `make procure BUDGET=<руб>` | готово — `procure: A/B/C` с ценой, охватом EL и `budget_feasible` (D-023; `pytest tests/procurement`) |
+| Зоны, цена, A/B/C | `make procure BUDGET=<руб>` | готово — `procure: A/B/C` с ценой, охватом EL, ценой ошибки решения и `budget_feasible` (D-023; `pytest tests/procurement`). C покупает снимки там, где они могут изменить решение: max прироста R = V·q·min(p, 1−p) (сценарная «цена ошибки решения», не снижение потерь) на рубль корзины; объекты с почти известным исходом (p ≈ 0 или 1) не покупаются; прежнее правило «EL на рубль» — строка `C_by_EL` в `sensitivity.csv` (D-049). Поэтому доля покрытого EL у C может быть малой: объекты с исходом, почти известным по карте (p ≈ 1), идут на осмотр (D-035), а не на снимок |
 | 12 обязательных файлов | `make export && make validate` | готово — реальный комплект `make all CHIP=Sri-Lanka_713926 BUDGET=5000` → `12/12 файлов прошли проверку`, `flood_mask.tif`/`flood_probability.tif` — с калиброванным порогом 0,37, `metrics.csv` — с калиброванными метриками main (D-027, D-029; `pytest tests/contracts tests/export`); `run_metadata.warnings` пуст на чистом дереве — `make all CHIP=Sri-Lanka_713926 BUDGET=5000` на commit `89c8e4f` (26.09) → `warnings: []`, validate 12/12 (ранее было предупреждение про рассинхрон порога метрик, снято подключением калибратора в `export`) |
-| Интерфейс оператора | `make app` | не реализовано — `stage 'app' not implemented yet (floodvalue.app.run); issue area:app` (выбран Streamlit, D-034) |
+| Интерфейс оператора | `make app` | не реализовано в `main` — `uv run --frozen python -m floodvalue app` на `9040ece` (26.09) → `stage 'app' not implemented yet (floodvalue.app.run); issue area:app`; интерфейс — issue #83 (выбран Streamlit, D-034), в `main` не влит |
 | Отчёт QC данных | `make data-qc` | готово — `docs/verification/data-qc.md` из `interim/qc.csv` после `make data` |
 | Комплект и веса для релиза | `make release OUT=<комплект> [TAG=<тег>]` | готово — `run_<run_id>.zip`, `models_<commit>.zip`, `SHA256SUMS` (D-037, `pytest tests/test_release_bundle.py`); загрузка финального комплекта — после `eval-test` |
 | Перенос рецепта U-Net между событиями (LOEO) | `python -m floodvalue.model.unet.loeo` через `notebooks/loeo_colab.ipynb` (D-036) | прогнан `MODE=full` на commit `1eaf2cc9e572` (локально на RTX 4080 вместо Colab, 6 фолдов): IoU U-Net на невиданном событии 0,206–0,532, ΔIoU к порогу фолда значимо > 0 в 4 из 6 фолдов — `docs/verification/transfer-loeo.md` (таблица из отчёта прогона в #86, CSV/JSON фолдов не приложены); проводка — `pytest tests/model/test_loeo.py tests/model/test_loeo_notebook.py` |
@@ -171,6 +171,25 @@ make validate OUT=outputs/<chip_id>_<руб>_<commit>
 `docs/tz-compliance.md`.
 Оригиналы условий организатора (PDF, текст, выжимка) — `docs/task/`.
 
+### A/B/C при бюджете 5 000 руб.: что это значит для оператора
+
+Демо-чип validation `Sri-Lanka_713926`, `make all CHIP=Sri-Lanka_713926 BUDGET=5000` на
+`9040ece` (26.09) → `strategy_comparison.csv`; те же числа —
+`docs/verification/procurement-catalog.md` §5, строка «5 000 / стало». Все рубли — учебные
+V·q и сценарная ставка Б (`base_rate_status=scenario`), не фактические потери.
+
+- **C** (в бюджете, 4 207,54 руб.: E-2, Z-A03) покрывает лишь 8,7 % ожидаемого ущерба
+  (1 462 348,49 из 16 842 207,70 руб.), но 70,6 % ожидаемой цены ошибки решения
+  R = V·q·min(p, 1−p) (1 462 348,49 из 2 070 290,02 руб.). Это сценарная ценность информации
+  (D-049), а не снижение потерь: снимок нужен там, где карта не знает ответа (A08, p ≈ 0,38).
+- **Объекты с p > 0,97** (A10 — 0,997, A02 — 0,978, A01 — 0,970; `asset_loss.csv`) —
+  основная часть EL, но исход по карте почти известен: их ставят первыми **на осмотр**
+  (D-035), а снимок их решения не изменит. Прежнее правило «EL на рубль» купило бы Z-A02,
+  Z-A10 (EL 12 610 565,84 руб., R лишь 189 434,16) — строка `C_by_EL` в `sensitivity.csv`.
+- **B** (весь чип, W-CHIP) покрывает все 10 объектов и 100 % R, но стоит 42 465,93 руб. —
+  сверх бюджета (`budget_feasible=false`), это **контрфактическая** стратегия для сравнения,
+  а не рекомендация. **A** — ничего не покупать (0 руб. данных).
+
 ### Комплект и веса в релизе
 
 `outputs/` и `*.tif` в git не входят, поэтому 12 файлов демо-запуска и веса `models/`
@@ -242,10 +261,15 @@ D-017.
   метками воды, а не с фактическими потерями объектов; на validation она уже
   выполнена и показывает MAE прогноза против прокси-ущерба
   (`docs/verification/eval-validation.md` §5), но это выборка для настройки, а не
-  независимая. В `run_metadata.json` собранного комплекта поле `proxy_check` пока
-  `"status": "planned"` в любом случае (`make all CHIP=Sri-Lanka_713926 BUDGET=5000` на `89c8e4f`, 26.09 → `proxy_check.status=planned`)
-  — `export` ещё не сшит с протоколом `eval-test`, а на замороженном test проверка
-  не выполнялась вовсе.
+  независимая. `export` берёт `run_metadata.proxy_check` из сводки `eval-test` той части
+  split, где лежит чип (`docs/verification/eval-<part>-summary.json`, для test —
+  `test-eval-summary.json`), только если в сводке тот же чип, метод, порог и веса `models/`
+  (#107). Для validation-чипа числа переносятся, но статус остаётся `planned`: выборка
+  настроечная (`make all CHIP=Sri-Lanka_713926 BUDGET=5000` на `9040ece`, 26.09 →
+  `proxy_check.status=planned`, `result.estimated=true`, `independent=false`, MAE 274 285,66
+  руб. на 10 точках демо-чипа, источник `docs/verification/eval-validation-summary.json`).
+  `status=done` бывает только у test-чипа после `eval-test` замороженной конфигурации; до
+  него на test проверка не выполнялась вовсе, и у test-чипа статус `planned`.
 - **Стоимость данных — сценарная.** Ставка Б = 788,64 руб./км² (`base_rate_status=scenario`)
   и сроки `available_at` не подтверждены поставщиком (D-026, `docs/pp840.md`). Покупка
   ни разу не совершалась: A/B/C — расчётные стратегии на одной карте, и ни одна не
