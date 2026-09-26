@@ -50,6 +50,8 @@ torch = { index = "pytorch-cpu" }
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+# Keep tmp_path only for failed tests: several checkouts share a small tmpfs /tmp (#117).
+tmp_path_retention_policy = "failed"
 
 [tool.ruff]
 line-length = 100

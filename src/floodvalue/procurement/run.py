@@ -24,7 +24,9 @@ from floodvalue.procurement import strategies, zones
 from floodvalue.procurement.pricing import load_pricing
 
 SENS_BUDGETS = (0, 1000, 2500, 5000, 10000, 20000, 50000)
-SENS_RATE_FACTORS = (Decimal("0.5"), Decimal("1.5"))
+SENS_RATE_FACTORS = tuple(map(Decimal, ("0.5", "0.75", "1.25", "1.5", "2.0")))
+# decision_deadline = decision_at + h (D-001: 6–12 h window; 24/48 h — later decision).
+SENS_DEADLINE_HOURS = (6, 12, 24, 48)
 
 PLAN_FIELDS = ["strategy", "candidate_id", "area_km2", "base_rate_rub_km2", "base_rate_status",
                "processing_level", "usage_type", "guaranteed_purchase", "processing_coef",
@@ -34,7 +36,8 @@ PLAN_FIELDS = ["strategy", "candidate_id", "area_km2", "base_rate_rub_km2", "bas
 COMPARISON_FIELDS = ["strategy", "data_cost_rub", "other_cost_rub", "decision_cost_rub",
                      "budget_rub", "budget_feasible", "covered_expected_loss_rub",
                      "coverage_share", "residual_uncertainty", "uncertainty_status",
-                     "uncertainty_basis", "covered_asset_ids"]
+                     "uncertainty_basis", "covered_asset_ids", "addressed_decision_risk_rub",
+                     "decision_risk_share"]
 SENS_FIELDS = ["scenario_id", "strategy", "changed_inputs_json", "decision_cost_rub",
                "covered_expected_loss_rub", "result_status", "interpretation"]
 
@@ -138,6 +141,41 @@ def _uncertainty_raster(run_dir: Path) -> tuple[Any, Any, str]:
     return None, None, "нет растров — кластеры неопределённости не строятся"
 
 
+_CONTEXT_CACHE: dict[Path, tuple[tuple, dict[str, Any]]] = {}
+
+
+def _inputs_key(run_dir: Path) -> tuple:
+    """(путь, mtime_ns, размер) всех входов контекста; нет файла — (путь, None, None)."""
+    from floodvalue.paths import CONFIGS_DIR
+    paths = [run_dir / n for n in ("assets.csv", "asset_loss.csv", "flood_probability.tif",
+                                   "uncertainty.tif")]
+    paths += [CONFIGS_DIR / "run.yaml", CONFIGS_DIR / "pricing.yaml",
+              data_dir() / "interim" / "source_manifest_s1.json"]
+    key = []
+    for p in paths:
+        try:
+            st = p.stat()
+            key.append((str(p), st.st_mtime_ns, st.st_size))
+        except FileNotFoundError:
+            key.append((str(p), None, None))
+    return tuple(key)
+
+
+def _cached_context(run_dir: Path) -> dict[str, Any]:
+    """:func:`_context` с кешем по :func:`_inputs_key`: смена бюджета не пересобирает каталог (#105).
+
+    Любая правка входа (mtime или размер) даёт новый ключ — устаревший контекст не читается.
+    """
+    run_dir = Path(run_dir).resolve()
+    key = _inputs_key(run_dir)
+    hit = _CONTEXT_CACHE.get(run_dir)
+    if hit is not None and hit[0] == key:
+        return hit[1]
+    ctx = _context(run_dir)
+    _CONTEXT_CACHE[run_dir] = (key, ctx)
+    return ctx
+
+
 def _context(run_dir: Path) -> dict[str, Any]:
     """Всё, что не зависит от бюджета: каталог, охват, EL, конфиги."""
     run_dir = Path(run_dir)
@@ -185,14 +223,19 @@ def _not_selected_reason(cid: str, ctx: dict[str, Any], res: dict[str, Any]) -> 
     if cid in ctx["excluded"]:
         return ctx["excluded"][cid]
     covered = {a for c in res["plans"]["C"] for a in ctx["cov"].get(c, ())}
-    own = [a for a in ctx["cov"].get(cid, ()) if a in {r["asset_id"] for r in ctx["loss"]
-                                                        if r["status"] == "ok"}]
+    el = strategies.assessed(ctx["loss"])
+    own = [a for a in ctx["cov"].get(cid, ()) if a in el]
     if not own:
         return "не покрывает ни одного оценённого объекта (status=ok)"
     if set(own) <= covered:
-        return f"объекты {', '.join(own)} уже покрыты выбранными позициями C — EL не добавляет"
-    return ("не выбрана в C: хуже по EL на рубль прироста цены корзины или не помещается в "
-            "остаток бюджета при пересчёте всей корзины")
+        return f"объекты {', '.join(own)} уже покрыты выбранными позициями C — R и EL не добавляет"
+    new = [a for a in own if a not in covered]
+    if sum(el[a]["risk"] for a in new) <= 0:
+        return (f"низкая ценность информации: исход по объекту почти известен ({', '.join(new)}: "
+                f"p = 0 или 1, цена ошибки решения R = V·q·min(p, 1−p) = 0) — снимок "
+                f"решения не меняет (D-049)")
+    return ("не выбрана в C: хуже по цене ошибки решения на рубль прироста цены корзины или не "
+            "помещается в остаток бюджета при пересчёте всей корзины")
 
 
 def _plan(ctx: dict[str, Any], budget_rub: float, social: bool | None = None) -> dict[str, Any]:
@@ -214,12 +257,13 @@ def plan(run_dir: Path, budget_rub: float, social: bool | None = None) -> dict[s
     """Пересчёт A/B/C для бюджета без записи файлов (для интерфейса, D-013).
 
     Читает assets.csv, asset_loss.csv, растры комплекта (только чтение) и конфиги; каталог зон
-    каждый раз строится заново из текущих входов (детерминированно, как в файле); p-растр,
+    строится из текущих входов (детерминированно, как в файле); p-растр,
     маску, порог и портфель не меняет. ``social`` — включить/выключить социальное ограничение
     C (None — как в configs/run.yaml). Ключи: plans, plan_rows, comparison, reasons,
-    social_constraint.
+    social_constraint. Контекст (каталог, охват, EL) кешируется по mtime и размеру входов —
+    повторная смена бюджета не пересобирает каталог, результат тот же (#105).
     """
-    return _plan(_context(Path(run_dir)), budget_rub, social)
+    return _plan(_cached_context(Path(run_dir)), budget_rub, social)
 
 
 def _cell(v: Any) -> str:
@@ -276,7 +320,9 @@ def write_outputs(run_dir: Path, budget_rub: float) -> dict[str, Any]:
                                   sorted({*map(Decimal, map(str, SENS_BUDGETS)),
                                           Decimal(str(budget_rub))}),
                                   SENS_RATE_FACTORS, other_cfg=ctx["rc"]["other_cost"],
-                                  required=ctx["required"], social_ids=ctx["social_ids"])
+                                  required=ctx["required"], social_ids=ctx["social_ids"],
+                                  decision_at=ctx["decision_at"],
+                                  deadline_hours=SENS_DEADLINE_HOURS)
     _write_csv(run_dir / "procurement_sensitivity.csv", SENS_FIELDS, sens)
     denom = sum(float(r["expected_loss_rub"]) for r in ctx["loss"] if r["status"] == "ok")
     kinds: dict[str, int] = {}
@@ -325,9 +371,21 @@ def write_outputs(run_dir: Path, budget_rub: float) -> dict[str, Any]:
             "coverage_rule": ("polygon.covers(point) по объектам status=ok, уникально по "
                               "asset_id; только data_role=event_observation, available_at ≤ "
                               "decision_deadline и без неподтверждённой облачности"),
+            "excluded_covers_rule": ("у позиций с exclusion_reason covers_asset_ids = [] (к сроку "
+                                     "решения ничего не наблюдают); объекты внутри их контура — "
+                                     "inside_geometry_asset_ids, это не охват (D-048)"),
         },
         "rule_B": strategies.RULE_B,
         "rule_C": strategies.RULE_C,
+        "rule_C_by_EL": strategies.RULE_C_BY_EL,
+        "decision_risk": {
+            "formula": "R = V·q·min(p, 1−p) = EL·min(p, 1−p)/p, руб. (сценарий), D-049",
+            "status": "scenario",
+            "meaning": ("адресуемая съёмкой ожидаемая цена ошибки решения (EVPI при бинарном "
+                        "решении, симметричной цене ошибки V·q, идеальном снимке и "
+                        "откалиброванной p); не фактическое снижение потерь"),
+            "columns": "strategy_comparison.csv: addressed_decision_risk_rub, decision_risk_share",
+            "excluded": "объекты partial/no_data в R не входят (p нет)"},
         "social_constraint": {**ctx["rc"]["social_constraint"],
                               "asset_ids": ctx["social_ids"], "result": res["social_constraint"],
                               "note": ("отдельное ограничение покрытия C, не множитель рублей EL "
@@ -378,6 +436,7 @@ def run(args) -> int:
         print(f"procure: {r['strategy']}: данные {r['data_cost_rub']} руб., "
               f"бюджет {r['budget_rub']}, в бюджете {r['budget_feasible']}, "
               f"охват EL {r['covered_expected_loss_rub']:.2f} руб., "
+              f"цена ошибки решения {r['addressed_decision_risk_rub']:.2f} руб., "
               f"зоны {res['plans'][r['strategy']]}")
     print(f"procure: файлы в {out}")
     return 0

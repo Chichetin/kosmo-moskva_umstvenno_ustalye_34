@@ -3,6 +3,9 @@
 # Нет pyproject.toml или tests/, или pytest не нашёл ни одного теста (код 5) — молчит.
 # Прогон пропускается, если ничего не менялось с последнего зелёного.
 set -uo pipefail
+# Local opt-out: FLOODVALUE_SKIP_TEST_HOOK=1 (e.g. env in .claude/settings.local.json) skips
+# this hook on a machine where the suite is red for environment reasons.
+[ -n "${FLOODVALUE_SKIP_TEST_HOOK:-}" ] && exit 0
 
 MARKER=".claude/.last-green-test-run"
 [ -f pyproject.toml ] && [ -d tests ] || exit 0
