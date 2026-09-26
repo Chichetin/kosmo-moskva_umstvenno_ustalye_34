@@ -24,8 +24,11 @@ MIN_REPRINT_WORDS = 5
 def make_fetcher(source: sqlite3.Row, settings: Settings, budget: Budget) -> Fetcher:
     cfg = json.loads(source["config_json"])
     hosts = frozenset(cfg.get("allowed_hosts", []))
+    # Slow APIs (GDELT answers in 10–40 s) set their own read timeout and attempt count.
     return Fetcher(allowed_hosts=hosts, budget=budget, user_agent=settings.user_agent,
-                   min_interval_s={h: float(cfg.get("min_interval_s", 1.0)) for h in hosts})
+                   min_interval_s={h: float(cfg.get("min_interval_s", 1.0)) for h in hosts},
+                   timeout=(10.0, float(cfg.get("read_timeout_s", 30))),
+                   attempts=int(cfg.get("attempts", 3)))
 
 
 def make_geocoder(conn, settings: Settings, budget: Budget) -> Geocoder | None:
