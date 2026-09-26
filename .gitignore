@@ -10,6 +10,8 @@
 .env.*
 !.env.example
 .venv/
+web/node_modules/
+web/*.tsbuildinfo
 __pycache__/
 *.pyc
 .pytest_cache/
