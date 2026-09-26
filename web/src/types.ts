@@ -23,7 +23,7 @@ export type Session = {
       decision_deadline: string;
     };
     pricing?: { base_rate_status?: string; base_rate_rub_km2?: number };
-    uncertainty?: { meaning?: string };
+    uncertainty?: { meaning?: string; units?: string; method?: string };
     [key: string]: unknown;
   };
   raster: {

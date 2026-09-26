@@ -33,41 +33,6 @@ const dateTimeUtc = (value: string | null | undefined) =>
         timeZone: "UTC",
       }).format(new Date(value))} UTC`
     : "—";
-function useCountUp(value: number | null | undefined, enabled: boolean) {
-  const [shown, setShown] = useState<number | null>(value ?? null);
-  const lastShown = useRef<number | null>(value ?? null);
-  const hasAnimated = useRef(false);
-  useEffect(() => {
-    if (value == null) {
-      setShown(null);
-      lastShown.current = null;
-      hasAnimated.current = false;
-      return;
-    }
-    if (!enabled || window.matchMedia("(prefers-reduced-motion: reduce)").matches || value === 0) {
-      setShown(value);
-      lastShown.current = value;
-      if (enabled && value !== 0) hasAnimated.current = true;
-      return;
-    }
-    const from = hasAnimated.current ? (lastShown.current ?? 0) : 0;
-    hasAnimated.current = true;
-    if (from === value) return;
-    let frame = 0;
-    const start = performance.now();
-    setShown(from);
-    const tick = (now: number) => {
-      const progress = Math.min((now - start) / 850, 1);
-      const next = from + (value - from) * (1 - Math.pow(1 - progress, 3));
-      setShown(next);
-      lastShown.current = next;
-      if (progress < 1) frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [value, enabled]);
-  return shown;
-}
 const date = (value: string | null | undefined) =>
   value
     ? new Intl.DateTimeFormat("ru-RU", {
@@ -96,6 +61,12 @@ const labels: Record<string, string> = {
 const assetName = (feature: Feature) =>
   labels[String(feature.properties.asset_class)] ??
   String(feature.properties.asset_class).replaceAll("_", " ");
+type AssetSort = "name" | "probability" | "loss" | "uncertainty";
+const assetSortValue = (feature: Feature, key: AssetSort): number | string | null => {
+  if (key === "name") return assetName(feature);
+  const raw = feature.properties[key === "probability" ? "p_flood" : key === "loss" ? "expected_loss_rub" : "uncertainty"];
+  return raw == null || raw === "" || feature.properties.status === "no_data" ? null : Number(raw);
+};
 const pointInZone = (asset: Feature, zone: Feature) => {
   if (asset.geometry.type !== "Point" || zone.geometry.type !== "Polygon")
     return false;
@@ -231,6 +202,7 @@ export default function App() {
   const messageCount =
     (messages?.events.features.length ?? 0) + (messages?.reports.features.length ?? 0);
   const [zoneView, setZoneView] = useState<"plan" | "all">("plan");
+  const [assetSort, setAssetSort] = useState<{ key: AssetSort; descending: boolean }>({ key: "loss", descending: true });
   const scene = scenes.find((item) => item.chip_id === route.chipId) ?? null;
   const locatorPosition = scene?.bounds
     ? { lon: (scene.bounds[0] + scene.bounds[2]) / 2, lat: (scene.bounds[1] + scene.bounds[3]) / 2 }
@@ -432,6 +404,19 @@ export default function App() {
       ),
     [activeSession],
   );
+  const sortedAssets = useMemo(() => [...assets].sort((left, right) => {
+    const a = assetSortValue(left, assetSort.key);
+    const b = assetSortValue(right, assetSort.key);
+    if (a == null || (typeof a === "number" && !Number.isFinite(a))) return b == null ? 0 : 1;
+    if (b == null || (typeof b === "number" && !Number.isFinite(b))) return -1;
+    const comparison = typeof a === "string" && typeof b === "string"
+      ? a.localeCompare(b, "ru") : Number(a) - Number(b);
+    return (assetSort.descending ? -comparison : comparison) ||
+      String(left.properties.asset_id).localeCompare(String(right.properties.asset_id), "ru");
+  }), [assets, assetSort]);
+  const toggleAssetSort = (key: AssetSort) => setAssetSort((current) => ({
+    key, descending: current.key === key ? !current.descending : key !== "name",
+  }));
   const zones = activeSession?.candidates.features ?? [];
   const currentPlan = planFor && planFor.runId === activeSession?.run_id && planFor.budget === budget ? plan : null;
   const chosen = currentPlan?.comparison.find((row) => row.strategy === "C");
@@ -512,9 +497,9 @@ export default function App() {
     (sum, item) => sum + Number(item.properties.expected_loss_rub || 0),
     0,
   );
-  const shownLoss = useCountUp(activeSession ? totalLoss : null, !mapVisible && !!activeSession);
-  const shownCost = useCountUp(chosen?.data_cost_rub, !mapVisible && !!activeSession);
-  const shownCoverage = useCountUp(chosen?.coverage_share, !mapVisible && !!activeSession);
+  const planRowsC = new Map((currentPlan?.plan_rows ?? [])
+    .filter((row) => row.strategy === "C")
+    .map((row) => [String(row.candidate_id), row]));
   const downloadCurrentPlan = async () => {
     if (!activeSession || budget === null || !currentPlan || exporting) return;
     setExporting(true);
@@ -1134,46 +1119,43 @@ export default function App() {
             )}
             {activeSession && (
               <div className="analysis-body">
-                <div className="analysis-metrics">
-                  <div>
-                    <span>Объектов</span>
-                    <strong>{assets.length}</strong>
-                  </div>
-                  <div>
-                    <span>Ожидаемый ущерб</span>
-                    <strong>{formatRub(shownLoss)}</strong>
-                  </div>
-                  <div>
-                    <span>План C · данные</span>
-                    <strong>{formatRub(shownCost)}</strong>
-                  </div>
-                  <div>
-                    <span>Охват ущерба</span>
-                    <strong>{pct(shownCoverage)}</strong>
-                  </div>
-                  <div>
-                    <span>Доля адресуемой цены ошибки · сценарий</span>
-                    <strong>{pct(chosen?.decision_risk_share)}</strong>
-                  </div>
+                <div className="analysis-metrics" aria-label="Краткое резюме плана C">
+                  <div><span>Зон в плане C</span><strong>{currentPlan ? currentPlan.plans.C.length : "—"}</strong></div>
+                  <div><span>Стоимость данных</span><strong>{formatRub(chosen?.data_cost_rub)}</strong></div>
+                  <div><span>Охват ожидаемого ущерба</span><strong>{pct(chosen?.coverage_share)}</strong></div>
                 </div>
                 <div className="analysis-columns">
                   <section className="analysis-card">
                     <div className="card-title">
                       <h2>Приоритет осмотра</h2>
-                      <span>Выбор выделит объект на карте</span>
+                      <span>{assets.length} объектов · ожидаемый ущерб {formatRub(totalLoss)}</span>
                     </div>
+                    <details className="analysis-explain">
+                      <summary>Что означает неопределённость карты?</summary>
+                      <p>{activeSession.metadata.uncertainty?.meaning ?? "Методика неопределённости не указана в комплекте."}</p>
+                      {activeSession.metadata.uncertainty?.units && <p>Единицы: {activeSession.metadata.uncertainty.units}.</p>}
+                      <p>Это показатель исходной карты в точке объекта; он не подтверждает затопление и не показывает ущерб.</p>
+                    </details>
                     <div className="table-scroll">
                       <table>
                         <thead>
                           <tr>
-                            <th>Объект</th>
-                            <th>Вероятность воды</th>
-                            <th>Ожидаемый ущерб</th>
-                            <th>Неопределённость карты</th>
+                            {([
+                              ["name", "Объект"],
+                              ["probability", "Вероятность воды"],
+                              ["loss", "Ожидаемый ущерб"],
+                              ["uncertainty", "Неопределённость карты"],
+                            ] as const).map(([key, label]) => (
+                              <th key={key} aria-sort={assetSort.key === key ? assetSort.descending ? "descending" : "ascending" : "none"}>
+                                <button className="asset-sort" onClick={() => toggleAssetSort(key)}>
+                                  {label}<span aria-hidden="true">{assetSort.key === key ? assetSort.descending ? "↓" : "↑" : "↕"}</span>
+                                </button>
+                              </th>
+                            ))}
                           </tr>
                         </thead>
                         <tbody>
-                          {assets.map((item) => (
+                          {sortedAssets.map((item) => (
                             <tr
                               key={String(item.properties.asset_id)}
                               tabIndex={0}
@@ -1200,10 +1182,8 @@ export default function App() {
                               <td>
                                 <strong>{assetName(item)}</strong>
                                 <small>
-                                  {String(item.properties.asset_id)} ·{" "}
-                                  {item.properties.status === "no_data"
-                                    ? "нет данных"
-                                    : "оценка доступна"}
+                                  {String(item.properties.asset_id)}
+                                  {item.properties.status === "no_data" && " · нет данных"}
                                 </small>
                               </td>
                               <td>
@@ -1230,13 +1210,15 @@ export default function App() {
                       </table>
                     </div>
                     {activeAsset && (
-                      <div className="card-foot">
-                        {assetName(activeAsset)} · стоимость{" "}
-                        {money(activeAsset.properties.asset_value_rub)} ₽ ·
-                        уязвимость{" "}
-                        {Number(
-                          activeAsset.properties.vulnerability_coef,
-                        ).toFixed(2)} · точное p: {formatExactProbability(activeAsset.properties.p_flood)}
+                      <div className="card-foot asset-detail">
+                        <div><strong>{assetName(activeAsset)} · {String(activeAsset.properties.asset_id)}</strong>
+                          <span>Стоимость {formatRub(activeAsset.properties.asset_value_rub)} · уязвимость {money(activeAsset.properties.vulnerability_coef)} · точное p {formatExactProbability(activeAsset.properties.p_flood)}</span>
+                        </div>
+                        <button onClick={() => {
+                          setLayers((current) => ({ ...current, assets: true }));
+                          setPanelOpen(true);
+                          setSourceViewerOpen(true);
+                        }}>Показать на карте</button>
                       </div>
                     )}
                   </section>
@@ -1276,42 +1258,32 @@ export default function App() {
                       {planError ? <p className="inline-error">{planError}</p>
                         : !currentPlan && <p className="analysis-plan-loading" role="status">Пересчитываем план…</p>}
                       {chosen && <div className="analysis-plan-totals">
-                        <div><span>Зон в плане</span><strong>{currentPlan?.plans.C.length ?? 0}</strong></div>
-                        <div><span>Стоимость данных</span><strong>{formatRub(chosen.data_cost_rub)}</strong></div>
                         <div><span>Расчёт и проверка зон</span><strong>{formatRub(chosen.other_cost_rub)}</strong></div>
                         <div><span>Полная стоимость решения</span><strong>{formatRub(chosen.decision_cost_rub)}</strong></div>
-                        <div><span>Охват ожидаемого ущерба</span><strong>{pct(chosen.coverage_share)}</strong></div>
                       </div>}
                       <h3 className="analysis-compare-title">Сравнение A / B / C</h3>
                       {(currentPlan?.comparison ?? []).map((row) => (
                         <div
                           key={row.strategy}
-                          className={`strategy ${row.strategy === "C" ? "chosen" : ""}`}
+                          className={`strategy ${row.strategy === "C" ? "chosen" : ""} ${!row.budget_feasible ? "overbudget" : ""}`}
                         >
                           <b>{row.strategy}</b>
                           <div>
-                            <strong>
+                            <strong className="strategy-name">
                               {row.strategy === "A"
                                 ? "Текущие данные"
                                 : row.strategy === "B"
                                   ? "Сплошная съёмка"
                                   : "Приоритетный заказ"}
                             </strong>
-                            <small>
-                              Данные {formatRub(row.data_cost_rub)} · охват
-                              ущерба {pct(row.coverage_share)} · доля адресуемой
-                              цены ошибки {pct(row.decision_risk_share)}
-                            </small>
+                            <div className="strategy-values">
+                              <span>Данные <strong>{formatRub(row.data_cost_rub)}</strong></span>
+                              <span>Охват <strong>{pct(row.coverage_share)}</strong></span>
+                              <span>Доля R <strong>{pct(row.decision_risk_share)}</strong></span>
+                            </div>
                             {row.strategy === "B" && !row.budget_feasible && (
                               <small>
-                                Выше бюджета — контрфактическая, не
-                                рекомендация
-                              </small>
-                            )}
-                            {row.strategy === "C" && (
-                              <small>
-                                Полная стоимость решения{" "}
-                                {money(row.decision_cost_rub)} ₽
+                                Выше бюджета · сравнение, не рекомендация
                               </small>
                             )}
                           </div>
@@ -1350,7 +1322,7 @@ export default function App() {
                           Все зоны
                         </button>
                       </div>
-                      <div className="zone-list">
+                      <div className="zone-list" aria-label={zoneView === "plan" ? "Зоны плана C" : "Все зоны съёмки"}>
                         {zones
                           .filter(
                             (item) =>
@@ -1375,7 +1347,7 @@ export default function App() {
                               <span>
                                 <b>{String(item.properties.candidate_id)}</b>
                                 <small>
-                                  {item.properties.area_km2} км² ·{" "}
+                                  {money(item.properties.area_km2)} км² ·{" "}
                                   {String(
                                     item.properties.sensor_type,
                                   ).toUpperCase()}{" "}
@@ -1391,24 +1363,30 @@ export default function App() {
                                   </small>
                                 ) : null}
                               </span>
-                              <strong>
-                                {money(item.properties.solo_cost_rub)} ₽
-                              </strong>
+                              <span className="zone-cost">
+                                <strong>{formatRub(planRowsC.get(String(item.properties.candidate_id))?.cost_rub ?? item.properties.solo_cost_rub)}</strong>
+                                <small>{planRowsC.has(String(item.properties.candidate_id)) ? "в корзине C" : "отдельный заказ"}</small>
+                              </span>
                             </button>
                           ))}
-                        {zoneView === "plan" && !chosenZoneIds.size && (
+                        {zoneView === "plan" && currentPlan && !chosenZoneIds.size && (
                           <p>При текущем бюджете зон в плане C нет.</p>
                         )}
                       </div>
                       {activeZone && (
-                        <div className="card-foot">
-                          {currentPlan?.reasons.C[
+                        <div className="card-foot zone-detail">
+                          <span>{currentPlan?.reasons.C[
                             String(activeZone.properties.candidate_id)
                           ] ??
                             currentPlan?.reasons.not_selected_C[
                               String(activeZone.properties.candidate_id)
                             ] ??
-                            "Причина отсутствует"}
+                            "Причина выбора недоступна"}</span>
+                          <button onClick={() => {
+                            setLayers((current) => ({ ...current, zones: true }));
+                            setPanelOpen(true);
+                            setSourceViewerOpen(true);
+                          }}>Показать на карте</button>
                         </div>
                       )}
                     </section>
