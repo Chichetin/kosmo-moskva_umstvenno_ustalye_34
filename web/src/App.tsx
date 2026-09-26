@@ -634,7 +634,7 @@ export default function App() {
                     setQuery(event.target.value);
                     setSearchOpen(true);
                   }}
-                  placeholder="Страна или ID сцены"
+                  placeholder="Страна или ID"
                   aria-label="Поиск наблюдений"
                 />
                 {query && (
