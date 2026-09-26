@@ -39,6 +39,7 @@ type Props = {
   onIssue: (message: string | null) => void;
   onSelectMessage?: (message: SelectedMessage) => void;
   focus?: { lngLat: [number, number]; zoom: number; request: number } | null;
+  newsOpen?: boolean;
 };
 const empty: FeatureCollection = { type: "FeatureCollection", features: [] };
 const features = (items: Feature[]): FeatureCollection => ({
@@ -111,7 +112,7 @@ const messageCard = (props: Record<string, unknown>, kind: "event" | "report") =
     if (props.place_label) line(String(props.place_label));
     const coarse = props.geo_precision === "coarsened";
     line(`${when(props.event_time_start ?? props.first_detected_at, props.event_time_start ? props.time_precision : "hour", coarse)} · ${REVIEW_STATE[String(props.review_state)] ?? ""}`);
-    if (coarse) line("место показано с точностью ≈ 1 км, время — до часа; подробности — у аналитика", "small");
+    if (coarse) line("место показано с точностью ≈ 1 км, время — до часа; точные данные — после входа", "small");
   }
   line("Сообщение не проверено по снимкам и не входит в p, ущерб и план.", "small");
   return node;
@@ -783,8 +784,21 @@ export default function MapPanel(props: Props) {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !props.focus) return;
-    map.easeTo({ center: props.focus.lngLat, zoom: props.focus.zoom, duration: reducedMotion() ? 0 : 900 });
+    // From the «Новости» panel: keep the place between the scene list and the panel.
+    const news = window.innerWidth > 700 ? document.querySelector(".news-panel")?.getBoundingClientRect() : null;
+    map.easeTo({
+      center: props.focus.lngLat,
+      zoom: props.focus.zoom,
+      duration: reducedMotion() ? 0 : 900,
+      ...(news ? { padding: { ...overviewPadding(), right: Math.max(0, Math.round(window.innerWidth - news.left)) } } : {}),
+    });
   }, [props.focus?.request]);
+  // The «Новости» panel closed: give the camera its overview padding back (no offset left behind).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || props.newsOpen || props.scene) return;
+    map.setPadding(overviewPadding());
+  }, [props.newsOpen]);
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready || !map.getLayer("boundary")) return;

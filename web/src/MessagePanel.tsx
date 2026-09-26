@@ -56,6 +56,7 @@ type Observation = {
   reason: string;
 };
 type EventCard = {
+  exact_locations?: boolean; // false: the public card without login (sources only, coarse place)
   event: {
     event_id: number;
     title: string;
@@ -188,7 +189,7 @@ export default function MessagePanel({
         </button>
         <a href={analystLink} target="_blank" rel="noopener noreferrer">
           <ExternalLink size={16} />
-          Открыть у аналитика
+          Открыть в модерации
         </a>
       </div>
 
@@ -198,8 +199,16 @@ export default function MessagePanel({
       {loaded.status === "error" && <p className="mp-state mp-error">{loaded.text}</p>}
       {loaded.status === "locked" && (
         <p className="mp-state">
-          Содержание доступно аналитику ·{" "}
+          Сообщение известно только от очевидцев: их текст и фото — персональные данные,
+          они видны после входа ·{" "}
           <a href="/media/analyst" target="_blank" rel="noopener noreferrer">Войти</a>
+        </p>
+      )}
+      {card?.exact_locations === false && (
+        <p className="mp-state">
+          Показано то, что опубликовали источники; место — с точностью ≈ 1 км, время — до часа.
+          Точные данные и сообщения очевидцев — после{" "}
+          <a href="/media/analyst" target="_blank" rel="noopener noreferrer">входа</a>.
         </p>
       )}
       {card && <EventBody card={card} onPhoto={setPhoto} />}
