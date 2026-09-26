@@ -13,7 +13,8 @@ from floodvalue import procurement
 from floodvalue.cli import main
 from floodvalue.procurement import run as prun
 
-FILES = ["flood_probability.tif", "flood_mask.tif", "assets.csv", "asset_loss.csv"]
+FILES = ["flood_probability.tif", "flood_mask.tif", "assets.csv", "asset_loss.csv",
+         "run_metadata.json"]
 
 
 @pytest.fixture(autouse=True)
@@ -49,6 +50,7 @@ def _write_run_dir(d):
                     "rank", "status"])
         for i in range(1, 11):
             w.writerow([f"A{i:02d}", "X_1", i / 10, i * 5e4, 0.5, 11 - i, "ok"])
+    (d / "run_metadata.json").write_text(json.dumps({"threshold": 0.5}), encoding="utf-8")
 
 
 def _hashes(d):
@@ -69,7 +71,42 @@ def test_budget_change_keeps_inputs(tmp_path):
     cat_hash = hashlib.sha256((tmp_path / "candidate_orders.geojson").read_bytes()).hexdigest()
     prun.write_outputs(tmp_path, 20000)
     assert _hashes(tmp_path) == before
+    assert json.loads((tmp_path / "run_metadata.json").read_text())["threshold"] == 0.5
+    with open(tmp_path / "procurement_sensitivity.csv", encoding="utf-8") as f:
+        sens = list(csv.DictReader(f))
+    for prefix in ("budget_", "rate_x"):
+        for s in "BC":
+            assert sum(r["scenario_id"].startswith(prefix) and r["strategy"] == s
+                       for r in sens) >= 5, (prefix, s)
     assert hashlib.sha256((tmp_path / "candidate_orders.geojson").read_bytes()).hexdigest() == cat_hash
+
+
+def test_plan_cache_same_result_and_invalidation(tmp_path, monkeypatch):
+    """Кеш контекста: тот же dict, смена бюджета не пересобирает каталог, правка входа
+    сбрасывает кеш (#105). Без порога по времени — считаются сборки контекста."""
+    import os
+    _write_run_dir(tmp_path)
+    cold = {b: prun._plan(prun._context(tmp_path), b) for b in (1000, 20000)}
+    builds = []
+    real = prun._context
+    monkeypatch.setattr(prun, "_context", lambda d: builds.append(d) or real(d))
+    prun._CONTEXT_CACHE.clear()
+    assert procurement.plan(tmp_path, 20000) == cold[20000]
+    assert procurement.plan(tmp_path, 1000) == cold[1000]
+    assert procurement.plan(tmp_path, 20000) == cold[20000]
+    assert len(builds) == 1
+    # same size, newer mtime -> rebuilt
+    loss = tmp_path / "asset_loss.csv"
+    st = loss.stat()
+    os.utime(loss, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
+    procurement.plan(tmp_path, 1000)
+    assert len(builds) == 2
+    # changed content -> rebuilt, result follows the new input
+    loss.write_text(",no_data".join(loss.read_text(encoding="utf-8").rsplit(",ok", 1)),
+                    encoding="utf-8")
+    os.utime(loss, ns=(st.st_atime_ns, st.st_mtime_ns + 2 * 10**9))
+    assert procurement.plan(tmp_path, 20000) != cold[20000]
+    assert len(builds) == 3
 
 
 def test_cli_procure_writes_contract_files(tmp_path):
@@ -92,8 +129,10 @@ def test_cli_procure_writes_contract_files(tmp_path):
     with open(tmp_path / "procurement_sensitivity.csv", encoding="utf-8") as f:
         sens = list(csv.DictReader(f))
     assert sum(r["scenario_id"].startswith("budget_") for r in sens) >= 5
-    assert {r["scenario_id"] for r in sens if r["scenario_id"].startswith("rate_")} >= {
-        "rate_x0.5", "rate_x1.5"}
+    assert {r["scenario_id"] for r in sens if r["scenario_id"].startswith("rate_")} == {
+        "rate_x0.5", "rate_x0.75", "rate_x1.25", "rate_x1.5", "rate_x2.0"}
+    assert {r["scenario_id"] for r in sens if r["scenario_id"].startswith("deadline_")} == {
+        "deadline_+6h", "deadline_+12h", "deadline_+24h", "deadline_+48h"}
     meta = json.loads((tmp_path / "procurement_metadata.json").read_text(encoding="utf-8"))
     assert "W-CHIP-OL" in meta["zones"]["excluded_from_coverage"]
     assert meta["other_cost"]["status"] == "scenario"
@@ -119,9 +158,10 @@ def test_stale_catalog_file_is_not_used(tmp_path):
         for r, (lon, lat) in zip(rows, coords, strict=True):
             w.writerow({**r, "longitude": lon, "latitude": lat})
     res = procurement.plan(tmp_path, 2500)
-    assert res["plans"]["C"][0] in ("Z-A09", "Z-A10")  # зоны у A10 (max EL) и соседей
+    # max R = V·q·min(p, 1−p) — у A05 (p = 0,5, D-049): зона у нового места A05 и соседей
+    assert res["plans"]["C"][0] in ("Z-A04", "Z-A05", "Z-A06")
     c = next(r for r in res["comparison"] if r["strategy"] == "C")
-    assert "A10" in c["covered_asset_ids"].split()
+    assert "A05" in c["covered_asset_ids"].split()
 
 
 def test_zones_inside_chip_except_asset_buffers(tmp_path):
@@ -199,3 +239,65 @@ def test_procurement_files_pass_validator_on_fixture(tmp_path):
     for name in ("candidate_orders.geojson", "procurement_plan.csv", "strategy_plans.json",
                  "strategy_comparison.csv"):
         assert errors[name] == [], (name, errors[name])
+
+
+def test_procurement_sensitivity_passes_validator(tmp_path):
+    """sensitivity.csv = строки procure (бюджет, ставка, срок) ∪ строки p, V, q эталона:
+    валидатор принимает ключ ставки и бюджета как «изменён один вход»."""
+    import shutil
+
+    from floodvalue.export import assemble
+    from floodvalue.export.validate import FIXTURE_RUN, validate_run
+    run = tmp_path / "run"
+    shutil.copytree(FIXTURE_RUN, run)
+    meta = json.loads((run / "run_metadata.json").read_text(encoding="utf-8"))
+    prun.write_outputs(run, meta["budget"]["budget_rub"])
+    with open(run / "procurement_sensitivity.csv", encoding="utf-8") as f:
+        proc = list(csv.DictReader(f))
+    with open(run / "sensitivity.csv", encoding="utf-8") as f:
+        pvq = [r for r in csv.DictReader(f) if set(json.loads(r["changed_inputs_json"]))
+               & {"p_flood", "asset_value_rub", "vulnerability_coef"}]
+    rows = assemble.merge_sensitivity(proc, pvq)
+    with open(run / "sensitivity.csv", "w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, assemble.sensitivity_fields(rows), lineterminator="\n")
+        w.writeheader()
+        w.writerows(rows)
+    assert validate_run(run)["sensitivity.csv"] == []
+    assert assemble.missing_sensitivity_keys(proc) == [
+        "asset_value_rub", "p_flood", "vulnerability_coef"]
+
+
+def test_coverage_at_base_deadline_matches_context(tmp_path):
+    """Пересчёт пригодности по сроку без перестройки каталога совпадает с _context."""
+    from floodvalue.procurement import strategies
+    _write_run_dir(tmp_path)
+    ctx = prun._context(tmp_path)
+    ok = {r["asset_id"] for r in ctx["loss"] if r["status"] == "ok"}
+    cov, elig = strategies.coverage_at(ctx["catalog"], ok, ctx["deadline"])
+    assert cov == ctx["cov"] and elig == ctx["eligible"]
+
+
+def test_low_value_of_information_reason_and_risk_columns(tmp_path):
+    """D-049: A01, A02 с p = 1 — R = 0: Z-A01 (покрывает только их) не покупается с причиной
+    «низкая ценность информации»; strategy_comparison.csv несёт столбцы цены ошибки решения."""
+    _write_run_dir(tmp_path)
+    with open(tmp_path / "asset_loss.csv", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    for r in rows[:2]:
+        r["p_flood"], r["expected_loss_rub"] = "1.0", "500000.0"
+    with open(tmp_path / "asset_loss.csv", "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w.writeheader()
+        w.writerows(rows)
+    res = procurement.plan(tmp_path, 2500)
+    assert "Z-A01" not in res["plans"]["C"]
+    why = res["reasons"]["not_selected_C"]["Z-A01"]
+    assert why.startswith("низкая ценность информации") and "A01, A02" in why
+    prun.write_outputs(tmp_path, 5000)
+    with open(tmp_path / "strategy_comparison.csv", encoding="utf-8") as f:
+        comp = list(csv.DictReader(f))
+    assert {"addressed_decision_risk_rub", "decision_risk_share"} <= set(comp[0])
+    a = next(r for r in comp if r["strategy"] == "A")
+    assert float(a["addressed_decision_risk_rub"]) == 0
+    meta = json.loads((tmp_path / "procurement_metadata.json").read_text(encoding="utf-8"))
+    assert "min(p, 1−p)" in meta["rule_C"] and meta["decision_risk"]["status"] == "scenario"

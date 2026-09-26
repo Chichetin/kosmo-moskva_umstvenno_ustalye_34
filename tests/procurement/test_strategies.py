@@ -13,7 +13,8 @@ T0 = datetime(2017, 5, 30, 12, tzinfo=UTC)
 DEADLINE = datetime(2017, 5, 31, 0, tzinfo=UTC)
 ASSETS = [{"asset_id": f"A{i:02d}", "longitude": 80.0 + 0.02 * i, "latitude": 7.0}
           for i in range(1, 11)]  # 2 км между объектами — буферы не перекрываются
-LOSS = [{"asset_id": a["asset_id"], "status": "ok",
+# p = 0,5: цена ошибки решения R = V·q·min(p, 1−p) = EL — порядок C как по EL (D-049)
+LOSS = [{"asset_id": a["asset_id"], "status": "ok", "p_flood": "0.5",
          "expected_loss_rub": str(1_000_000 * (11 - i)), "uncertainty": "0.5"}
         for i, a in enumerate(ASSETS, 1)]
 OTHER = {"compute_rub": 1000, "review_per_zone_rub": 500}
@@ -133,24 +134,126 @@ def test_reasons_for_every_c_zone():
     assert all("EL" in v for v in res["reasons"]["C"].values())
 
 
-def test_sensitivity_rows():
+BUDGETS = [Decimal(b) for b in ("0", "2500", "5000", "10000", "50000")]
+RATES = [Decimal(f) for f in ("0.5", "0.75", "1.25", "1.5", "2.0")]
+
+
+def sens_rows(**kw):
     cat, cov, elig = ctx()
-    rows = strategies.sensitivity(cat, cov, elig, LOSS, Decimal(5000), CFG, AS_OF,
-                                  [Decimal(b) for b in ("0", "2500", "5000", "10000", "50000")],
-                                  [Decimal("0.5"), Decimal("1.5")], other_cfg=OTHER)
+    return strategies.sensitivity(cat, cov, elig, LOSS, Decimal(5000), CFG, AS_OF,
+                                  kw.pop("budgets", BUDGETS), kw.pop("rates", RATES),
+                                  other_cfg=OTHER, **kw)
+
+
+def _of(rows, prefix, strategy):
+    return [r for r in rows if r["scenario_id"].startswith(prefix) and r["strategy"] == strategy]
+
+
+def test_sensitivity_rows():
     import json
-    budgets = [r for r in rows if r["scenario_id"].startswith("budget_")]
-    rates = [r for r in rows if r["scenario_id"].startswith("rate_")]
-    assert len(budgets) == 5 and len(rates) == 4
+    rows = sens_rows()
+    budgets = _of(rows, "budget_", "C")
+    assert len(budgets) == 5 and len(_of(rows, "budget_", "B")) == 5
+    assert len(_of(rows, "rate_", "C")) == 5 and len(_of(rows, "rate_", "B")) == 5
     assert all(json.loads(r["changed_inputs_json"]) for r in rows)
     costs = [r["covered_expected_loss_rub"] for r in budgets]
     assert costs == sorted(costs)
     assert budgets[0]["result_status"] == "empty_plan"
-    b_rates = [r for r in rates if r["strategy"] == "B"]
+    b_rates = _of(rows, "rate_", "B")
     assert all(r["result_status"] == "counterfactual_over_budget" for r in b_rates)
-    cheap = next(r for r in rates if r["scenario_id"] == "rate_x0.5" and r["strategy"] == "C")
+    cheap = next(r for r in _of(rows, "rate_x0.5", "C"))
     base = next(r for r in budgets if r["scenario_id"] == "budget_5000.00")
     assert cheap["covered_expected_loss_rub"] > base["covered_expected_loss_rub"]
+
+
+def test_sensitivity_changed_inputs_one_required_key_each():
+    """Каждая строка бюджета меняет только budget_rub, каждая строка ставки — только
+    base_rate_rub_km2 из обязательных ключей контракта §7a; ставка — сценарная."""
+    import json
+
+    from floodvalue.contracts import files as F
+    required = set(F.SENSITIVITY_REQUIRED_KEYS)
+    rows = sens_rows()
+    for r in rows:
+        changed = json.loads(r["changed_inputs_json"])
+        if r["scenario_id"].startswith("budget_"):
+            assert set(changed) & required == {"budget_rub"}
+        if r["scenario_id"].startswith("rate_"):
+            assert set(changed) & required == {"base_rate_rub_km2"}
+            assert changed["base_rate_status"] == "scenario"
+            factor = Decimal(str(changed["base_rate_factor"]))
+            assert Decimal(str(changed["base_rate_rub_km2"])) == (
+                Decimal(str(CFG["base_rate"]["rub_per_km2"])) * factor).quantize(Decimal("0.01"))
+    assert not any("тариф" in r["interpretation"].lower() for r in rows)
+
+
+def test_sensitivity_b_on_every_budget_counterfactual_when_over():
+    """B не зависит от бюджета по составу; сверх бюджета — counterfactual_over_budget и
+    «контрфактическая» в интерпретации, в бюджете — within_budget."""
+    rows = sens_rows(budgets=[Decimal("0"), Decimal("5000"), Decimal("10000000")])
+    b = {r["scenario_id"]: r for r in _of(rows, "budget_", "B")}
+    assert {r["decision_cost_rub"] for r in b.values()} == {b["budget_0.00"]["decision_cost_rub"]}
+    assert b["budget_0.00"]["result_status"] == "counterfactual_over_budget"
+    assert "контрфактическ" in b["budget_0.00"]["interpretation"]
+    assert b["budget_10000000.00"]["result_status"] == "within_budget"
+    assert "контрфактическ" not in b["budget_10000000.00"]["interpretation"]
+
+
+def test_sensitivity_interpretation_content():
+    rows = sens_rows()
+    for r in rows:
+        text = r["interpretation"]
+        assert "относительно базы" in text, text
+        assert "decision_cost" in text and "EL" in text
+        assert "без новых наблюдений фактическое снижение не заявляется" in text
+        if r["scenario_id"].startswith("budget_"):
+            assert "p, маска, порог и портфель не менялись" in text
+        if r["scenario_id"].startswith("rate_"):
+            assert "сценарн" in text
+            assert "бюджет 5000.00 руб." in text
+
+
+def test_rate_factor_scales_unit_price_at_fixed_basket():
+    """Корзина фиксирована: Р (по всей корзине) не зависит от ставки, unit_price =
+    ROUND_HALF_UP(k·Б × О × П × Т × Р) и отличается от k × unit_price(Б) не более чем на
+    округление; при k = 2 и 0,5 — ровно пропорционально (1703,46 → 3406,92 / 851,73)."""
+    from decimal import ROUND_HALF_UP
+    res = plan("100000")
+    items = strategies.catalog_items(ctx()[0])
+    basket = res["plans"]["C"]
+    assert len(basket) > 1
+    base = strategies.price(basket, items, CFG, AS_OF)
+    for k in RATES:
+        rows = strategies.price(basket, items, strategies.with_base_rate(CFG, k), AS_OF)
+        for r0, rk in zip(base, rows, strict=True):
+            assert rk["discount_coef"] == r0["discount_coef"]
+            exact = (rk["base_rate_rub_km2"] * rk["processing_coef"] * rk["usage_coef"]
+                     * rk["freshness_coef"] * rk["discount_coef"])
+            assert rk["unit_price_rub_km2"] == exact.quantize(Decimal("0.01"), ROUND_HALF_UP)
+            assert abs(rk["unit_price_rub_km2"] - k * r0["unit_price_rub_km2"]) <= Decimal("0.01")
+    one = [c for c in items if c == "Z-A01"]
+    u = {k: strategies.price(one, items, strategies.with_base_rate(CFG, k), AS_OF)[0]
+         ["unit_price_rub_km2"] for k in (Decimal(1), Decimal(2), Decimal("0.5"))}
+    assert u == {Decimal(1): Decimal("1703.46"), Decimal(2): Decimal("3406.92"),
+                 Decimal("0.5"): Decimal("851.73")}
+
+
+def test_sensitivity_deadline_rows_recompute_eligibility():
+    """Срок решения decision_at + h: позиции с available_at > срока не дают охвата.
+    +6 ч — ни одна новая съёмка не готова (S1N +9 ч) → C и B пусты; +12 ч — как база."""
+    rows = sens_rows(budgets=[], rates=[], decision_at=T0, deadline_hours=[6, 12, 24])
+    c = {r["scenario_id"]: r for r in _of(rows, "deadline_", "C")}
+    b = {r["scenario_id"]: r for r in _of(rows, "deadline_", "B")}
+    assert set(c) == set(b) == {"deadline_+6h", "deadline_+12h", "deadline_+24h"}
+    assert c["deadline_+6h"]["covered_expected_loss_rub"] == 0
+    assert c["deadline_+6h"]["result_status"] == "empty_plan"
+    assert b["deadline_+6h"]["result_status"] == "empty_plan"
+    base_c = cmp_(plan("5000"), "C")
+    assert c["deadline_+12h"]["covered_expected_loss_rub"] == base_c["covered_expected_loss_rub"]
+    import json
+    ch = json.loads(c["deadline_+6h"]["changed_inputs_json"])
+    assert ch == {"decision_deadline": "2017-05-30T18:00:00+00:00",
+                  "deadline_hours_after_decision": 6}
 
 
 def test_selection_uses_repriced_basket_not_sum_of_singles():
@@ -163,7 +266,7 @@ def test_selection_uses_repriced_basket_not_sum_of_singles():
 
 def test_overlapping_zones_do_not_double_count():
     cov = {"x": ["A01", "A02"], "y": ["A02"]}
-    el = {"A01": {"el": 10.0, "unc": 0.1}, "A02": {"el": 5.0, "unc": 0.2}}
+    el = {"A01": {"el": 10.0, "unc": 0.1, "risk": 10.0}, "A02": {"el": 5.0, "unc": 0.2, "risk": 5.0}}
     row = strategies.comparison_row("B", ["x", "y"], [], Decimal(0), cov, el, OTHER)
     assert row["covered_expected_loss_rub"] == 15.0
     assert row["covered_asset_ids"] == "A01 A02"
@@ -197,7 +300,7 @@ def test_tie_break_by_candidate_id_prefers_smaller_id():
                  "area_km2": Decimal("1.44"), "available_at": "2017-05-30T21:00:00+00:00"}
              for c in ("Z-A01", "Z-A01-X")}
     cov = {"Z-A01": ["A01"], "Z-A01-X": ["A01"]}
-    el = {"A01": {"el": 1.0, "unc": 0.1}}
+    el = {"A01": {"el": 1.0, "unc": 0.1, "risk": 1.0}}
     chosen, _, _ = strategies.select_c(items, cov, el, Decimal(10000), CFG, AS_OF)
     assert chosen == ["Z-A01"]
 
@@ -251,8 +354,8 @@ def test_c_best_single_start_beats_myopic_greedy():
     помещается: 11 < 12. Проход со стартом с наибольшего EL выбирает BIG."""
     items = {"BIG": _item("BIG", "3.000"), "S1": _item("S1", "1.440"), "S2": _item("S2", "1.440")}
     cov = {"BIG": ["A01", "A02", "A03"], "S1": ["A01"], "S2": ["A02"]}
-    el = {"A01": {"el": 10.0, "unc": 0}, "A02": {"el": 1.0, "unc": 0},
-          "A03": {"el": 1.0, "unc": 0}}
+    el = {"A01": {"el": 10.0, "unc": 0, "risk": 10.0}, "A02": {"el": 1.0, "unc": 0, "risk": 1.0},
+          "A03": {"el": 1.0, "unc": 0, "risk": 1.0}}
     chosen, reasons, info = strategies.select_c(items, cov, el, Decimal("5200"), CFG, AS_OF)
     assert chosen == ["BIG"] and info["variant"] == "start:BIG"
     assert info["alternatives"]["greedy"]["chosen"] == ["S1", "S2"]
@@ -272,7 +375,7 @@ def test_c_best_single_start_beats_myopic_greedy():
 def test_social_phase_takes_cheapest_cover_of_required():
     items = {"BIG": _item("BIG", "3.000"), "S1": _item("S1", "1.440")}
     cov = {"BIG": ["A01", "A02"], "S1": ["A01"]}
-    el = {"A01": {"el": 1.0, "unc": 0}, "A02": {"el": 1.0, "unc": 0}}
+    el = {"A01": {"el": 1.0, "unc": 0, "risk": 1.0}, "A02": {"el": 1.0, "unc": 0, "risk": 1.0}}
     chosen, reasons, info = strategies.select_c(items, cov, el, Decimal("10000"), CFG, AS_OF,
                                                 required=["A01"])
     assert chosen[0] == "S1" and "социальное" in reasons["S1"]  # дешевле BIG на объект A01
@@ -298,7 +401,7 @@ def test_uncertainty_tie_break_prefers_larger_uncertainty():
     """Равные EL на рубль и цена: берётся позиция с большей неопределённостью новых объектов."""
     items = {"P": _item("P", "1.440"), "Q": _item("Q", "1.440")}
     cov = {"P": ["A01"], "Q": ["A02"]}
-    el = {"A01": {"el": 5.0, "unc": 0.1}, "A02": {"el": 5.0, "unc": 0.9}}
+    el = {"A01": {"el": 5.0, "unc": 0.1, "risk": 5.0}, "A02": {"el": 5.0, "unc": 0.9, "risk": 5.0}}
     chosen, _, _ = strategies.select_c(items, cov, el, Decimal("2452.98"), CFG, AS_OF)
     assert chosen == ["Q"]
 
@@ -308,7 +411,7 @@ def test_social_phase_cost_per_required_not_el_ratio():
     берёт S1; без ограничения берётся BIG."""
     items = {"BIG": _item("BIG", "3.000"), "S1": _item("S1", "1.440")}
     cov = {"BIG": ["A01", "A02"], "S1": ["A01"]}
-    el = {"A01": {"el": 1.0, "unc": 0}, "A02": {"el": 100.0, "unc": 0}}
+    el = {"A01": {"el": 1.0, "unc": 0, "risk": 1.0}, "A02": {"el": 100.0, "unc": 0, "risk": 100.0}}
     chosen, _, _ = strategies.select_c(items, cov, el, Decimal("5200"), CFG, AS_OF,
                                        required=["A01"])
     assert chosen == ["S1"]
@@ -322,3 +425,50 @@ def test_sensitivity_social_off_row_when_enabled():
                                   other_cfg=OTHER, required=["A10"], social_ids=["A10"])
     ids = [r["scenario_id"] for r in rows]
     assert "social_constraint_off" in ids and "social_constraint_on" not in ids
+
+
+def test_sensitivity_interpretation_lists_basket_change():
+    rows = sens_rows(budgets=[Decimal("0"), Decimal("12000")], rates=[])
+    zero, big = _of(rows, "budget_0.00", "C")[0], _of(rows, "budget_12000.00", "C")[0]
+    assert "C [пусто], относительно базы +[] −[Z-A01, Z-A02]" in zero["interpretation"]
+    assert "относительно базы +[Z-A03" in big["interpretation"]
+    assert "−[]" in big["interpretation"]
+
+
+def test_coverage_at_only_assessed_assets():
+    cat = ctx()[0]
+    cov, elig = strategies.coverage_at(cat, {"A02"}, DEADLINE)
+    assert cov["Z-A01"] == [] and cov["Z-A02"] == ["A02"]
+    assert "Z-A01" in elig and "W-CHIP-OC" not in elig
+
+
+def test_deadline_rows_name_scenario_timing_and_why():
+    """Скептик D-047: сроки доступности — сценарные; пустая B к сроку объясняет, когда
+    доступна W-CHIP; более поздний срок называет доступную, но не дающую охвата оптику."""
+    rows = sens_rows(budgets=[], rates=[], decision_at=T0, deadline_hours=[6, 48])
+    rows = [r for r in rows if r["scenario_id"].startswith("deadline_")]
+    assert len(rows) == 4
+    for r in rows:
+        assert "сроки доступности предложений сценарные" in r["interpretation"]
+    b6 = _of(rows, "deadline_+6h", "B")[0]["interpretation"]
+    assert "правило B (W-CHIP) к сроку не исполнимо — W-CHIP доступна 2017-05-30T21:00:00" in b6
+    c48 = _of(rows, "deadline_+48h", "C")[0]["interpretation"]
+    assert "ещё 12 доступны к сроку, но охвата не дают (облачность не подтверждена)" in c48
+    assert "не дают" not in _of(rows, "deadline_+6h", "C")[0]["interpretation"]
+
+
+def test_empty_plan_uncertainty_is_initial_not_scenario():
+    """Скептик D-047: у пустого плана остаточная неопределённость = исходная (как A)."""
+    rows = sens_rows(budgets=[Decimal("0"), Decimal("5000")], rates=[])
+    empty = _of(rows, "budget_0.00", "C")[0]["interpretation"]
+    assert "закупки нет — неопределённость исходная (как A, baseline)" in empty
+    assert "scenario" not in empty.split("бюджета 0.00")[1].split("(без новых")[0]
+    full = _of(rows, "budget_5000.00", "C")[0]["interpretation"]
+    assert "остаточная неопределённость scenario" in full
+
+
+def test_with_base_rate_rounds_half_up():
+    """reviewer #109: сценарная ставка округляется ROUND_HALF_UP, не банковски (1,25 × 0,5 = 0,625)."""
+    cfg = {"base_rate": {"rub_per_km2": "1.25"}}
+    assert strategies.with_base_rate(cfg, Decimal("0.5"))["base_rate"]["rub_per_km2"] == "0.63"
+    assert cfg["base_rate"]["rub_per_km2"] == "1.25"
