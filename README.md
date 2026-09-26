@@ -71,7 +71,7 @@ python3 scripts/download_sen1floods11.py            # HandLabeled + perm_water +
 | Обучение основного метода (U-Net, ансамбль 5 seed) | `make train` (GPU: `make train GPU=1`; Colab: `notebooks/train_colab.ipynb`) | готово — веса 5 членов в `models/unet/` через LFS, dev IoU 0,584 против baseline 0,391 (D-019, `docs/verification/unet-metrics.md`); команда обучения проверена смоук-прогоном (`--max-chips`, CPU и GPU, код 0), полный переобучающий прогон (~75 с/член на GPU) после обучения весов сдачи не повторялся (время и устройство — `docs/verification/unet-metrics.md` §«Воспроизведение») |
 | Калибровка и порог на validation | `make calibrate` | готово — Platt-калибровка, порог 0,37 по IoU на validation (D-029, `docs/verification/calibration-val.md`); пишет `models/unet/calibration.json`, `predict` подхватывает его автоматически без правок вызова |
 | Inference на чипе (S1-only, оба метода) | `FLOODVALUE_METHOD=unet\|baseline make predict CHIP=<chip_id>` | готово — на `Sri-Lanka_713926` (unet: `threshold 0.37, threshold_status "calibrated (platt) and chosen on validation, D-029"`, `valid_pixels 262144`; baseline: `seconds 0.0`) и на `Nigeria_1095404` (другой официальный чип, unet: `valid_pixels 262144`) |
-| Финальная оценка на part (validation/dev/test) | `make eval-test` (сырое, по умолчанию `--part test` — запечатан); `uv run --frozen python -m floodvalue eval-test --part validation` | готово, **test честно запечатан**: `make eval-test` без подтверждения → `eval-test: отказ — test is sealed (D-010): set FLOODVALUE_EVAL_TEST_CONFIRM=<sha256 of the frozen configuration>; ...`; `--part validation` реально считает 60 чипов → `docs/verification/eval-validation.md` (калиброванная модель: IoU 0,685 против baseline 0,580, ECE 0,010 [CI 0,008; 0,021] в тех же 15 корзинах, что `calibration-val.md`, log-loss 0,146, Brier 0,041, AUROC неопределённости 0,902; «сырая → калиброванная p»: ECE 0,040 → 0,010, D-057); `docs/verification/test-log.md` по test пуст — test ещё не открывался (`eval-test` замороженной конфигурации — не позже 26.09 20:00, D-033) |
+| Финальная оценка на part (validation/dev/test) | `make eval-test` (сырое, по умолчанию `--part test` — запечатан); `uv run --frozen python -m floodvalue eval-test --part validation` | готово; без подтверждения test запечатан: `make eval-test` → `eval-test: отказ — test is sealed (D-010): set FLOODVALUE_EVAL_TEST_CONFIRM=<sha256 of the frozen configuration>; ...`; `--part validation` реально считает 60 чипов → `docs/verification/eval-validation.md` (калиброванная модель: IoU 0,685 против baseline 0,580, ECE 0,010 [CI 0,008; 0,021] в тех же 15 корзинах, что `calibration-val.md`, log-loss 0,146, Brier 0,041, AUROC неопределённости 0,902; «сырая → калиброванная p»: ECE 0,040 → 0,010, D-057); **test открыт один раз** замороженной конфигурацией: `FLOODVALUE_EVAL_TEST_CONFIRM=<sha256> make eval-test` на commit `e7a78e7` (26.09 17:32 UTC, sha256 конфигурации `e8fa3dae…`, строка в `docs/verification/test-log.md`) → 75 чипов, IoU основного 0,725 против baseline 0,677, ΔIoU +0,047 [0,012; 0,079], ECE 0,0436, AUROC неопределённости 0,897 (`docs/verification/test-eval.md` §1, §3, §4; итог — «Ограничения и развитие», «Перенос») |
 | 10 объектов и ущерб | `make assets CHIP=<chip_id>` | готово — `assets: 10 объектов, оценено 10` (D-018; `pytest tests/assets`) |
 | Зоны, цена, A/B/C | `make procure BUDGET=<руб>` | готово — `procure: A/B/C` с ценой, охватом EL, ценой ошибки решения и `budget_feasible` (D-023; `pytest tests/procurement`). C покупает снимки там, где они могут изменить решение: max прироста R = V·q·min(p, 1−p) (сценарная «цена ошибки решения», не снижение потерь) на рубль корзины; объекты с почти известным исходом (p ≈ 0 или 1) не покупаются; прежнее правило «EL на рубль» — строка `C_by_EL` в `sensitivity.csv` (D-049). Поэтому доля покрытого EL у C может быть малой: объекты с исходом, почти известным по карте (p ≈ 1), идут на осмотр (D-035), а не на снимок |
 | 12 обязательных файлов | `make export && make validate` | готово — реальный комплект `make all CHIP=Sri-Lanka_713926 BUDGET=5000` → `12/12 файлов прошли проверку`, `flood_mask.tif`/`flood_probability.tif` — с калиброванным порогом 0,37, `metrics.csv` — с калиброванными метриками main (D-027, D-029; `pytest tests/contracts tests/export`); `run_metadata.warnings` пуст на чистом дереве — `make all CHIP=Sri-Lanka_713926 BUDGET=5000` на commit `89c8e4f` (26.09) → `warnings: []`, validate 12/12 (ранее было предупреждение про рассинхрон порога метрик, снято подключением калибратора в `export`) |
@@ -207,7 +207,7 @@ CHIP=Sri-Lanka_713926` — оба дают код 0 на commit `89c8e4f` (26.09
 (не только на демонстрационном) проверен на `Nigeria_1095404`
 (`uv run --frozen python -m floodvalue predict --chip Nigeria_1095404`, вход только
 `S1Hand`, `valid_pixels: 262144`) — до заморозки функций чипы `test`-части (Spain,
-Mekong, Bolivia) не используются нигде, кроме будущего `make eval-test` (D-010,
+Mekong, Bolivia) не использовались нигде, кроме единственного запуска `make eval-test` замороженной конфигурации (D-010,
 раздел «Ограничения и развитие»). Полный сквозной путь до 12 файлов на другом чипе —
 подраздел ниже.
 
@@ -346,9 +346,11 @@ D-017.
   используется дважды — для отчёта (`python -m floodvalue eval-test --part validation`, commit `af52cc72a2d6` —
   `docs/verification/eval-validation.md`) и как единственная выборка для калибровки и выбора порога
   (`make calibrate` — Platt, порог 0,37, D-029, `docs/verification/calibration-val.md`). **Test
-  запечатан корректно**: `make eval-test` без
-  `FLOODVALUE_EVAL_TEST_CONFIRM` реально отказывает («test is sealed»),
-  `docs/verification/test-log.md` пока пуст — test ещё не открывался. Сводные доли
+  открыт один раз** — после заморозки, замороженной конфигурацией: `make eval-test` без
+  `FLOODVALUE_EVAL_TEST_CONFIRM` отказывает («test is sealed»), с подтверждением —
+  единственная строка `docs/verification/test-log.md` (26.09 17:32 UTC, commit `e7a78e7`,
+  sha256 конфигурации `e8fa3dae…`). Повторная настройка после этого запуска — только с
+  новым test (D-010, D-030). Сводные доли
   меток (включая test) смотрели до разбиения и они повлияли на выбор test-событий и
   демо-чипа (`docs/data.md` §10, D-016) — не на модель и пороги.
 - **Один демонстрационный чип.** До `eval-test` замороженной конфигурации (не позже
@@ -370,8 +372,11 @@ D-017.
   настроечная (`make all CHIP=Sri-Lanka_713926 BUDGET=5000` на `9040ece`, 26.09 →
   `proxy_check.status=planned`, `result.estimated=true`, `independent=false`, MAE 274 285,66
   руб. на 10 точках демо-чипа, источник `docs/verification/eval-validation-summary.json`).
-  `status=done` бывает только у test-чипа после `eval-test` замороженной конфигурации; до
-  него на test проверка не выполнялась вовсе, и у test-чипа статус `planned`.
+  `status=done` бывает только у test-чипа после `eval-test` замороженной конфигурации. Она
+  выполнена 26.09 (`docs/verification/test-eval.md` §5, прокси по ручной метке, не
+  фактические потери): демо-чип `Spain_7370579` — 10 точек, MAE 468 044 руб.; все 75
+  чипов test — 693 точки из 750 (57 исключены: метка −1), MAE 345 305 руб., Σ EL
+  585 567 944 руб. против Σ EL_ref 448 500 000 руб.
 - **Стоимость данных — сценарная.** Ставка Б = 788,64 руб./км² (`base_rate_status=scenario`)
   и сроки `available_at` не подтверждены поставщиком (D-026, `docs/pp840.md`). Покупка
   ни разу не совершалась: A/B/C — расчётные стратегии на одной карте, и ни одна не
@@ -391,12 +396,41 @@ D-017.
   рассеиватели (VV до +24,7 dB в train, на других событиях набора выше — `docs/limitations.md` §1, §8), вода под пологом
   растительности или при ветровой ряби, невидимая в SAR (`docs/data.md` §8 п. 13),
   тени рельефа (layover/shadow — общее свойство SAR, отдельно на этом наборе не
-  измерялось), и распределения dB/доли воды, сильно отличные от train. `make
-  eval-test` реализован и запечатан на test правильно (`make eval-test` без
-  `FLOODVALUE_EVAL_TEST_CONFIRM` на `89c8e4f`, 26.09 → «отказ — test is sealed (D-010)», код 2;
-  `--part validation` считает 60 чипов — `docs/verification/eval-validation.md`);
-  перенос на test (новые события Spain/Mekong/Bolivia) сам по себе ещё не проверен —
-  это следующий шаг после заморозки функций, а не нереализованный код.
+  измерялось), и распределения dB/доли воды, сильно отличные от train.
+- **Итог на test (новые события Bolivia, Mekong, Spain — в обучении, калибровке и выборе
+  порога не участвовали).** Один запуск замороженной конфигурации (commit `e7a78e7`, 26.09
+  17:32 UTC, `docs/verification/test-log.md`), идентичные валидные пиксели обоих методов,
+  75 чипов (`docs/verification/test-eval.md`):
+
+  | событие | IoU основного | IoU baseline | ΔIoU [95 % CI] | ECE | AUROC неопределённости |
+  |---|---|---|---|---|---|
+  | Bolivia | 0,688 | 0,581 | 0,107 [0,078; 0,131] | 0,0263 | 0,879 |
+  | Mekong | 0,823 | 0,766 | 0,057 [−0,021; 0,112] | 0,0273 | 0,928 |
+  | Spain | 0,613 | 0,597 | 0,017 [−0,010; 0,048] | 0,0788 | 0,878 |
+  | **ALL** | **0,725** | **0,677** | **0,047 [0,012; 0,079]** | 0,0436 [0,0304; 0,0559] | 0,897 |
+
+  Источники: IoU — §1, ΔIoU — парный бутстрэп по чипам §1, ECE (15 корзин) — §3, AUROC
+  энтропии p → ошибка маски — §4. Выигрыш значим на ALL и Bolivia; на Mekong и Spain CI
+  содержит 0. Основной метод меняет пропуски на ложные срабатывания: FN/(TP+FN) 0,070
+  против 0,225 у baseline, FP/(TP+FP) 0,234 против 0,157 (§2). Калибровка на test хуже,
+  чем на validation (ECE 0,0436 против 0,0100): средняя p 0,224 при доле воды 0,180, на
+  Spain ECE 0,0788; на ALL калиброванная p хуже сырой (ECE 0,0436 против 0,0217, §3a) —
+  по событиям калибровка сырой p снизила ECE на Bolivia (0,0734 → 0,0263) и Mekong (0,0324 → 0,0273) и повысила на Spain (0,0432 → 0,0788). Условия падения
+  качества (§7): доля воды < 1 % — IoU 0,065 (16 чипов), 1–10 % — 0,343 (30 чипов);
+  Spain — единственный климат (Csa), которого нет в train, IoU 0,613 против 0,794 на
+  Bolivia+Mekong (Am, виден в train; группировка зафиксирована до запуска, §7a).
+  Интервалы — бутстрэп по чипам трёх событий, не обобщение на новые события (см.
+  «Известные дефекты замороженного кода» ниже).
+- **Известные дефекты замороженного кода** (найдены после `eval-test`; код, веса,
+  конфигурация заморожены, D-033, поэтому не правятся): доля невалидных пикселей в
+  группировке переноса, пустые выборки бутстрэпа калибровки, NaN в выборе показателя
+  неопределённости, `±inf` в пиксельных признаках, сравнение с порогом float32/float64,
+  `segmentation_models_pytorch` вне зависимостей, `scripts/check_chain.py` только для
+  unet. Ни один не меняет числа отчётов — по каждому «что / почему не влияет / чем
+  проверено» в `docs/limitations.md` §13. Поле `status` в `models/unet/uncertainty.json`
+  («на test не проверено до eval-test») записано до `eval-test` и устарело: связь
+  неопределённости с ошибками на test проверена (AUROC 0,897, `test-eval.md` §4), файл
+  заморожен и не переписывается.
 - **Доступность дополнительных данных.** Лицензия официального Sen1Floods11 явно не
   указана (в STAC-коллекциях `"license": "proprietary"`, LICENSE в репозитории нет,
   `docs/data.md` §1); данные набора опубликованы на 1–4 года позже дат событий
@@ -412,9 +446,10 @@ D-017.
   «S1-only и выбор метода» выше; `predict` на `Sri-Lanka_713926` и `Nigeria_1095404` на
   `89c8e4f` (26.09) — код 0, вход только `S1Hand`.
 
-План проверки: `make eval-test --part test` для замороженной конфигурации (D-033) (код и запечатывание
-уже готовы: отказ без confirm-хеша проверен `make eval-test` на `89c8e4f` — следующий шаг чисто процедурный, не разработка),
-затем перенос на события вне Sen1Floods11 и на реальный реестр объектов инфраструктуры
+План проверки: независимая оценка на test уже выполнена один раз
+(`FLOODVALUE_EVAL_TEST_CONFIRM=<sha256> make eval-test`, по умолчанию часть test; то же —
+`uv run --frozen python -m floodvalue eval-test --part test`; итог — «Перенос» выше).
+Повторная настройка после неё требует нового test (D-030). Дальше — перенос на события вне Sen1Floods11 и на реальный реестр объектов инфраструктуры
 вместо учебных V/q; пилот с инфраструктурным оператором (D-001) с метриками из task.md
 — время от данных до решения, доля пропущенных значимых объектов, доля ручной
 проверки; реальные котировки поставщика ДЗЗ вместо сценарной ставки Б. Подробности и
