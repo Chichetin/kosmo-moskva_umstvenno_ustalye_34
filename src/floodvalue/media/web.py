@@ -7,8 +7,8 @@ open only to loopback unless FLOODVALUE_MEDIA_PUBLIC_REPORTS=1 is set deliberate
 GET /api/media/events is the GeoJSON joint for the globe's future «Сообщения» layer.
 GET /api/media/map is the operator map's read-only layer: events plus pending eyewitness reports
 without personal data. FLOODVALUE_MEDIA_OPERATOR_MAP_PUBLIC=1 opens it without login (the operator
-UI is public for now); then eyewitness points (reports and events holding them) are coarsened to
-MAP_PUBLIC_GRID degrees and the hour, and eyewitness-written titles and places are dropped."""
+UI is public for now); then points of reports and events are coarsened to
+MAP_PUBLIC_GRID degrees and the hour, and event titles and places are dropped."""
 
 from __future__ import annotations
 
@@ -536,26 +536,34 @@ def _coarse(lon: float, lat: float) -> list[float]:
 
 
 def _coarse_time(value: str | None) -> str | None:
-    """ISO 8601 UTC → the hour: a public map need not pin when exactly someone reported."""
-    return value[:13] + ":00:00Z" if value and len(value) >= 13 else value
+    """ISO 8601 → the UTC hour: a public map need not pin when exactly someone reported."""
+    if not value:
+        return value
+    try:
+        dt = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:00:00Z")
 
 
 def _public_event(feature: dict) -> dict:
-    """An event that holds an eyewitness report keeps the eyewitness's words, address and point
-    (title and place come from the report on accept): the public layer shows only that there is
-    a report near here. Events from media alone are public texts and stay as they are."""
+    """Without analyst access every event loses its title and place and gets a coarse point and
+    hour. An event's text and point may come from an eyewitness even when its current evidence is
+    news only (accepted report, then split or merged), so origin is not guessed from source_kinds.
+    Areas (non-Point geometry) come from the geocoder, not from an eyewitness, and stay."""
     props = feature["properties"]
-    if "citizen" not in (props.get("source_kinds") or "").split(","):
-        return feature
     geometry = feature["geometry"]
     if geometry and geometry.get("type") == "Point":
         geometry = {"type": "Point", "coordinates": _coarse(*geometry["coordinates"][:2])}
-    else:
-        geometry = None  # an area drawn from an eyewitness's place can pin it as well
+    kinds = set((props.get("source_kinds") or "").split(","))
+    title = ("Сообщение очевидца" if kinds == {"citizen"} else
+             "Сообщения СМИ и очевидцев" if "citizen" in kinds else "Сообщение СМИ")
     times = {k: _coarse_time(props[k]) for k in ("event_time_start", "event_time_end",
                                                   "first_detected_at", "updated_at")}
     return {**feature, "geometry": geometry,
-            "properties": {**props, **times, "title": "Сообщение очевидца", "place_label": None,
+            "properties": {**props, **times, "title": title, "place_label": None,
                            "geo_precision": "coarsened"}}
 
 

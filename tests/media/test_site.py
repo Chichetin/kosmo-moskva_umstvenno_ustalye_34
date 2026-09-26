@@ -122,3 +122,44 @@ def test_public_map_behind_proxy_is_not_exact(settings):
     assert r.status == 200 and r.json()["exact_locations"] is False
     for private in PRIVATE:
         assert private not in r.body.decode()
+
+
+def test_public_map_hides_eyewitness_text_after_split(settings):
+    """Accepted report → event «Очевидец: …»; a news item joins it; the analyst splits the eyewitness
+    evidence off. The original event is news-only now but still holds the eyewitness's title, place
+    and point — the public layer must not show them for any event (reviewer #175)."""
+    from contextlib import closing
+
+    from floodvalue.media import events as ev
+    from floodvalue.media.store import connect, transaction
+
+    app = create_app(replace(settings, analyst_token=TOKEN, public_reports=True,
+                             operator_map_public=True))
+    rid = _submit(app)
+    auth = {"Authorization": f"Bearer {TOKEN}", "X-FloodValue-Media": "1"}
+    eid = call(app, "POST", f"/api/media/reports/{rid}/moderate", json_body={"decision": "accept"},
+               headers=auth, client=REMOTE).json()["event_id"]
+    with closing(connect(settings.db_path)) as c, transaction(c):
+        src = c.execute("SELECT source_id FROM sources WHERE kind='news' LIMIT 1").fetchone()[0]
+        c.execute("INSERT INTO publications(source_id, external_id, url, canonical_url, title, "
+                  "content_scope, fetched_at, content_hash, title_key, source_domain) "
+                  "VALUES(?,?,?,?,?,?,?,?,?,?)", (src, "x", "http://n/1", "http://n/1",
+                  "Подтопление в центре", "title", "2026-09-26T10:00:00Z", "h", "k", "n"))
+        pid = c.execute("SELECT last_insert_rowid()").fetchone()[0]
+        ev.link(c, eid, origin="news", is_original=True, link_kind="auto", actor="system",
+                publication_id=pid, report_type="occurred", facts={})
+        cit = c.execute("SELECT evidence_id FROM evidence WHERE event_id=? AND origin='citizen'",
+                        (eid,)).fetchone()[0]
+    split = call(app, "POST", f"/api/media/events/{eid}/split", json_body={"evidence_ids": [cit]},
+                 headers=auth, client=REMOTE)
+    assert split.status == 200, split.body
+    public = call(app, "GET", "/api/media/map", client=REMOTE)
+    events = public.json()["events"]["features"]
+    assert len(events) == 2
+    assert {e["properties"]["source_kinds"] for e in events} == {"news", "citizen"}
+    for event in events:
+        assert event["properties"]["place_label"] is None
+        if event["geometry"]:  # the split-off part may have no place yet
+            assert event["geometry"]["coordinates"] == [37.62, 55.75]
+    for private in PRIVATE:
+        assert private not in public.body.decode()
