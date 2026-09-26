@@ -163,7 +163,7 @@ export default function App() {
   const cache = useRef<Record<string, Session>>({});
   const budgets = useRef<Record<string, number>>({});
   const [plan, setPlan] = useState<Plan | null>(null);
-  const [planFor, setPlanFor] = useState<{ runId: string; budget: number } | null>(null);
+  const [planFor, setPlanFor] = useState<{ runId: string; budget: number; priorityAssetId: string | null } | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
   const [budget, setBudget] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -172,6 +172,7 @@ export default function App() {
   const [layers, setLayers] = useState<LayerFlags>(defaults);
   const [opacity, setOpacity] = useState(0.76);
   const [assetId, setAssetId] = useState<string | null>(null);
+  const [priorityAssetId, setPriorityAssetId] = useState<string | null>(null);
   const [zoneId, setZoneId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [analysisQuery, setAnalysisQuery] = useState("");
@@ -248,6 +249,7 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!scene?.run_id) {
+      setPriorityAssetId(null);
       setSession(null);
       setPlan(null);
       setPlanFor(null);
@@ -256,6 +258,7 @@ export default function App() {
       return;
     }
     const runId = scene.run_id;
+    setPriorityAssetId(null);
     const cached = cache.current[runId];
     if (cached) {
       setSession(cached);
@@ -300,13 +303,13 @@ export default function App() {
     const controller = new AbortController();
     const timer = setTimeout(() => {
       json<Plan>(
-        `/api/plan?budget=${budget}&run_id=${encodeURIComponent(runId)}`,
+        `/api/plan?budget=${budget}&run_id=${encodeURIComponent(runId)}${priorityAssetId ? `&priority_asset_id=${encodeURIComponent(priorityAssetId)}` : ""}`,
         controller.signal,
       )
         .then((result) => {
           if (!controller.signal.aborted) {
             setPlan(result);
-            setPlanFor({ runId, budget });
+            setPlanFor({ runId, budget, priorityAssetId });
             setPlanError(null);
           }
         })
@@ -318,7 +321,7 @@ export default function App() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [activeSession?.run_id, budget]);
+  }, [activeSession?.run_id, budget, priorityAssetId]);
   useEffect(() => setExportError(null), [activeSession?.run_id, budget]);
   const openFinishedAnalysis = useCallback(async (finished: AnalysisJob) => {
     const updated = await json<SceneSummary[]>("/api/scenes");
@@ -456,7 +459,7 @@ export default function App() {
     key, descending: current.key === key ? !current.descending : key !== "name",
   }));
   const zones = activeSession?.candidates.features ?? [];
-  const currentPlan = planFor && planFor.runId === activeSession?.run_id && planFor.budget === budget ? plan : null;
+  const currentPlan = planFor && planFor.runId === activeSession?.run_id && planFor.budget === budget && planFor.priorityAssetId === priorityAssetId ? plan : null;
   const chosen = currentPlan?.comparison.find((row) => row.strategy === "C");
   const chosenZoneIds = new Set(currentPlan?.plans.C ?? []);
   // Keep the slider scale fixed while the operator changes the budget.
@@ -544,6 +547,7 @@ export default function App() {
   const activeAsset = assets.find(
     (item) => item.properties.asset_id === assetId,
   );
+  const priorityAsset = assets.find((item) => String(item.properties.asset_id) === priorityAssetId);
   const activeZone = zones.find(
     (item) => item.properties.candidate_id === zoneId,
   );
@@ -558,7 +562,7 @@ export default function App() {
     .filter((row) => row.strategy === "C")
     .map((row) => [String(row.candidate_id), row]));
   const downloadCurrentPlan = async () => {
-    if (!activeSession || budget === null || !currentPlan || exporting) return;
+    if (!activeSession || budget === null || !currentPlan || exporting || priorityAssetId) return;
     setExporting(true);
     setExportError(null);
     try {
@@ -636,14 +640,14 @@ export default function App() {
           <button
             className="top-export"
             type="button"
-            disabled={!currentPlan || exporting}
+            disabled={!currentPlan || exporting || !!priorityAssetId}
             aria-busy={exporting}
             onClick={() => void downloadCurrentPlan()}
             title="Выгрузить файлы этой сцены и выбранного бюджета"
           >
             <ArrowDownToLine size={16} />
             <span>{exporting ? "Готовим комплект…" : "Выгрузить комплект"}</span>
-            <small className="export-note">при бюджете {formatRub(budget)}</small>
+            <small className="export-note">{priorityAssetId ? "сначала сбросьте приоритет" : `при бюджете ${formatRub(budget)}`}</small>
           </button>
         )}
       </header>
@@ -1338,6 +1342,11 @@ export default function App() {
                         <div><strong>{assetName(activeAsset)} · {String(activeAsset.properties.asset_id)}</strong>
                           <span>Стоимость {formatRub(activeAsset.properties.asset_value_rub)} · уязвимость {money(activeAsset.properties.vulnerability_coef)} · точное p {formatExactProbability(activeAsset.properties.p_flood)}</span>
                         </div>
+                        <button
+                          className={priorityAssetId === String(activeAsset.properties.asset_id) ? "priority-active" : ""}
+                          disabled={activeAsset.properties.status === "no_data"}
+                          onClick={() => setPriorityAssetId((current) => current === String(activeAsset.properties.asset_id) ? null : String(activeAsset.properties.asset_id))}
+                        >{priorityAssetId === String(activeAsset.properties.asset_id) ? "Сбросить приоритет" : "Сделать приоритетом"}</button>
                         <button onClick={() => {
                           setLayers((current) => ({ ...current, assets: true }));
                           setPanelOpen(true);
@@ -1375,10 +1384,21 @@ export default function App() {
                           onChange={(event) => setBudget(Number(event.target.value))}
                           aria-label="Бюджет данных плана"
                         />
-                        {activeSession.plan_c_saturation_rub != null && (
+                        {!priorityAssetId && activeSession.plan_c_saturation_rub != null && (
                           <p>Свыше ≈ {formatRub(activeSession.plan_c_saturation_rub)} состав плана C не меняется.</p>
                         )}
                       </div>
+                      {priorityAssetId && <div className="priority-summary" role="status" aria-live="polite">
+                        <div className="priority-heading">
+                          <strong>Приоритет: {priorityAsset ? assetName(priorityAsset) : priorityAssetId}</strong>
+                          <button onClick={() => setPriorityAssetId(null)}>Сбросить</button>
+                        </div>
+                        {currentPlan?.priority ? <>
+                          <p className={currentPlan.priority.covered ? "priority-success" : "priority-unavailable"}>{currentPlan.priority.reason}</p>
+                          <p>Сначала подбирается доступная зона для объекта, затем оставшийся бюджет распределяется по цене ошибки решения.</p>
+                          {chosen && <p>Обычный план: {formatRub(currentPlan.priority.baseline_data_cost_rub)} · охват {pct(currentPlan.priority.baseline_coverage_share)}. С приоритетом: {formatRub(chosen.data_cost_rub)} · охват {pct(chosen.coverage_share)}.</p>}
+                        </> : <p>Пересчитываем зоны для выбранного объекта…</p>}
+                      </div>}
                       {planError ? <p className="inline-error">{planError}</p>
                         : !currentPlan && <p className="analysis-plan-loading" role="status">Пересчитываем план…</p>}
                       {chosen && <div className="analysis-plan-totals">

@@ -98,6 +98,14 @@ export type Comparison = {
 };
 
 export type Plan = {
+  priority?: {
+    asset_id: string;
+    covered: boolean;
+    reason: string;
+    baseline_candidate_ids: string[];
+    baseline_data_cost_rub: number;
+    baseline_coverage_share: number | null;
+  };
   plans: Record<"A" | "B" | "C", string[]>;
   plan_rows: Array<Record<string, string | number>>;
   comparison: Comparison[];

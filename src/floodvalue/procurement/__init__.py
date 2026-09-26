@@ -13,3 +13,9 @@ def plan(run_dir: Path, budget_rub: float, social: bool | None = None) -> dict[s
     (None — as in configs/run.yaml)."""
     from floodvalue.procurement.run import plan as _plan
     return _plan(run_dir, budget_rub, social)
+
+
+def priority_plan(run_dir: Path, budget_rub: float, asset_id: str) -> dict[str, Any]:
+    """Preview a C plan that covers one assessed asset before optimizing the remaining budget."""
+    from floodvalue.procurement.run import priority_plan as _priority_plan
+    return _priority_plan(run_dir, budget_rub, asset_id)

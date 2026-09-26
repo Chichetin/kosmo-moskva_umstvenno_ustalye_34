@@ -919,6 +919,22 @@ tbody tr.selected {
   font-size: 11px;
   line-height: 1.5;
 }
+.priority-summary {
+  margin: 15px 18px;
+  padding: 14px 16px;
+  border: 1px solid #6f9951;
+  border-radius: var(--radius);
+  background: #1e2e22;
+  color: #dcebd5;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.priority-summary p { margin: 7px 0 0; }
+.priority-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.priority-heading strong { color: #d6f5b7; font-size: 13px; }
+.priority-heading button, .asset-detail .priority-active { color: #c4f477; border-color: #8eae62; }
+.priority-success { color: #c4f477; }
+.priority-unavailable { color: #ffb3a5; }
 .strategy {
   display: flex;
   gap: 12px;

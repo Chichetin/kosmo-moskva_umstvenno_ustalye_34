@@ -240,8 +240,11 @@ def _not_selected_reason(cid: str, ctx: dict[str, Any], res: dict[str, Any]) -> 
             "помещается в остаток бюджета при пересчёте всей корзины")
 
 
-def _plan(ctx: dict[str, Any], budget_rub: float, social: bool | None = None) -> dict[str, Any]:
+def _plan(ctx: dict[str, Any], budget_rub: float, social: bool | None = None,
+          priority_asset_id: str | None = None) -> dict[str, Any]:
     required = ctx["required"] if social is None else (ctx["social_ids"] if social else [])
+    if priority_asset_id:
+        required = sorted(set(required) | {priority_asset_id})
     res = strategies.compute_plan(ctx["catalog"], ctx["cov"], ctx["eligible"], ctx["loss"],
                                   Decimal(str(budget_rub)), ctx["pricing"], ctx["as_of"],
                                   other_cfg=ctx["rc"]["other_cost"], required=required)
@@ -266,6 +269,30 @@ def plan(run_dir: Path, budget_rub: float, social: bool | None = None) -> dict[s
     повторная смена бюджета не пересобирает каталог, результат тот же (#105).
     """
     return _plan(_cached_context(Path(run_dir)), budget_rub, social)
+
+
+def priority_plan(run_dir: Path, budget_rub: float, asset_id: str) -> dict[str, Any]:
+    """Preview plan C with one assessed asset covered first; leave bundle files untouched."""
+    ctx = _cached_context(Path(run_dir))
+    assessed_ids = strategies.assessed(ctx["loss"])
+    if asset_id not in assessed_ids:
+        raise ValueError(f"Объект {asset_id!r} не найден среди оценённых объектов")
+    baseline = _plan(ctx, budget_rub)
+    result = _plan(ctx, budget_rub, priority_asset_id=asset_id)
+    covered = any(asset_id in ctx["cov"].get(cid, ()) for cid in result["plans"]["C"])
+    available = any(asset_id in ctx["cov"].get(cid, ()) for cid in ctx["eligible"])
+    baseline_c = next(row for row in baseline["comparison"] if row["strategy"] == "C")
+    result["priority"] = {
+        "asset_id": asset_id,
+        "covered": covered,
+        "reason": ("Объект включён в зону плана C" if covered else
+                   "Нет доступной к сроку зоны для объекта" if not available else
+                   "При этом бюджете зона для объекта не помещается в план C"),
+        "baseline_candidate_ids": baseline["plans"]["C"],
+        "baseline_data_cost_rub": baseline_c["data_cost_rub"],
+        "baseline_coverage_share": baseline_c["coverage_share"],
+    }
+    return result
 
 
 def _cell(v: Any) -> str:
@@ -445,4 +472,3 @@ def run(args) -> int:
               f"зоны {res['plans'][r['strategy']]}")
     print(f"procure: файлы в {out}")
     return 0
-
