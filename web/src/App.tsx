@@ -134,8 +134,8 @@ const parseRoute = () => {
 const navigate = (mode: "earth" | "scene" | "analysis", id?: string) => {
   location.hash = `#/${mode}${id ? `/${encodeURIComponent(id)}` : ""}`;
 };
-async function json<T>(url: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(url, { signal });
+async function json<T>(url: string, signal?: AbortSignal, options?: RequestInit): Promise<T> {
+  const response = await fetch(url, { ...options, signal });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.detail ?? `Ошибка ${response.status}`);
@@ -149,6 +149,17 @@ type LayerFlags = {
   uncertainty: boolean;
   assets: boolean;
   zones: boolean;
+};
+type AnalysisJob = {
+  job_id: string | null;
+  chip_id: string;
+  status: "queued" | "running" | "done" | "failed";
+  step: number;
+  steps: number;
+  step_label: string | null;
+  run_id: string | null;
+  error: string | null;
+  detail: string | null;
 };
 const defaults: LayerFlags = {
   s1: true,
@@ -178,6 +189,12 @@ export default function App() {
   const [assetId, setAssetId] = useState<string | null>(null);
   const [zoneId, setZoneId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [analysisQuery, setAnalysisQuery] = useState("");
+  const [expandedTerritory, setExpandedTerritory] = useState<string | null>(null);
+  const [sourceViewerOpen, setSourceViewerOpen] = useState(false);
+  const [analysisJob, setAnalysisJob] = useState<AnalysisJob | null>(null);
+  const [analysisStarting, setAnalysisStarting] = useState<string | null>(null);
+  const [analysisJobError, setAnalysisJobError] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(() => window.innerWidth >= 700);
   const [panelOpen, setPanelOpen] = useState(true);
   const [overviewRequest, setOverviewRequest] = useState(0);
@@ -208,6 +225,7 @@ export default function App() {
   const scene = scenes.find((item) => item.chip_id === route.chipId) ?? null;
   const activeSession = scene?.run_id === session?.run_id ? session : null;
   const mapActive = route.view === "map";
+  const mapVisible = mapActive || sourceViewerOpen;
   useEffect(() => {
     const onHash = () => setRoute(parseRoute());
     addEventListener("hashchange", onHash);
@@ -217,6 +235,9 @@ export default function App() {
   useEffect(() => {
     if (route.chipId) setSearchOpen(false);
   }, [route.chipId]);
+  useEffect(() => {
+    if (mapActive) setSourceViewerOpen(false);
+  }, [mapActive]);
   useEffect(() => {
     const controller = new AbortController();
     json<SceneSummary[]>("/api/scenes", controller.signal)
@@ -297,6 +318,66 @@ export default function App() {
       controller.abort();
     };
   }, [activeSession?.run_id, budget]);
+  const openFinishedAnalysis = useCallback(async (finished: AnalysisJob) => {
+    const updated = await json<SceneSummary[]>("/api/scenes");
+    setScenes(updated);
+    if (!updated.some((item) => item.chip_id === finished.chip_id && item.run_id)) {
+      throw new Error("Расчёт завершён, но результат ещё не появился в каталоге. Обновите его повторно.");
+    }
+    navigate("analysis", finished.chip_id);
+  }, []);
+  const startAnalysis = useCallback(async (target: SceneSummary) => {
+    setAnalysisStarting(target.chip_id);
+    setAnalysisJobError(null);
+    try {
+      const result = await json<AnalysisJob>(
+        `/api/analyses?chip_id=${encodeURIComponent(target.chip_id)}`,
+        undefined,
+        { method: "POST" },
+      );
+      setAnalysisJob(result);
+      if (result.status === "done") await openFinishedAnalysis(result);
+    } catch (error) {
+      setAnalysisJobError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setAnalysisStarting(null);
+    }
+  }, [openFinishedAnalysis]);
+  useEffect(() => {
+    if (!analysisJob?.job_id || !["queued", "running"].includes(analysisJob.status)) return;
+    let stopped = false;
+    let timer: number;
+    const poll = async () => {
+      try {
+        const result = await json<AnalysisJob>(`/api/analyses/${encodeURIComponent(analysisJob.job_id!)}`);
+        if (stopped) return;
+        setAnalysisJob(result);
+        setAnalysisJobError(null);
+        if (result.status === "done") {
+          try {
+            await openFinishedAnalysis(result);
+          } catch (error) {
+            if (!stopped) setAnalysisJobError(error instanceof Error ? error.message : String(error));
+          }
+        } else if (result.status !== "failed") {
+          timer = window.setTimeout(poll, 1000);
+        }
+      } catch (error) {
+        if (stopped) return;
+        setAnalysisJobError(error instanceof Error ? error.message : String(error));
+        timer = window.setTimeout(poll, 3000);
+      }
+    };
+    timer = window.setTimeout(poll, 1000);
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+    };
+  }, [analysisJob?.job_id, openFinishedAnalysis]);
+  useEffect(() => setAnalysisJobError(null), [route.chipId]);
+  useEffect(() => {
+    if (scene?.territory) setExpandedTerritory(scene.territory);
+  }, [scene?.territory]);
   const selectScene = useCallback((selected: SceneSummary) => {
     setPanelOpen(true);
     setSearchOpen(false);
@@ -339,6 +420,52 @@ export default function App() {
   }
   const filtered = (query ? matchingScenes : [...firstByTerritory, ...remainingScenes])
     .slice(0, query ? 30 : 10);
+  const analysisLocations = scenes.filter((item) =>
+    `${item.territory} ${item.chip_id} ${item.observation_date ?? ""}`
+      .toLocaleLowerCase("ru")
+      .includes(analysisQuery.trim().toLocaleLowerCase("ru")),
+  );
+  const locationGroups = [...new Set(analysisLocations.map((item) => item.territory))]
+    .sort((left, right) => left.localeCompare(right, "ru"))
+    .map((territory) => ({
+      territory,
+      items: analysisLocations.filter((item) => item.territory === territory),
+    }));
+  const renderAnalysisAction = (target: SceneSummary) => {
+    if (target.analyzable === false) {
+      return <p className="analysis-unavailable">{target.not_analyzable_reason ?? "В исходном снимке нет данных для расчёта."}</p>;
+    }
+    const current = analysisJob?.chip_id === target.chip_id ? analysisJob : null;
+    const running = current?.status === "queued" || current?.status === "running";
+    return (
+      <div className="analysis-job" role="status" aria-live="polite">
+        <button
+          className="analysis-start"
+          disabled={running || analysisStarting === target.chip_id}
+          onClick={() => void startAnalysis(target)}
+        >
+          {running ? "Анализ выполняется" : analysisStarting === target.chip_id
+            ? "Отправляем запрос…" : current?.status === "failed" ? "Повторить анализ" : "Запустить анализ"}
+        </button>
+        {current?.status === "queued" && <p>В очереди · ожидает запуска</p>}
+        {current?.status === "running" && (
+          <p>Шаг {current.step} из {current.steps} · {current.step_label}</p>
+        )}
+        {current?.status === "failed" && <p className="inline-error">{current.error}</p>}
+        {current?.status === "failed" && current.detail && (
+          <details><summary>Подробности ошибки</summary><pre>{current.detail}</pre></details>
+        )}
+        {current?.status === "done" && !target.run_id && (
+          <button className="analysis-refresh" onClick={() => void openFinishedAnalysis(current).catch((error) => setAnalysisJobError(String(error)))}>
+            Обновить результат
+          </button>
+        )}
+        {analysisJobError && scene?.chip_id === target.chip_id && (
+          <p className="inline-error">{analysisJobError}</p>
+        )}
+      </div>
+    );
+  };
   const activeAsset = assets.find(
     (item) => item.properties.asset_id === assetId,
   );
@@ -352,15 +479,15 @@ export default function App() {
     (sum, item) => sum + Number(item.properties.expected_loss_rub || 0),
     0,
   );
-  const shownLoss = useCountUp(activeSession ? totalLoss : null, !mapActive && !!activeSession);
-  const shownCost = useCountUp(chosen?.data_cost_rub, !mapActive && !!activeSession);
-  const shownCoverage = useCountUp(chosen?.coverage_share, !mapActive && !!activeSession);
+  const shownLoss = useCountUp(activeSession ? totalLoss : null, !mapVisible && !!activeSession);
+  const shownCost = useCountUp(chosen?.data_cost_rub, !mapVisible && !!activeSession);
+  const shownCoverage = useCountUp(chosen?.coverage_share, !mapVisible && !!activeSession);
   const exportUrl = activeSession
     ? `/api/download?run_id=${encodeURIComponent(activeSession.run_id)}`
     : null;
   return (
     <div className="app">
-      <header className={`topbar ${mapActive ? "topbar-map" : "topbar-analysis"}`}>
+      <header className={`topbar ${mapVisible ? "topbar-map" : "topbar-analysis"}`}>
         <button className="brand" onClick={overview} aria-label="Митрандир — обзор Земли">
           <svg className="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M3.5 18.5V5.5L12 14l8.5-8.5v13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -371,16 +498,19 @@ export default function App() {
         <nav className="top-nav">
           <button
             className={mapActive ? "active" : ""}
-            onClick={() =>
-              scene ? navigate("scene", scene.chip_id) : overview()
-            }
+            onClick={() => {
+              setSourceViewerOpen(false);
+              scene ? navigate("scene", scene.chip_id) : overview();
+            }}
           >
             Земля
           </button>
           <button
             className={!mapActive ? "active" : ""}
-            disabled={!activeSession}
-            onClick={() => scene && navigate("analysis", scene.chip_id)}
+            onClick={() => {
+              setSourceViewerOpen(false);
+              navigate("analysis", scene?.chip_id);
+            }}
           >
             Анализ
           </button>
@@ -404,9 +534,9 @@ export default function App() {
       </header>
       <main className="workspace">
         <div
-          className={`map-screen ${mapActive ? "" : "map-hidden"} ${scene ? "scene-mode" : ""} ${baseMap === "optical" ? "optical-mode" : ""}`}
-          aria-hidden={!mapActive}
-          inert={!mapActive}
+          className={`map-screen ${mapVisible ? "" : "map-hidden"} ${scene ? "scene-mode" : ""} ${baseMap === "optical" ? "optical-mode" : ""}`}
+          aria-hidden={!mapVisible}
+          inert={!mapVisible}
         >
           <MapPanel
             scenes={scenes}
@@ -420,7 +550,7 @@ export default function App() {
             overlayOpacity={opacity}
             selectedAsset={assetId}
             selectedZone={zoneId}
-            active={mapActive}
+            active={mapVisible}
             overviewRequest={overviewRequest}
             onSelectScene={selectScene}
             onSelectAsset={(id) => {
@@ -578,6 +708,7 @@ export default function App() {
                     ? "Результаты модели доступны"
                     : "Исходный снимок есть; анализ не выполнен"}
               </div>
+              {scene.status === "observation_only" && !scene.fixture && renderAnalysisAction(scene)}
               {!scene.bounds && (
                 <p className="inline-error">
                   Геопривязка отсутствует. Снимок нельзя разместить на карте.
@@ -813,8 +944,64 @@ export default function App() {
               {mapIssue}
             </div>
           )}
+          {sourceViewerOpen && scene && (
+            <button className="source-viewer-return" onClick={() => setSourceViewerOpen(false)}>
+              <ArrowLeft size={16} /> К результату анализа
+            </button>
+          )}
         </div>
-          <div className={`analysis-screen ${mapActive ? "analysis-hidden" : ""}`} aria-hidden={mapActive} inert={mapActive}>
+          <div className={`analysis-screen ${mapVisible ? "analysis-hidden" : ""}`} aria-hidden={mapVisible} inert={mapVisible}>
+            <div className="analysis-shell">
+              <aside className="analysis-locations" aria-label="Локации для анализа">
+                <div className="analysis-locations-head">
+                  <h2>Локации</h2>
+                  <span>{locationGroups.length} · {scenes.length} снимков</span>
+                </div>
+                <label className="analysis-location-search">
+                  <Search size={16} />
+                  <input
+                    value={analysisQuery}
+                    onChange={(event) => setAnalysisQuery(event.target.value)}
+                    placeholder="Страна или ID снимка"
+                    aria-label="Поиск локации для анализа"
+                  />
+                </label>
+                <div className="analysis-location-list">
+                  {catalogError && <p className="inline-error">{catalogError}</p>}
+                  {catalogLoading && !scenes.length && <p>Загружаем локации…</p>}
+                  {locationGroups.map(({ territory, items }) => {
+                    const expanded = !!analysisQuery || expandedTerritory === territory;
+                    return (
+                      <div className="analysis-location-group" key={territory}>
+                        <button
+                          className="analysis-location-group-toggle"
+                          aria-expanded={expanded}
+                          onClick={() => setExpandedTerritory(expanded ? null : territory)}
+                        >
+                          <strong>{territory.replaceAll("-", " ")}</strong>
+                          <span>{items.length} <ChevronDown size={14} /></span>
+                        </button>
+                        {expanded && items.map((item) => (
+                          <button
+                            key={item.chip_id}
+                            className={`analysis-location-item ${scene?.chip_id === item.chip_id ? "active" : ""}`}
+                            aria-current={scene?.chip_id === item.chip_id ? "true" : undefined}
+                            onClick={() => navigate("analysis", item.chip_id)}
+                          >
+                            <strong>{item.chip_id}</strong>
+                            <small>{date(item.observation_date)}</small>
+                            <em>{item.status === "analyzed" ? "Готов" : item.analyzable === false ? "Без данных для расчёта" : "Исходный снимок"}</em>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })}
+                  {!catalogLoading && !catalogError && !analysisLocations.length && (
+                    <p>{analysisQuery ? "Локации не найдены" : "Нет доступных локаций"}</p>
+                  )}
+                </div>
+              </aside>
+              <div className="analysis-content">
             <div className="analysis-head">
               <button
                 onClick={() =>
@@ -824,25 +1011,40 @@ export default function App() {
                 <ArrowLeft size={17} /> К карте
               </button>
               <div>
-                <span>АНАЛИТИКА СЦЕНЫ</span>
+                <span>{scene ? "АНАЛИЗ СЦЕНЫ" : "АНАЛИЗ НАБЛЮДЕНИЙ"}</span>
                 <h1>
-                  {scene?.territory.replaceAll("-", " ") ?? "Сцена не выбрана"}
+                  {scene?.territory.replaceAll("-", " ") ?? "Выберите локацию"}
                 </h1>
                 <p>
                   {scene
                     ? `${date(scene.observation_date)} · ${scene.chip_id}`
-                    : "Выберите наблюдение на Земле"}
+                    : "Выберите локацию в списке слева"}
                 </p>
               </div>
+              {scene && (
+                <button
+                  className="analysis-source-link"
+                  disabled={!scene.bounds}
+                  title={!scene.bounds ? "У снимка нет геопривязки для карты" : undefined}
+                  onClick={() => {
+                    setLayers((current) => ({ ...current, s1: true }));
+                    setPanelOpen(true);
+                    setSourceViewerOpen(true);
+                  }}
+                >
+                  <Layers3 size={16} /> Исходный снимок и слои
+                </button>
+              )}
             </div>
             {!activeSession && (
               <div className="analysis-empty">
-                {sessionLoading
-                  ? "Загружаем анализ…"
-                  : (sessionError ??
-                    (scene
-                      ? "Для этой сцены есть исходный S1, но расчёт объектов и плана не выполнен."
-                      : "Вернитесь на Землю и выберите сцену."))}
+                {sessionLoading ? "Загружаем анализ…" : sessionError ?? (
+                  scene ? scene.analyzable === false
+                    ? "Результат анализа для этого снимка недоступен."
+                    : "Для этой сцены есть исходный S1, но расчёт объектов и плана не выполнен."
+                    : "Выберите локацию слева, чтобы открыть результат или запустить расчёт."
+                )}
+                {scene?.status === "observation_only" && !scene.fixture && renderAnalysisAction(scene)}
               </div>
             )}
             {activeSession && (
@@ -1135,6 +1337,8 @@ export default function App() {
                 </section>
               </div>
             )}
+              </div>
+            </div>
           </div>
       </main>
     </div>
