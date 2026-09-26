@@ -2264,3 +2264,20 @@ th .hint { margin-left: 4px; }
     transition: margin-right 340ms cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 }
+
+/* observation list: next page of scenes (also loads on scroll) */
+.scene-results .scene-more {
+  display: block;
+  width: 100%;
+  margin: 6px 0 2px;
+  padding: 10px 12px;
+  border: 1px solid #ffffff22;
+  border-radius: var(--radius, 6px);
+  background: #ffffff0a;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8125rem;
+  text-align: center;
+  cursor: pointer;
+}
+.scene-results .scene-more:hover, .scene-results .scene-more:focus-visible { background: #ffffff16; }

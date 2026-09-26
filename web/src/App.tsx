@@ -94,6 +94,7 @@ const countryMatches = (territory: string, query: string) => {
     .replaceAll("ё", "е")
     .includes(needle);
 };
+const SCENE_PAGE = 30;  // observation list page size, next page loads on scroll
 const assetName = (feature: Feature) =>
   labels[String(feature.properties.asset_class)] ??
   String(feature.properties.asset_class).replaceAll("_", " ");
@@ -196,6 +197,19 @@ export default function App() {
   const [analysisBudget, setAnalysisBudget] = useState(5_000);
   const [readyAnalysisNotice, setReadyAnalysisNotice] = useState<{ chipId: string; territory: string } | null>(null);
   const [searchOpen, setSearchOpen] = useState(() => window.innerWidth >= 700);
+  // the observation list grows as it scrolls: all scenes are reachable from the list itself
+  const [sceneLimit, setSceneLimit] = useState(SCENE_PAGE);
+  // Escape closes the open observation list (and the news / messages panels)
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setSearchOpen(false);
+      setNewsOpen(false);
+      setMessagesOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const [panelOpen, setPanelOpen] = useState(true);
   const [newsOpen, setNewsOpen] = useState(false);
   const [messagesOpen, setMessagesOpen] = useState(false);
@@ -502,7 +516,8 @@ export default function App() {
     } else remainingScenes.push(item);
   }
   const filtered = (query ? matchingScenes : [...firstByTerritory, ...remainingScenes])
-    .slice(0, query ? undefined : 10);
+    .slice(0, query ? undefined : sceneLimit);
+  const allScenesCount = query ? matchingScenes.length : scenes.length;
   const analysisLocations = scenes.filter((item) => countryMatches(item.territory, analysisQuery));
   const locationGroups = [...new Set(analysisLocations.map((item) => item.territory))]
     .sort((left, right) => left.localeCompare(right, "ru"))
@@ -827,6 +842,12 @@ export default function App() {
                   className="scene-results"
                   role="listbox"
                   aria-label="Доступные сцены"
+                  onScroll={(event) => {
+                    const el = event.currentTarget;
+                    if (!query && sceneLimit < scenes.length &&
+                        el.scrollTop + el.clientHeight >= el.scrollHeight - 120)
+                      setSceneLimit((limit) => limit + SCENE_PAGE);
+                  }}
                 >
                   {catalogError && <p>{catalogError}</p>}
                   {!catalogError && !scenes.length && (
@@ -859,10 +880,13 @@ export default function App() {
                   {!filtered.length && scenes.length > 0 && (
                     <p>Сцен не найдено</p>
                   )}
-                  {scenes.length > 10 && !query && (
-                    <small className="search-hint">
-                      Другие снимки доступны через поиск или точки на Земле.
-                    </small>
+                  {!query && sceneLimit < scenes.length && (
+                    <button
+                      className="scene-more"
+                      onClick={() => setSceneLimit((limit) => limit + SCENE_PAGE)}
+                    >
+                      Показано {filtered.length} из {allScenesCount} · загрузить ещё
+                    </button>
                   )}
                 </div>
               )}
