@@ -16,6 +16,8 @@ import { WorldLocator } from "./WorldLocator";
 import MessagePanel, { type SelectedMessage } from "./MessagePanel";
 import SensitivityPanel from "./SensitivityPanel";
 import NewsPanel from "./NewsPanel";
+import PlanZones from "./PlanZones";
+import { pointInZone } from "./geometry";
 import {
   formatExactProbability,
   formatNumber as money,
@@ -90,23 +92,6 @@ const assetSortValue = (feature: Feature, key: AssetSort): number | string | nul
   if (key === "name") return assetName(feature);
   const raw = feature.properties[key === "probability" ? "p_flood" : key === "loss" ? "expected_loss_rub" : "uncertainty"];
   return raw == null || raw === "" || feature.properties.status === "no_data" ? null : Number(raw);
-};
-const pointInZone = (asset: Feature, zone: Feature) => {
-  if (asset.geometry.type !== "Point" || zone.geometry.type !== "Polygon")
-    return false;
-  const [x, y] = asset.geometry.coordinates as number[];
-  const rings = zone.geometry.coordinates as number[][][];
-  const inside = (ring: number[][]) => {
-    let hit = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const [xi, yi] = ring[i],
-        [xj, yj] = ring[j];
-      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi)
-        hit = !hit;
-    }
-    return hit;
-  };
-  return !!rings[0] && inside(rings[0]) && !rings.slice(1).some(inside);
 };
 const parseRoute = () => {
   const match = /^#\/(earth|scene|analysis)(?:\/([^/]+))?/.exec(location.hash);
@@ -193,6 +178,8 @@ export default function App() {
   const [analysisJob, setAnalysisJob] = useState<AnalysisJob | null>(null);
   const [analysisStarting, setAnalysisStarting] = useState<string | null>(null);
   const [analysisJobError, setAnalysisJobError] = useState<string | null>(null);
+  // Data budget the operator sets before the run: plan A/B/C of the bundle is built for it.
+  const [analysisBudget, setAnalysisBudget] = useState(5_000);
   const [readyAnalysisNotice, setReadyAnalysisNotice] = useState<{ chipId: string; territory: string } | null>(null);
   const [searchOpen, setSearchOpen] = useState(() => window.innerWidth >= 700);
   const [panelOpen, setPanelOpen] = useState(true);
@@ -356,7 +343,7 @@ export default function App() {
     setAnalysisJobError(null);
     try {
       const result = await json<AnalysisJob>(
-        `/api/analyses?chip_id=${encodeURIComponent(target.chip_id)}`,
+        `/api/analyses?chip_id=${encodeURIComponent(target.chip_id)}&budget=${analysisBudget}`,
         undefined,
         { method: "POST" },
       );
@@ -367,7 +354,7 @@ export default function App() {
     } finally {
       setAnalysisStarting(null);
     }
-  }, [openFinishedAnalysis]);
+  }, [openFinishedAnalysis, analysisBudget]);
   useEffect(() => {
     if (!analysisJob?.job_id || !["queued", "running"].includes(analysisJob.status)) return;
     let stopped = false;
@@ -496,15 +483,38 @@ export default function App() {
     const statusText = errorText ?? (current?.status === "queued" ? "В очереди · ожидает запуска"
       : current?.status === "running" ? `Шаг ${current.step} из ${current.steps} · ${current.step_label}`
       : null);
+    const asking = !running && current?.status !== "done";
     return (
       <div className="analysis-job">
+        {asking && (
+          <label className="analysis-budget-ask">
+            <span>Бюджет на дополнительную съёмку, ₽</span>
+            <input
+              type="number"
+              min="0"
+              max="1000000000"
+              step="100"
+              value={analysisBudget}
+              disabled={analysisStarting === target.chip_id}
+              onChange={(event) =>
+                setAnalysisBudget(Math.min(1_000_000_000, Math.max(0, Number(event.target.value) || 0)))
+              }
+            />
+            <small>
+              Карта воды и ущерб считаются по уже полученному снимку S1 — за него не платим.
+              Бюджет ограничивает только дозаказ снимков: под него строится план C. После
+              расчёта бюджет можно изменить.
+            </small>
+          </label>
+        )}
         <button
           className="analysis-start"
           disabled={running || analysisStarting === target.chip_id}
           onClick={() => void startAnalysis(target)}
         >
           {running ? "Анализ выполняется" : analysisStarting === target.chip_id
-            ? "Отправляем запрос…" : current?.status === "failed" ? "Повторить анализ" : "Запустить анализ"}
+            ? "Отправляем запрос…" : current?.status === "failed" ? "Повторить анализ"
+            : `Запустить анализ · ${formatRub(analysisBudget)}`}
         </button>
         {statusText && <p className={errorText ? "inline-error" : undefined} role="status" aria-live="polite">{statusText}</p>}
         {current?.status === "failed" && current.detail && (
@@ -999,7 +1009,10 @@ export default function App() {
                       : !currentPlan && <p role="status">Пересчитываем план…</p>}
                     <button
                       className="analysis-link"
-                      onClick={() => navigate("analysis", scene.chip_id)}
+                      onClick={() => {
+                        setSourceViewerOpen(false);
+                        navigate("analysis", scene.chip_id);
+                      }}
                     >
                       Подробный анализ <BarChart3 size={17} />
                     </button>
@@ -1068,11 +1081,6 @@ export default function App() {
             <div className="map-issue" role="status">
               {mapIssue}
             </div>
-          )}
-          {sourceViewerOpen && scene && (
-            <button className="source-viewer-return" onClick={() => setSourceViewerOpen(false)}>
-              <ArrowLeft size={16} /> К результату анализа
-            </button>
           )}
         </div>
           <div className={`analysis-screen ${mapVisible ? "analysis-hidden" : ""}`} aria-hidden={mapVisible} inert={mapVisible}>
@@ -1189,6 +1197,19 @@ export default function App() {
                   <div><span>Стоимость данных</span><strong>{formatRub(chosen?.data_cost_rub)}</strong></div>
                   <div><span>Охват ожидаемого ущерба</span><strong>{pct(chosen?.coverage_share)}</strong></div>
                 </div>
+                <PlanZones
+                  session={activeSession}
+                  plan={currentPlan}
+                  budget={budget}
+                  assets={assets}
+                  selectedZone={zoneId}
+                  onSelectZone={(id) => {
+                    setZoneId(id);
+                    setAssetId(null);
+                  }}
+                  assetName={assetName}
+                  observationDate={date(scene?.observation_date ?? activeSession.observation_date)}
+                />
                 <div className="analysis-columns">
                   <section className="analysis-card">
                     <div className="card-title">
