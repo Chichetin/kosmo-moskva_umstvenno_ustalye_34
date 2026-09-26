@@ -854,3 +854,54 @@ def test_broken_fixture_gives_its_own_error(run_dir, case):
     for other, (_, _, other_sig) in BROKEN.items():
         if other != case:
             assert other_sig not in everything, (case, other)
+
+
+# --- #142 (D-049): optional decision-risk columns of strategy_comparison.csv ------------------
+
+def test_good_fixture_has_decision_risk_columns_that_pass(run_dir):
+    with open(run_dir / F.STRATEGY_COMPARISON, encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert {"addressed_decision_risk_rub", "decision_risk_share"} <= set(rows[0])
+    assert float(row(rows, strategy="C")["addressed_decision_risk_rub"]) > 0
+    assert F.STRATEGY_COMPARISON not in {n for n, e in failing(run_dir).items() if e}
+
+
+@pytest.mark.parametrize("field,value,text", [
+    ("addressed_decision_risk_rub", "1.00", "addressed_decision_risk_rub=1.0 ≠ пересчёту"),
+    ("addressed_decision_risk_rub", "", "addressed_decision_risk_rub пуст"),
+    ("decision_risk_share", "0.9", "decision_risk_share=0.9 ≠"),
+    ("decision_risk_share", "", "decision_risk_share пуст"),
+    ("addressed_decision_risk_rub", "abc", "не число"),
+])
+def test_broken_decision_risk_column_fails(run_dir, field, value, text):
+    edit_csv(run_dir / F.STRATEGY_COMPARISON,
+             lambda rows: row(rows, strategy="C").update({field: value}))
+    assert text in only(failing(run_dir), F.STRATEGY_COMPARISON)
+
+
+def test_strategy_a_addresses_no_decision_risk(run_dir):
+    edit_csv(run_dir / F.STRATEGY_COMPARISON,
+             lambda rows: row(rows, strategy="A").update(addressed_decision_risk_rub="10.00"))
+    assert "A: addressed_decision_risk_rub=10.0" in only(failing(run_dir), F.STRATEGY_COMPARISON)
+
+
+def test_decision_risk_counts_only_zones_usable_by_the_deadline(run_dir):
+    # the B value recomputed with every zone (also late ones) must not pass
+    edit_csv(run_dir / F.STRATEGY_COMPARISON,
+             lambda rows: row(rows, strategy="B").update(addressed_decision_risk_rub="9000000.00",
+                                                          decision_risk_share=""))
+    assert "B: addressed_decision_risk_rub=9000000.0" in " ".join(
+        failing(run_dir)[F.STRATEGY_COMPARISON])
+
+
+def test_set_without_decision_risk_columns_still_passes(run_dir):
+    # the columns are optional (older sets): absent columns are not an error
+    path = run_dir / F.STRATEGY_COMPARISON
+    with open(path, encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=list(F.STRATEGY_COMPARISON_FIELDS), extrasaction="ignore")
+        w.writeheader()
+        w.writerows(rows)
+    assert "decision_risk" not in path.read_text(encoding="utf-8")
+    assert F.STRATEGY_COMPARISON not in failing(run_dir)
