@@ -162,10 +162,15 @@ def test_cli_missing_assets(tmp_path):
     assert main(["procure", "--budget", "5000", "--out", str(tmp_path)]) == 1
 
 
-@pytest.mark.parametrize("budget", ["nan", "inf"])
-def test_cli_rejects_non_finite_budget(tmp_path, budget):
+@pytest.mark.parametrize("budget", ["nan", "inf", "2452.975", "5000.009"])
+def test_cli_rejects_non_finite_or_sub_kopeck_budget(tmp_path, budget):
     _write_run_dir(tmp_path)
     assert main(["procure", "--budget", budget, "--out", str(tmp_path)]) == 1
+
+
+def test_cli_accepts_kopeck_budget(tmp_path):
+    _write_run_dir(tmp_path)
+    assert main(["procure", "--budget", "5000.01", "--out", str(tmp_path)]) == 0
 
 
 def test_stale_catalog_file_is_not_used(tmp_path):

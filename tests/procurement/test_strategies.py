@@ -55,12 +55,6 @@ def test_budget_boundary_inclusive():
     assert plan("2452.97")["plans"]["C"] == []
 
 
-def test_sub_kopeck_budget_not_rounded_up():
-    """Бюджет 2452,975 не превращается в 2452,98: C не покупает Z-A01 за 2452,98 (#248)."""
-    res = plan("2452.975")
-    assert res["plans"]["C"] == [] and cmp_(res, "C")["budget_rub"] <= Decimal("2452.975")
-
-
 def test_c_orders_by_el_per_rub():
     assert plan("5000")["plans"]["C"] == ["Z-A01", "Z-A02"]
 
