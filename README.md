@@ -71,11 +71,11 @@ python3 scripts/download_sen1floods11.py            # HandLabeled + perm_water +
 | Обучение основного метода (U-Net, ансамбль 5 seed) | `make train` (GPU: `make train GPU=1`; Colab: `notebooks/train_colab.ipynb`) | готово — веса 5 членов в `models/unet/` через LFS, dev IoU 0,584 против baseline 0,391 (D-019, `docs/verification/unet-metrics.md`); команда обучения проверена смоук-прогоном (`--max-chips`, CPU и GPU, код 0), полный переобучающий прогон (~75 с/член на GPU) после обучения весов сдачи не повторялся (время и устройство — `docs/verification/unet-metrics.md` §«Воспроизведение») |
 | Калибровка и порог на validation | `make calibrate` | готово — Platt-калибровка, порог 0,37 по IoU на validation (D-029, `docs/verification/calibration-val.md`); пишет `models/unet/calibration.json`, `predict` подхватывает его автоматически без правок вызова |
 | Inference на чипе (S1-only, оба метода) | `FLOODVALUE_METHOD=unet\|baseline make predict CHIP=<chip_id>` | готово — на `Sri-Lanka_713926` (unet: `threshold 0.37, threshold_status "calibrated (platt) and chosen on validation, D-029"`, `valid_pixels 262144`; baseline: `seconds 0.0`) и на `Nigeria_1095404` (другой официальный чип, unet: `valid_pixels 262144`) |
-| Финальная оценка на part (validation/dev/test) | `make eval-test` (сырое, по умолчанию `--part test` — запечатан); `uv run --frozen python -m floodvalue eval-test --part validation` | готово, **test честно запечатан**: `make eval-test` без подтверждения → `eval-test: отказ — test is sealed (D-010): set FLOODVALUE_EVAL_TEST_CONFIRM=<sha256 of the frozen configuration>; ...`; `--part validation` реально считает 60 чипов → `docs/verification/eval-validation.md` (калиброванная модель: IoU 0,685 против baseline 0,580, ECE 0,010 [CI 0,008; 0,021] в тех же 15 корзинах, что `calibration-val.md`, log-loss 0,146, Brier 0,041, AUROC неопределённости 0,902; «сырая → калиброванная p»: ECE 0,040 → 0,010, D-050); `docs/verification/test-log.md` по test пуст — test ещё не открывался (`eval-test` замороженной конфигурации — не позже 26.09 20:00, D-033) |
+| Финальная оценка на part (validation/dev/test) | `make eval-test` (сырое, по умолчанию `--part test` — запечатан); `uv run --frozen python -m floodvalue eval-test --part validation` | готово, **test честно запечатан**: `make eval-test` без подтверждения → `eval-test: отказ — test is sealed (D-010): set FLOODVALUE_EVAL_TEST_CONFIRM=<sha256 of the frozen configuration>; ...`; `--part validation` реально считает 60 чипов → `docs/verification/eval-validation.md` (калиброванная модель: IoU 0,685 против baseline 0,580, ECE 0,010 [CI 0,008; 0,021] в тех же 15 корзинах, что `calibration-val.md`, log-loss 0,146, Brier 0,041, AUROC неопределённости 0,902; «сырая → калиброванная p»: ECE 0,040 → 0,010, D-051); `docs/verification/test-log.md` по test пуст — test ещё не открывался (`eval-test` замороженной конфигурации — не позже 26.09 20:00, D-033) |
 | 10 объектов и ущерб | `make assets CHIP=<chip_id>` | готово — `assets: 10 объектов, оценено 10` (D-018; `pytest tests/assets`) |
 | Зоны, цена, A/B/C | `make procure BUDGET=<руб>` | готово — `procure: A/B/C` с ценой, охватом EL, ценой ошибки решения и `budget_feasible` (D-023; `pytest tests/procurement`). C покупает снимки там, где они могут изменить решение: max прироста R = V·q·min(p, 1−p) (сценарная «цена ошибки решения», не снижение потерь) на рубль корзины; объекты с почти известным исходом (p ≈ 0 или 1) не покупаются; прежнее правило «EL на рубль» — строка `C_by_EL` в `sensitivity.csv` (D-049). Поэтому доля покрытого EL у C может быть малой: объекты с исходом, почти известным по карте (p ≈ 1), идут на осмотр (D-035), а не на снимок |
 | 12 обязательных файлов | `make export && make validate` | готово — реальный комплект `make all CHIP=Sri-Lanka_713926 BUDGET=5000` → `12/12 файлов прошли проверку`, `flood_mask.tif`/`flood_probability.tif` — с калиброванным порогом 0,37, `metrics.csv` — с калиброванными метриками main (D-027, D-029; `pytest tests/contracts tests/export`); `run_metadata.warnings` пуст на чистом дереве — `make all CHIP=Sri-Lanka_713926 BUDGET=5000` на commit `89c8e4f` (26.09) → `warnings: []`, validate 12/12 (ранее было предупреждение про рассинхрон порога метрик, снято подключением калибратора в `export`) |
-| Интерфейс оператора | `make app` | не реализовано в `main` — `uv run --frozen python -m floodvalue app` на `90bf679` (26.09) → `stage 'app' not implemented yet (floodvalue.app.run); issue area:app`; интерфейс — issue #83 (открыта), черновой PR #120 (draft, не влит) |
+| Интерфейс оператора | `make app` | готово — React + MapLibre + FastAPI (D-050): карта Земли, слои S1/p/маска/неопределённость, 10 объектов, зоны с ценой и сроком, A/B/C с долей EL и адресуемой цены ошибки решения, чувствительность, выгрузка комплекта. `make app` на комплекте `Sri-Lanka_713926` (main e7f4389): бюджет 2 500 / 5 000 / 20 000 руб. → C из 1 / 2 / 6 зон, sha256 `flood_probability.tif`, `flood_mask.tif`, `uncertainty.tif` не меняются; test-чипы скрыты до `eval-test` (`pytest tests/app`) |
 | Отчёт QC данных | `make data-qc` | готово — `docs/verification/data-qc.md` из `interim/qc.csv` после `make data` |
 | Комплект и веса для релиза | `make release OUT=<комплект> [TAG=<тег>]` | готово — `run_<run_id>.zip`, `models_<commit>.zip`, `SHA256SUMS` (D-037, `pytest tests/test_release_bundle.py`); загрузка финального комплекта — после `eval-test` |
 | Перенос рецепта U-Net между событиями (LOEO) | `python -m floodvalue.model.unet.loeo` через `notebooks/loeo_colab.ipynb` (D-036) | прогнан `MODE=full` на commit `1eaf2cc9e572` (локально на RTX 4080 вместо Colab, 6 фолдов): IoU U-Net на невиданном событии 0,206–0,532, ΔIoU к порогу фолда значимо > 0 в 4 из 6 фолдов — `docs/verification/transfer-loeo.md` (таблица из отчёта прогона в #86; CSV/JSON фолдов, лог и `COMMIT` — `docs/verification/loeo/`, PR #154); проводка — `pytest tests/model/test_loeo.py tests/model/test_loeo_notebook.py` |
@@ -96,6 +96,56 @@ pytest` → 473 passed, `make all` → validate 12/12 (`docs/verification/clean-
 (26.09); текущее число — вывод `make check` на нужном commit.
 На commit `89c8e4f` (26.09) `make check` → 646 passed, 4 skipped, `test-hooks.sh` OK,
 `validate` 12/12. Число тестов растёт с каждым PR.
+
+## Интерфейс оператора
+
+Запустите `make app` и откройте `http://127.0.0.1:8000`. Интерфейс
+показывает исходный S1, вероятность воды и маску, объекты с ожидаемым ущербом,
+кандидатные и выбранные зоны, сравнение A/B/C и сценарии чувствительности. Бюджет
+можно менять числом или ползунком: пересчитывается только план закупки, без запуска
+модели и изменения растров. Цены зон — по сценарной ставке Б (`base_rate_status=scenario`, не тариф): подпись под
+бюджетом вместе со сроком решения `decision_deadline`. Кнопка «Выгрузить комплект» отдаёт файлы `make all` при
+бюджете, с которым комплект рассчитан (подпись рядом с кнопкой); для другого бюджета — `make all CHIP=… BUDGET=…`.
+Начальный экран — интерактивная Земля MapLibre. Маркеры и поиск показывают реальные
+локальные наблюдения Sen1Floods11; прямой выбор точки открывает её территорию на той
+же карте. Каталог читает даты из `data/interim/source_manifest_s1.json`, а границы и
+центр — из геопривязки каждого GeoTIFF. Test-события (Bolivia, Mekong, Spain) запечатаны до `eval-test`
+(D-010, D-033): каталог их не показывает и не отдаёт их пиксели, пока нет готового
+комплекта этого чипа (по D-033 он появляется после `eval-test`) или явного
+`FLOODVALUE_APP_ALLOW_TEST=1`. Без этого в каталоге 371 исходный S1 train, dev и
+validation, и только для чипов с готовым комплектом есть вероятность воды, объекты и план. Для остальных
+снимков приложение не подставляет чужие расчёты. Сцены без геопривязки остаются в
+поиске, но не появляются как точка на Земле. При отсутствии готовых результатов и
+сырого каталога приложение показывает пустой каталог; тестовый эталон доступен
+только при явном указании `FLOODVALUE_APP_RUN_DIR=tests/fixtures/good`.
+
+В локальном режиме доступны географическая карта OpenFreeMap / OpenStreetMap и
+оптическая мозаика EOX Sentinel-2 cloudless за 2019 год, а отдельно — исходный S1,
+вероятность воды, маска, объекты и зоны. Внешняя оптика служит только контекстом:
+она не является снимком паводка за 2017 год и не входит в модель. Обе подложки (OSM — текущая карта, EOX —
+мозаика 2019 года) появились позже даты события: они только для ориентира и не входят в p, ущерб и план
+(подпись в панели слоёв, D-050). Мозаика 2019 года
+распространяется на условиях CC BY-NC-SA 4.0; её использование ограничено
+некоммерческими сценариями ([условия EOX](https://cloudless.eox.at/documentation/license),
+[схема WMTS](https://cloudless.eox.at/documentation/usage)). Для обычной карты действуют
+[условия сервиса OpenFreeMap](https://openfreemap.org/tos/) и атрибуция OpenStreetMap. Внешние тайлы требуют сети; локальные результаты и
+аналитика доступны при их отказе. Смена бюджета пересчитывает только план закупки.
+
+Раздел «Анализ» показывает полный портфель, каталог зон, сравнение A/B/C и
+чувствительность. У стратегий две доли: ожидаемого ущерба в зонах (`coverage_share`) и
+адресуемой цены ошибки решения R = V·q·min(p, 1−p) (`decision_risk_share`, сценарий,
+D-049); B сверх бюджета помечена контрфактической. Почему у C малая доля ущерба при
+большой доле R — `docs/team-brief.md`. Прямая ссылка `#/scene/<chip_id>` открывает сцену, а
+`#/analysis/<chip_id>` — её анализ; кнопки браузера сохраняют этот переход.
+
+Для открытия конкретного комплекта: `make app OUT=outputs/<run_id>`. Порт задаётся
+`FLOODVALUE_APP_PORT`. Собранный React-бандл хранится в репозитории, поэтому для
+`make app` нужен только Python из `uv.lock`; после правки `web/` пересоберите его
+командой `make web` (Node.js нужен только для сборки).
+Для просмотра изменений во время разработки запустите `make app` в одном терминале
+и `cd web && npm install && npm run dev` в другом, затем откройте
+`http://127.0.0.1:5173`. Скриншоты текущей сборки (headless Chromium, комплект `Sri-Lanka_713926`):
+[сцена](docs/verification/ui-scene.png), [анализ](docs/verification/ui-analysis.png).
 
 ## Основной метод (критерий 3)
 
