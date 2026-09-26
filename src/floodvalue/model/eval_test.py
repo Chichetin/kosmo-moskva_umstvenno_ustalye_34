@@ -17,7 +17,8 @@ when FLOODVALUE_EVAL_TEST_CONFIRM equals the sha256 of the frozen configuration 
 tracked code/configs are committed, and only for the final method (predict.DEFAULT_METHOD;
 FLOODVALUE_METHOD naming a candidate is refused, D-025); every such run writes a row to
 docs/verification/test-log.md. Outputs: docs/verification/eval-<part>*.{md,csv,json,png}, for
-test — test-eval*.
+test — test-eval*; `<prefix>-qc.csv` is the pixel QC of the part's chips (#64, D-031), computed
+in the same pass over the chips from the same arrays.
 """
 
 from __future__ import annotations
@@ -207,6 +208,61 @@ def proxy_points(chip: str, out: Path, label: np.ndarray, transform) -> list[dic
     return points
 
 
+# --- pixel QC of the part (#64, D-031) ------------------------------------------------------
+
+# Shares of all H×W pixels of a chip. NaN = not finite; "S1" NaN = VV or VH not finite.
+QC_SHARES = ("vv_nan_share", "vh_nan_share", "s1_nan_share", "label_invalid_share",
+             "label_other_share", "vv_pos_share", "vh_pos_share", "s1_nan_label_0_share",
+             "s1_nan_label_1_share", "s1_nan_label_invalid_share")
+QC_COLUMNS = ["chip_id", "event", "n_pixels_total", *QC_SHARES]
+
+
+def pixel_qc(s1: np.ndarray, label: np.ndarray) -> dict:
+    """Pixel QC of one chip from its S1 (2, H, W) dB with NaN and LabelHand (H, W).
+
+    `make data` does not read test pixels (D-031); eval-test computes the same quantities on
+    the arrays it already reads. `label_other_share` — label values outside {-1, 0, 1}.
+    VV/VH > 0 dB is a share of all pixels (NaN is not > 0)."""
+    if s1.ndim != 3 or s1.shape[0] < 2 or s1.shape[1:] != label.shape:
+        raise ValueError(f"S1 {s1.shape} and label {label.shape} do not match")
+    vv, vh = s1[0], s1[1]
+    vv_nan, vh_nan = ~np.isfinite(vv), ~np.isfinite(vh)
+    s1_nan = vv_nan | vh_nan
+    n = label.size
+    share = lambda m: float(np.count_nonzero(m)) / n  # noqa: E731
+    with np.errstate(invalid="ignore"):
+        vv_pos, vh_pos = vv > 0, vh > 0
+    return {"n_pixels_total": int(n),
+            "vv_nan_share": share(vv_nan), "vh_nan_share": share(vh_nan),
+            "s1_nan_share": share(s1_nan), "label_invalid_share": share(label == -1),
+            "label_other_share": share(~np.isin(label, (-1, 0, 1))),
+            "vv_pos_share": share(vv_pos), "vh_pos_share": share(vh_pos),
+            "s1_nan_label_0_share": share(s1_nan & (label == 0)),
+            "s1_nan_label_1_share": share(s1_nan & (label == 1)),
+            "s1_nan_label_invalid_share": share(s1_nan & (label == -1))}
+
+
+def qc_summary(rows: list[dict]) -> list[dict]:
+    """Per event (sorted) and ALL: pixel-weighted shares and chip counts."""
+    out = []
+    events = sorted({r["event"] for r in rows})
+    for scope in [*events, "ALL"]:
+        group = [r for r in rows if scope in ("ALL", r["event"])]
+        n = sum(r["n_pixels_total"] for r in group)
+        g = {"scope": scope, "n_chips": len(group)}
+        for k in QC_SHARES:
+            g[k] = sum(r[k] * r["n_pixels_total"] for r in group) / n if n else float("nan")
+        g["chips_with_nan"] = sum(r["s1_nan_share"] > 0 for r in group)
+        g["chips_nan_gt_half"] = sum(r["s1_nan_share"] > 0.5 for r in group)
+        g["chips_nan_labelled"] = sum(r["s1_nan_label_0_share"] + r["s1_nan_label_1_share"] > 0
+                                      for r in group)
+        g["chips_invalid_gt_half"] = sum(r["label_invalid_share"] > 0.5 for r in group)
+        g["chips_vv_pos"] = sum(r["vv_pos_share"] > 0 for r in group)
+        g["chips_label_other"] = sum(r["label_other_share"] > 0 for r in group)
+        out.append(g)
+    return out
+
+
 # --- evaluation -----------------------------------------------------------------------------
 
 def _zero() -> dict[str, int]:
@@ -218,7 +274,7 @@ def evaluate(part: str, chips: list[str], workdir: Path, *, allow_test: bool = F
     """All numbers of the report for one part; chips in chip_id order."""
     chips = sorted(chips)
     proxy_chip = proxy_chip if proxy_chip in chips else chips[0]
-    per_chip, masks, rel, unc_hist = [], {}, {}, {}
+    per_chip, masks, rel, unc_hist, qc_rows = [], {}, {}, {}, []
     jrc = {m: {"jrc_1": _zero(), "jrc_0": _zero()} for m in ("main", "baseline")}
     proxy_all, proxy_demo, main_meta, base_cfg = [], [], None, None
     edges = np.linspace(0.0, 1.0, 100_001)
@@ -227,6 +283,8 @@ def evaluate(part: str, chips: list[str], workdir: Path, *, allow_test: bool = F
         s1, s1_profile = read_layer(chip, io.S1_LAYER)
         s1 = s1.astype(np.float32)
         label, _ = io.load_label(chip, allow_test=allow_test)
+        # the same arrays, the same single pass: no second opening of the part's chips
+        qc_rows.append({"chip_id": chip, "event": event, **pixel_qc(s1, label)})
         jrc_layer, _ = read_layer(chip, io.JRC_LAYER)
         out = workdir / chip
         p, mask_main, main_meta = predict_main(chip, out)
@@ -275,7 +333,7 @@ def evaluate(part: str, chips: list[str], workdir: Path, *, allow_test: bool = F
         h = {k: M.mask_sha256([masks[k][c] for c in scope_chips]) for k in masks}
         hashes[scope] = C.require_same_valid_pixels(h)
     return {"part": part, "chips": chips, "per_chip": per_chip, "events": events,
-            "hashes": hashes, "reliability": rel, "uncertainty": unc_hist, "edges": edges,
+            "hashes": hashes, "qc": qc_rows, "reliability": rel, "uncertainty": unc_hist, "edges": edges,
             "jrc": jrc, "proxy_chip": proxy_chip,
             "proxy_demo": C.proxy_rows(proxy_demo), "proxy_all": C.proxy_rows(proxy_all),
             "main_meta": main_meta, "baseline_config": base_cfg}
@@ -452,7 +510,7 @@ def write_report(res: dict, out_dir: Path, workdir: Path, allow_test: bool, comm
     paths = {k: out_dir / f"{prefix}{suffix}" for k, suffix in (
         ("md", ".md"), ("csv", ".csv"), ("chips", "-chips.csv"),
         ("reliability", "-reliability.csv"), ("proxy", "-proxy.csv"), ("json", "-summary.json"),
-        ("png", "-errors.png"))}
+        ("png", "-errors.png"), ("qc", "-qc.csv"))}
     rows = metric_rows(res)
     write_csv(paths["csv"], M.METRIC_COLUMNS, rows)
     chip_rows = []
@@ -473,6 +531,7 @@ def write_report(res: dict, out_dir: Path, workdir: Path, allow_test: bool, comm
     proxy_fields = ["chip_id", "asset_id", "asset_class", "V", "q", "row", "col", "p", "y",
                     "el", "el_ref", "abs_error", "included", "reason"]
     write_csv(paths["proxy"], proxy_fields, res["proxy_all"])
+    write_csv(paths["qc"], QC_COLUMNS, res["qc"])
     maps = draw_error_maps(res, workdir, paths["png"], allow_test)
 
     boot = bootstraps(res)
@@ -502,6 +561,7 @@ def write_report(res: dict, out_dir: Path, workdir: Path, allow_test: bool, comm
                "valid_mask_sha256": res["hashes"], "bootstrap_delta_iou": boot,
                "calibration": cal, "uncertainty": unc, "jrc_iou": jrc,
                "proxy_check": proxy_check, "error_maps": maps,
+               "pixel_qc": qc_summary(res["qc"]),
                "baseline_crosscheck": baseline_crosscheck(rows, part)}
     paths["json"].write_text(json.dumps(summary, ensure_ascii=False, indent=1, default=float)
                              + "\n", encoding="utf-8")
@@ -517,7 +577,8 @@ def render_md(res, rows, s, groups, jrc_counts, calibrated, paths) -> str:
          f"Сгенерировано `python -m floodvalue eval-test --part {part}` "
          f"(commit `{s['commit'][:12]}`, {dt.date.today().isoformat()}), sha256 конфигурации "
          f"`{s['config_sha256']}`. Числа — из `{paths['csv'].name}`, `{paths['chips'].name}`, "
-         f"`{paths['reliability'].name}`, `{paths['proxy'].name}`, `{paths['json'].name}`.", ""]
+         f"`{paths['reliability'].name}`, `{paths['proxy'].name}`, `{paths['qc'].name}`, "
+         f"`{paths['json'].name}`.", ""]
     if part == "test":
         L += ["Test прочитан один раз замороженной конфигурацией; запуск записан в "
               "`docs/verification/test-log.md`.", ""]
@@ -634,6 +695,28 @@ def render_md(res, rows, s, groups, jrc_counts, calibrated, paths) -> str:
     for g in groups:
         L.append(f"| {g['group']} | {g['n_chips']} | {f3(g['iou_main'])} | "
                  f"{f3(g['iou_baseline'])} | {g['fp_main']} | {g['fn_main']} |")
+    L += ["", "## 8. Пиксельный QC чипов части (критерий 1)", "",
+          "Считается в том же проходе по чипам, что и метрики, по тем же массивам S1 и "
+          "LabelHand (для test `make data` пиксели не читает, D-031). Доли — от всех пикселей "
+          "чипа, по событию — взвешенно по пикселям. NaN S1 — не конечен VV или VH; "
+          "VV/VH > 0 dB — доля от всех пикселей (NaN не > 0); «NaN S1 под 0/1/−1» — S1 не "
+          "конечен, а метка 0/1/−1 (под 0/1 — ловушка набора: такие пиксели исключаются "
+          "маской валидности). Метка вне {−1, 0, 1} — нарушение схемы. Доля воды — в "
+          f"разделе 1. По чипам — `{paths['qc'].name}`.", "",
+          "| событие | чипов | NaN VV, % | NaN VH, % | NaN S1, % | −1, % | VV > 0 dB, % | "
+          "VH > 0 dB, % | NaN S1 под 0, % | под 1, % | под −1, % | чипов с NaN | NaN > 50 % "
+          "| чипов с NaN под 0/1 | −1 > 50 % | чипов с VV > 0 | метка вне схемы, чипов |",
+          "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for g in s["pixel_qc"]:
+        pct = {k: f"{100 * g[k]:.2f}" if np.isfinite(g[k]) else "—" for k in QC_SHARES}
+        L.append(f"| {'**ALL**' if g['scope'] == 'ALL' else g['scope']} | {g['n_chips']} | "
+                 f"{pct['vv_nan_share']} | {pct['vh_nan_share']} | {pct['s1_nan_share']} | "
+                 f"{pct['label_invalid_share']} | {pct['vv_pos_share']} | "
+                 f"{pct['vh_pos_share']} | {pct['s1_nan_label_0_share']} | "
+                 f"{pct['s1_nan_label_1_share']} | {pct['s1_nan_label_invalid_share']} | "
+                 f"{g['chips_with_nan']} | {g['chips_nan_gt_half']} | "
+                 f"{g['chips_nan_labelled']} | {g['chips_invalid_gt_half']} | "
+                 f"{g['chips_vv_pos']} | {g['chips_label_other']} |")
     L += ["", "## Воспроизведение", "", "```bash", "set -a; . ./.env; set +a",
           f"uv run --frozen python -m floodvalue eval-test --part {part}",
           "uv run --frozen pytest tests/eval", "```", ""]

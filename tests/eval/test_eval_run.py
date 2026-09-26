@@ -166,7 +166,18 @@ def test_validation_run_writes_report_on_identical_pixels(data_root, tmp_path, m
     names = sorted(p.name for p in out.iterdir())
     assert names == sorted(f"eval-validation{s}" for s in (
         ".md", ".csv", "-chips.csv", "-reliability.csv", "-proxy.csv", "-summary.json",
-        "-errors.png"))
+        "-errors.png", "-qc.csv"))
+    with open(out / "eval-validation-qc.csv", newline="", encoding="utf-8") as f:
+        qc = list(csv.DictReader(f))
+    assert [r["chip_id"] for r in qc] == sorted(chips)          # one row per chip, same pass
+    assert list(qc[0]) == E.QC_COLUMNS
+    for r in qc:                                  # write_chip: 3×3 NaN corner under label 1,
+        n = H * W                                 # a 4-row −1 strip, no VV/VH > 0 dB
+        assert int(r["n_pixels_total"]) == n
+        assert float(r["s1_nan_share"]) == pytest.approx(9 / n, abs=1e-6)
+        assert float(r["s1_nan_label_1_share"]) == pytest.approx(9 / n, abs=1e-6)
+        assert float(r["s1_nan_label_0_share"]) == 0.0
+        assert float(r["label_invalid_share"]) == pytest.approx(4 * W / n, abs=1e-6)
     with open(out / "eval-validation.csv", newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     assert list(rows[0]) == E.M.METRIC_COLUMNS
@@ -191,6 +202,9 @@ def test_validation_run_writes_report_on_identical_pixels(data_root, tmp_path, m
     assert 0 <= s["calibration"]["ALL"]["ece"] <= 1
     md = (out / "eval-validation.md").read_text(encoding="utf-8")
     assert "не фактические потери" in md and "Test не читался" in md
+    assert "## 8. Пиксельный QC чипов части" in md and "eval-validation-qc.csv" in md
+    assert [g["scope"] for g in s["pixel_qc"]] == ["Nigeria", "Sri-Lanka", "ALL"]
+    assert s["pixel_qc"][-1]["chips_nan_labelled"] == 3
     calibrated = (E.MODELS_DIR / "unet" / "calibration.json").exists()   # #20, D-029
     assert ("Калибровка: применена в predict" in md) == calibrated
     assert ("сырая p" in md) == (not calibrated)
@@ -225,6 +239,7 @@ def test_confirmed_test_run_reads_test_and_logs_one_row(data_root, tmp_path, mon
     out = tmp_path / "report"
     assert E.run(Namespace(part="test", out=str(out))) == 0
     assert (out / "test-eval.md").exists() and (out / "test-eval.csv").exists()
+    assert (out / "test-eval-qc.csv").exists()          # pixel QC of test after the gate
     rows = [line for line in test_log.read_text(encoding="utf-8").splitlines()
             if line.startswith("| 20")]
     assert len(rows) == 1
