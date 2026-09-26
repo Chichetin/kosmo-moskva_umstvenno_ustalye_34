@@ -32,15 +32,15 @@
 
 ## 2. Цепочка: данные → карта → ущерб → закупка → интерфейс
 
-| Звено | Команда | Артефакт | Статус (`docs/tz-compliance.md`) |
+| Звено | Команда | Артефакт | Статус (по `docs/tz-compliance.md` на `90bf679`; ✅/🟡/⬜ — как в матрице) |
 |---|---|---|---|
 | Данные Sen1Floods11 (S1 VV/VH dB, `LabelHand`) | `make data && make data-qc` | `interim/qc.csv`, `interim/source_manifest_s1.json`, `docs/verification/data-qc.md` | ✅ критерий 1 (446/446 формат, 371/446 пиксельный QC, test — только заголовки/хеши) |
 | Split по событиям | `make split` | `splits/split_v1.json`, sha256 `0098346e0f87297501409a1a8522afab6209e35f56e8cf1b68996909c8b63c75` (D-016) | ✅ критерий 6 |
 | Пороговый baseline | `make baseline` | `models/baseline/config.json`, `docs/verification/baseline-val.md` | ✅ критерий 2 (validation IoU 0,580) |
-| Основной метод — выбор B против A и baseline | (внутри `make train`, выбор — D-040) | `docs/verification/method-selection.md` | ✅ критерий 3, метод выбран |
-| Основной метод (U-Net, ансамбль 5 seed, S1-only) | `make train` (обучение — только Colab/GPU, не локально) | `models/unet/` (5 весов LFS), `docs/verification/unet-metrics.md` | ✅ dev IoU 0,584; кандидат A (`models/pixel/`) остаётся как `FLOODVALUE_METHOD=pixel` для сравнения |
-| Вероятностная карта (в т. ч. на произвольном S1-файле вне HandLabeled, #87) | `make predict CHIP=…` / `predict --s1 <path>` | `flood_probability.tif`, `prediction.json` | ✅ |
-| Калибровка и порог | `make calibrate` | `models/unet/calibration.json`, `flood_mask.tif`, `docs/verification/calibration-val.md` | ✅ validation: порог 0,37; на test — после `eval-test` |
+| Основной метод — выбор B против A и baseline | (внутри `make train`, выбор — D-040) | `docs/verification/method-selection.md` | 🟡 критерий 3: метод выбран (D-040), веса и калибровка влиты; test — после `eval-test` |
+| Основной метод (U-Net, ансамбль 5 seed, S1-only) | `make train` (обучение — только Colab/GPU, не локально) | `models/unet/` (5 весов LFS), `docs/verification/unet-metrics.md` | 🟡 критерий 3 (см. строку выше); dev IoU 0,584; кандидат A (`models/pixel/`) остаётся как `FLOODVALUE_METHOD=pixel` для сравнения |
+| Вероятностная карта (в т. ч. на произвольном S1-файле вне HandLabeled, #87) | `make predict CHIP=…` / `predict --s1 <path>` | `flood_probability.tif`, `prediction.json` | 🟡 критерий 5: p и маска на validation-чипах; на test — после `eval-test` |
+| Калибровка и порог | `make calibrate` | `models/unet/calibration.json`, `flood_mask.tif`, `docs/verification/calibration-val.md` | 🟡 критерии 5 и 9: на validation готово (порог 0,37); на test — после `eval-test` |
 | Неопределённость | (внутри `predict`) | `uncertainty.tif`, `flood_probability_range.tif`, `docs/verification/uncertainty-val.md` | 🟡 критерий 10 (AUROC 0,902 на validation; с D-049 — прямой фактор выбора съёмки C) |
 | Ущерб портфеля 10 объектов | `make assets CHIP=…` | `assets.geojson/csv`, `asset_loss.csv` | 🟡 критерий 13 (код и тесты готовы, EL = p·V·q) |
 | Приоритеты и очерёдность осмотра | (внутри `assets`) | `run_metadata.expected_loss.inspection_priority` | 🟡 критерий 14 |
@@ -48,10 +48,10 @@
 | Чувствительность плана (бюджет, ставка Б, срок решения) | внутри `make export` | `sensitivity.csv`, `docs/verification/procurement-sensitivity.md` | D-047 |
 | Сборка комплекта | `make export` | `run_metadata.json`, `sensitivity.csv` | ✅ критерий 12 (12/12 на реальном комплекте) |
 | Валидатор | `make validate` | код 0 при 12/12 | ✅ критерий 12 |
-| Перенос до заморозки (4 официальных чипа dev/validation) | `make all CHIP=<chip> BUDGET=5000` | `docs/verification/transfer-val.md` | ✅ критерии 7, 11 (12/12 на всех 4 чипах) |
+| Перенос до заморозки (4 официальных чипа dev/validation) | `make all CHIP=<chip> BUDGET=5000` | `docs/verification/transfer-val.md` | 🟡 критерии 7 и 11: 12/12 на всех 4 чипах; независимый перенос — только test (`eval-test`) |
 | Итоговая независимая оценка | `python -m floodvalue eval-test --part test` (или `make eval-test` — `--part test` по умолчанию) | `docs/verification/test-eval.md`, `docs/verification/test-log.md` | ⬜ ещё не запускался (заморозка не наступила) |
 | Интерфейс оператора | `make app` | `src/floodvalue/app/` | ⬜ критерий 19 — на `90bf679` в `main` только `src/floodvalue/app/__init__.py`, `python -m floodvalue app` отвечает «stage 'app' not implemented yet» (`docs/tz-compliance.md`, критерий 19; issue #83 открыт, PR #120 — черновик, не влит) |
-| Сквозной путь целиком | `make all CHIP=… BUDGET=…` | весь комплект `outputs/<chip>_<budget>_<commit>/` | ✅ критерий 11 (чистый клон GitVerse `6d8e99d`, прогон 3, действующий статус — `docs/verification/clean-clone-gitverse.md`) |
+| Сквозной путь целиком | `make all CHIP=… BUDGET=…` | весь комплект `outputs/<chip>_<budget>_<commit>/` | 🟡 критерий 11: чистый клон GitVerse `6d8e99d`, прогон 3 (`docs/verification/clean-clone-gitverse.md`); прогона из чистого клона на текущем `main` (после D-049) ещё нет — запланирован на 27.09 00:00 |
 
 ## 3. Данные и split
 
@@ -177,8 +177,8 @@ AUROC(u → ошибка) на validation 0,902 (худшее событие —
 IoU падает вдвое-втрое; доля невалидных пикселей > 10 % — IoU ниже на 0,15–0,23;
 плотная застройка с экстремально высоким VV — систематический недобор воды (FN ≫ FP:
 IoU чипа `Sri-Lanka_916628` 0,516 против 0,884 у чистого чипа того же события);
-событие с долей воды далеко от 15,2 % (калибровка validation) — калибратор завышает
-p (`docs/verification/transfer-val.md` §6).
+событие с меньшей долей воды, чем 15,2 % (калибровка validation), — калибратор завышает
+p (`docs/verification/transfer-val.md` §6; на dev с 4,6 % воды — `calibration-val.md`).
 
 ### 4.4 LOEO: перенос рецепта U-Net на 6 невиданных событиях (D-036, прогнан)
 
@@ -217,7 +217,8 @@ U-Net значимо лучше порога VH того же фолда в 4 ф
 
 13 альтернатив рецепта (9 вариантов обучения — ×4 шагов, кроп 512, ширина 32, слабая
 разметка Sen1Floods11, сдвиг яркости, нормализация по чипу — и 4 прогона двух других
-архитектур: U-Net на resnet34, DeepLabV3+) проверены тем же LOEO: средняя AP по 6
+архитектур: U-Net на resnet34, DeepLabV3+) проверены тем же LOEO; у 12 из них, прошедших
+все 6 событий (4-й вариант слабой разметки остановлен после 2 событий), средняя AP по 6
 событиям 0,584–0,621 против 0,607 / 0,619 / 0,625 у трёх seed эталонного рецепта;
 порог замены 0,639 не прошла ни одна. В сдачу идёт `models/unet` (D-019) + Platt,
 порог 0,37 (D-029). Оговорки: каждая альтернатива — один seed, эффект меньше +0,03 не
@@ -233,7 +234,7 @@ U-Net значимо лучше порога VH того же фолда в 4 ф
 
 ## 5. Экономика
 
-### 5.1 Контрольная арифметика постановки (тесты, а не код, писались первыми)
+### 5.1 Контрольная арифметика постановки (тесты)
 
 | Пример | Число | Тест |
 |---|---|---|
@@ -460,10 +461,14 @@ commit `6d8e99d`, до 91 коммита слияний — часть вопр�
    превосходство над baseline (0,585) статистически не подтверждено даже после
    калибровки: ΔIoU 0,035, CI [−0,010; +0,079] (`eval-validation.md` §1).
 7. **Метод хуже на чипах с долей воды 1–30 % — типичный паводок в пойме. Что видит
-   оператор на таком чипе?** Прямого предупреждения в интерфейсе нет (интерфейс не
-   реализован, критерий 19 ⬜). Деградация задокументирована как измеренное
-   ограничение (`docs/limitations.md` §8, таблица групп чипов) — раскрытие есть,
-   действия оператора внутри продукта пока нет.
+   оператор на таком чипе?** Посылка устарела: это числа до калибровки. Выдаваемая
+   (калиброванная) конфигурация на validation не хуже baseline ни в одной группе
+   доли воды: < 1 % — 0,270 против 0,143; 1–10 % — 0,271 против 0,265; 10–30 % —
+   0,480 против 0,379; ≥ 30 % — 0,866 против 0,710 (`docs/verification/eval-validation.md`
+   §7). Честное слабое место — абсолютный IoU на маловодных чипах вдвое-втрое ниже,
+   а на 1–10 % воды преимущество над baseline в пределах шума. Прямого предупреждения
+   оператору в продукте нет (интерфейса в `main` нет, критерий 19 ⬜); ограничение
+   раскрыто в `docs/limitations.md` §8.
 
 ### (4) Экономика ПП 840 и сценарная ставка
 
@@ -523,9 +528,9 @@ commit `6d8e99d`, до 91 коммита слияний — часть вопр�
     Уже прогнан (это обновление после отклика жюри — на момент формулировки
     вопроса `transfer-loeo.md` был пуст): 6 фолдов, `MODE=full`, локально на GPU
     (commit `1eaf2cc9e572`), файлы прогона — `docs/verification/loeo/`. Значимый выигрыш U-Net над порогом фолда — в 4 фолдах
-    из 6 (§4.4 этого документа). Контролируемый эксперимент (критерий 8) также
-    закрыт вариантами U-Net на dev и абляцией пиксельного метода
-    (`docs/tz-compliance.md`, критерий 8). Дополнительно 26.09 проверены 13
+    из 6 (§4.4 этого документа). Контролируемый эксперимент (критерий 8)
+    в матрице 🟡 — «три эксперимента с числами»: варианты U-Net на dev и абляция
+    пиксельного метода (`docs/tz-compliance.md`, критерий 8). Дополнительно 26.09 проверены 13
     альтернатив рецепта в LOEO — ни одна не прошла порог замены (§4.5).
 15. **Прокси-ошибка посчитана, но не в `run_metadata.json` — почему?**
     Это уже исправлено (обновление после отклика жюри — на момент формулировки

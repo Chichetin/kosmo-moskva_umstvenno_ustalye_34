@@ -62,12 +62,13 @@ def main() -> None:
     fig, ax = plt.subplots(figsize=(7, 4.5))
     for i, (name, values) in enumerate(series.items()):
         offsets = [xi + (i - 1.5) * width for xi in x]
-        plotted = [v if v is not None else 0.0 for v in values]
-        bars = ax.bar(offsets, plotted, width=width, label=name)
-        for bar, v in zip(bars, values):
-            if v is not None:
-                ax.text(bar.get_x() + bar.get_width() / 2, v + 0.01, f"{v:.3f}",
-                        ha="center", va="bottom", fontsize=8)
+        present = [(o, v) for o, v in zip(offsets, values) if v is not None]
+        if not present:
+            continue
+        bars = ax.bar([o for o, _ in present], [v for _, v in present], width=width, label=name)
+        for bar, (_, v) in zip(bars, present):
+            ax.text(bar.get_x() + bar.get_width() / 2, v + 0.01, f"{v:.3f}",
+                    ha="center", va="bottom", fontsize=8)
 
     ax.set_xticks(list(x))
     ax.set_xticklabels(labels)
