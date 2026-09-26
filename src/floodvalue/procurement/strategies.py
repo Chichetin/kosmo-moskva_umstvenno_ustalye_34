@@ -101,9 +101,12 @@ def _avail_key(item: Mapping[str, Any]) -> str:
 
 def _run_c(items: Mapping[str, Mapping[str, Any]], cov: Mapping[str, list[str]],
            el: Mapping[str, Mapping[str, float]], budget: Decimal, cfg: Mapping[str, Any],
-           as_of: date, required: list[str], start: str | None) -> dict[str, Any]:
+           as_of: date, required: list[str], start: str | None,
+           totals: dict[frozenset, Decimal] | None = None) -> dict[str, Any]:
     """Один проход отбора C: социальная фаза → (опц.) стартовая позиция ``start`` →
-    жадное добавление по EL на рубль прироста цены всей корзины."""
+    жадное добавление по EL на рубль прироста цены всей корзины. ``totals`` — общий для
+    проходов кеш «состав корзины → цена» (цена корзины не зависит от порядка позиций)."""
+    totals = {} if totals is None else totals
     chosen: list[str] = []
     reasons: dict[str, str] = {}
     covered: set[str] = set()
@@ -119,7 +122,10 @@ def _run_c(items: Mapping[str, Mapping[str, Any]], cov: Mapping[str, list[str]],
             new = sorted(a for a in cov[cid] if a in el and a not in covered)
             if not new or (targets is not None and not set(new) & targets):
                 continue
-            new_total = basket_total(price(chosen + [cid], items, cfg, as_of))
+            basket = frozenset(chosen) | {cid}
+            if basket not in totals:
+                totals[basket] = basket_total(price(chosen + [cid], items, cfg, as_of))
+            new_total = totals[basket]
             if new_total > budget:
                 continue
             d_cost = new_total - total
@@ -182,9 +188,10 @@ def select_c(items: Mapping[str, Mapping[str, Any]], cov: Mapping[str, list[str]
     """
     req = sorted(a for a in set(required) if a in el)
     pool = sorted(c for c, a in cov.items() if any(x in el for x in a))
-    runs = {"greedy": _run_c(items, cov, el, budget, cfg, as_of, req, None)}
+    totals: dict[frozenset, Decimal] = {}
+    runs = {"greedy": _run_c(items, cov, el, budget, cfg, as_of, req, None, totals)}
     for cid in pool:
-        r = _run_c(items, cov, el, budget, cfg, as_of, req, cid)
+        r = _run_c(items, cov, el, budget, cfg, as_of, req, cid, totals)
         if r["total"] is not None:
             runs[f"start:{cid}"] = r
     variant = min(runs, key=lambda k: (-round(runs[k]["covered_el"], 6), runs[k]["total"],

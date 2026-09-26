@@ -140,6 +140,41 @@ def _uncertainty_raster(run_dir: Path) -> tuple[Any, Any, str]:
     return None, None, "нет растров — кластеры неопределённости не строятся"
 
 
+_CONTEXT_CACHE: dict[Path, tuple[tuple, dict[str, Any]]] = {}
+
+
+def _inputs_key(run_dir: Path) -> tuple:
+    """(путь, mtime_ns, размер) всех входов контекста; нет файла — (путь, None, None)."""
+    from floodvalue.paths import CONFIGS_DIR
+    paths = [run_dir / n for n in ("assets.csv", "asset_loss.csv", "flood_probability.tif",
+                                   "uncertainty.tif")]
+    paths += [CONFIGS_DIR / "run.yaml", CONFIGS_DIR / "pricing.yaml",
+              data_dir() / "interim" / "source_manifest_s1.json"]
+    key = []
+    for p in paths:
+        try:
+            st = p.stat()
+            key.append((str(p), st.st_mtime_ns, st.st_size))
+        except FileNotFoundError:
+            key.append((str(p), None, None))
+    return tuple(key)
+
+
+def _cached_context(run_dir: Path) -> dict[str, Any]:
+    """:func:`_context` с кешем по :func:`_inputs_key`: смена бюджета не пересобирает каталог (#105).
+
+    Любая правка входа (mtime или размер) даёт новый ключ — устаревший контекст не читается.
+    """
+    run_dir = Path(run_dir).resolve()
+    key = _inputs_key(run_dir)
+    hit = _CONTEXT_CACHE.get(run_dir)
+    if hit is not None and hit[0] == key:
+        return hit[1]
+    ctx = _context(run_dir)
+    _CONTEXT_CACHE[run_dir] = (key, ctx)
+    return ctx
+
+
 def _context(run_dir: Path) -> dict[str, Any]:
     """Всё, что не зависит от бюджета: каталог, охват, EL, конфиги."""
     run_dir = Path(run_dir)
@@ -216,12 +251,13 @@ def plan(run_dir: Path, budget_rub: float, social: bool | None = None) -> dict[s
     """Пересчёт A/B/C для бюджета без записи файлов (для интерфейса, D-013).
 
     Читает assets.csv, asset_loss.csv, растры комплекта (только чтение) и конфиги; каталог зон
-    каждый раз строится заново из текущих входов (детерминированно, как в файле); p-растр,
+    строится из текущих входов (детерминированно, как в файле); p-растр,
     маску, порог и портфель не меняет. ``social`` — включить/выключить социальное ограничение
     C (None — как в configs/run.yaml). Ключи: plans, plan_rows, comparison, reasons,
-    social_constraint.
+    social_constraint. Контекст (каталог, охват, EL) кешируется по mtime и размеру входов —
+    повторная смена бюджета не пересобирает каталог, результат тот же (#105).
     """
-    return _plan(_context(Path(run_dir)), budget_rub, social)
+    return _plan(_cached_context(Path(run_dir)), budget_rub, social)
 
 
 def _cell(v: Any) -> str:
@@ -331,6 +367,9 @@ def write_outputs(run_dir: Path, budget_rub: float) -> dict[str, Any]:
             "coverage_rule": ("polygon.covers(point) по объектам status=ok, уникально по "
                               "asset_id; только data_role=event_observation, available_at ≤ "
                               "decision_deadline и без неподтверждённой облачности"),
+            "excluded_covers_rule": ("у позиций с exclusion_reason covers_asset_ids = [] (к сроку "
+                                     "решения ничего не наблюдают); объекты внутри их контура — "
+                                     "inside_geometry_asset_ids, это не охват (D-048)"),
         },
         "rule_B": strategies.RULE_B,
         "rule_C": strategies.RULE_C,
