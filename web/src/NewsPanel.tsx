@@ -133,7 +133,7 @@ export default function NewsPanel({ onClose }: { onClose: () => void }) {
         )}
         {items && items.length > 0 && !shown.length && <p className="news-note">В этом фильтре сообщений нет.</p>}
         {shown.map((item) => {
-          const url = safeUrl(item.url);
+          const url = item.is_demo ? null : safeUrl(item.url);  // demo links point to demo.invalid
           return (
             <article key={item.publication_id} className="news-item">
               <div className="news-meta">
