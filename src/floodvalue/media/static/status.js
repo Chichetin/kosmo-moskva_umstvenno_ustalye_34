@@ -2,7 +2,7 @@
 (async function () {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  const token = location.hash.slice(1);
+  const token = location.hash.slice(1);  // secret-scan: allow — read from the URL, not a stored secret
   if (!/^[0-9a-f]{40}$/.test(token)) { $("state").textContent = "Ссылка неполная или неверная."; return; }
   try {
     const resp = await fetch("/api/media/reports/status", {

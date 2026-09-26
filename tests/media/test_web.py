@@ -24,7 +24,7 @@ def app(settings):
 
 @pytest.fixture
 def token_app(settings):
-    return create_app(replace(settings, analyst_token="s3cret-token-for-tests"))
+    return create_app(replace(settings, analyst_token="s3cret-token-for-tests"))  # secret-scan: allow — test value
 
 
 def test_pages_are_separate_and_locked_down(app):
@@ -104,7 +104,7 @@ def test_operator_actions_closed_to_anonymous(app, token_app):
 def test_login_cookie(token_app):
     bad = call(token_app, "POST", "/media/login", data={"token": "nope"})
     assert bad.status == 401
-    good = call(token_app, "POST", "/media/login", data={"token": "s3cret-token-for-tests"})
+    good = call(token_app, "POST", "/media/login", data={"token": "s3cret-token-for-tests"})  # secret-scan: allow — test value
     assert good.status == 303
     cookie = good.headers["set-cookie"]
     assert "HttpOnly" in cookie and "SameSite=strict" in cookie
