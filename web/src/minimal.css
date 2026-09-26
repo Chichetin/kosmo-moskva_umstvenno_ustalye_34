@@ -1,5 +1,13 @@
+@font-face {
+  font-family: "Onest";
+  src: url("/fonts/Onest-Variable.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 :root {
-  font-family: "Noto Sans", "Adwaita Sans", Arial, sans-serif;
+  font-family: "Onest", system-ui, sans-serif;
   color: #e9edef;
   background: #08090b;
   font-synthesis: none;
@@ -322,7 +330,7 @@ input:focus-visible,
   gap: 6px;
   margin-top: 5px;
   color: #96a2a8;
-  font: 12px/1.4 "Noto Sans", Arial, sans-serif;
+  font: 12px/1.4 "Onest", system-ui, sans-serif;
 }
 
 .scene-results small code {
@@ -515,7 +523,7 @@ input:focus-visible,
 
 .context-heading small {
   color: #9eaaaf;
-  font: 11px "Noto Sans", Arial, sans-serif;
+  font: 11px "Onest", system-ui, sans-serif;
   font-weight: 600;
   letter-spacing: 0.07em;
 }
@@ -643,7 +651,7 @@ input:focus-visible,
 
 .analysis-head span {
   color: #93a0a5;
-  font: 11px "Noto Sans", Arial, sans-serif;
+  font: 11px "Onest", system-ui, sans-serif;
   font-weight: 600;
   letter-spacing: 0.08em;
 }
@@ -685,6 +693,12 @@ input:focus-visible,
 .analysis-metrics strong {
   font-size: 21px;
   font-weight: 620;
+  font-variant-numeric: tabular-nums;
+}
+
+.analysis-screen table,
+.analysis-screen .plan-summary strong {
+  font-variant-numeric: tabular-nums;
 }
 
 .analysis-columns {
