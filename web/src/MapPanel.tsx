@@ -1,0 +1,688 @@
+import { useEffect, useRef, useState } from "react";
+import * as maplibregl from "maplibre-gl";
+import type { GeoJSONSource, Map } from "maplibre-gl";
+import type { FeatureCollection, Geometry, Point, Polygon } from "geojson";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+import "maplibre-gl/dist/maplibre-gl.css";
+import { mapProviders } from "./mapProviders";
+import type { Feature, Plan, SceneSummary, Session } from "./types";
+
+maplibregl.setWorkerUrl(workerUrl);
+type LayerFlags = {
+  s1: boolean;
+  probability: boolean;
+  mask: boolean;
+  uncertainty: boolean;
+  assets: boolean;
+  zones: boolean;
+};
+type Props = {
+  scenes: SceneSummary[];
+  scene: SceneSummary | null;
+  session: Session | null;
+  plan: Plan | null;
+  baseMap: "map" | "optical";
+  visibleLayers: LayerFlags;
+  overlayOpacity: number;
+  selectedAsset: string | null;
+  selectedZone: string | null;
+  active: boolean;
+  overviewRequest: number;
+  onSelectScene: (scene: SceneSummary) => void;
+  onSelectAsset: (id: string) => void;
+  onSelectZone: (id: string) => void;
+  onIssue: (message: string | null) => void;
+};
+const empty: FeatureCollection = { type: "FeatureCollection", features: [] };
+const features = (items: Feature[]): FeatureCollection => ({
+  type: "FeatureCollection",
+  features: items.flatMap((item) => {
+    let geometry: Geometry;
+    if (item.geometry.type === "Point") {
+      geometry = {
+        type: "Point",
+        coordinates: item.geometry.coordinates as number[],
+      } as Point;
+    } else if (item.geometry.type === "Polygon") {
+      geometry = {
+        type: "Polygon",
+        coordinates: item.geometry.coordinates as number[][][],
+      } as Polygon;
+    } else return [];
+    return [
+      { type: "Feature" as const, geometry, properties: item.properties },
+    ];
+  }),
+});
+const markers = (scenes: SceneSummary[]): FeatureCollection<Point> => ({
+  type: "FeatureCollection",
+  features: scenes.flatMap((scene) =>
+    scene.position
+      ? [
+          {
+            type: "Feature" as const,
+            geometry: {
+              type: "Point" as const,
+              coordinates: [scene.position.lon, scene.position.lat],
+            },
+            properties: { chip_id: scene.chip_id, status: scene.status },
+          },
+        ]
+      : [],
+  ),
+});
+const reducedMotion = () =>
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const minimumZoom = () => (window.innerWidth < 700 ? 0.9 : 1.15);
+const overviewZoom = () => (window.innerWidth < 700 ? 1.15 : 2.05);
+
+export default function MapPanel(props: Props) {
+  const host = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<Map | null>(null);
+  const current = useRef(props);
+  current.current = props;
+  const popup = useRef<maplibregl.Popup | null>(null);
+  const lastScene = useRef<string | null>(null);
+  const [ready, setReady] = useState(0);
+  const [unavailable, setUnavailable] = useState<string | null>(null);
+
+  const updateVisibility = () => {
+    const map = mapRef.current;
+    if (!map || !map.getLayer("boundary")) return;
+    const {
+      scene,
+      baseMap,
+      visibleLayers,
+      overlayOpacity,
+      selectedAsset,
+      selectedZone,
+    } = current.current;
+    const show: Record<string, boolean> = {
+      optical: baseMap === "optical",
+      cluster: !scene,
+      "cluster-count": !scene,
+      observation: !scene,
+      analyzed: !scene,
+      s1: !!scene && visibleLayers.s1,
+      probability: !!scene && visibleLayers.probability,
+      mask: !!scene && visibleLayers.mask,
+      uncertainty: !!scene && visibleLayers.uncertainty,
+      boundary: !!scene,
+      assets: !!scene && visibleLayers.assets,
+      "asset-focus": !!scene && visibleLayers.assets,
+      candidates: !!scene && visibleLayers.zones,
+      "candidate-hit": !!scene && visibleLayers.zones,
+      "plan-fill": !!scene && visibleLayers.zones,
+      "plan-line": !!scene && visibleLayers.zones,
+      "zone-focus": !!scene && visibleLayers.zones,
+    };
+    for (const [id, visible] of Object.entries(show)) {
+      if (map.getLayer(id))
+        map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+    }
+    // Global view needs only the largest country names. Detailed map labels
+    // return when an observation is selected.
+    for (const id of [
+      "water_name", "road_oneway", "road_oneway_opposite",
+      "highway_name_other", "highway_name_motorway", "place_other",
+      "place_suburb", "place_village", "place_town", "place_city",
+      "place_city_large", "place_state", "place_country_other",
+      "place_country_minor",
+    ]) {
+      if (map.getLayer(id))
+        map.setLayoutProperty(id, "visibility", scene ? "visible" : "none");
+    }
+    for (const id of [
+      "waterway", "road_pier", "highway_path", "highway_minor",
+      "highway_major_casing", "highway_major_inner", "highway_major_subtle",
+      "highway_motorway_casing", "highway_motorway_inner", "highway_motorway_subtle",
+      "railway_transit", "railway_transit_dashline", "railway_minor",
+      "railway_minor_dashline", "railway", "railway_dashline", "boundary_state",
+    ]) {
+      if (map.getLayer(id))
+        map.setLayoutProperty(id, "visibility", scene ? "visible" : "none");
+    }
+    for (const id of ["probability", "mask", "uncertainty"])
+      if (map.getLayer(id))
+        map.setPaintProperty(id, "raster-opacity", overlayOpacity);
+    if (map.getLayer("asset-focus"))
+      map.setFilter("asset-focus", [
+        "==",
+        ["get", "asset_id"],
+        selectedAsset ?? "",
+      ]);
+    if (map.getLayer("zone-focus"))
+      map.setFilter("zone-focus", [
+        "==",
+        ["get", "candidate_id"],
+        selectedZone ?? "",
+      ]);
+  };
+
+  const updateScene = () => {
+    const map = mapRef.current;
+    if (!map || !map.getLayer("boundary")) return;
+    const { scene, session, plan } = current.current;
+    for (const id of ["s1", "probability", "mask", "uncertainty"] as const) {
+      if (map.getLayer(id)) map.removeLayer(id);
+      if (map.getSource(id)) map.removeSource(id);
+      const available =
+        id === "s1"
+          ? (session?.layers.s1 ?? scene?.status === "observation_only")
+          : !!session?.layers[id];
+      const coordinates = session?.layer_rasters[id]?.corners ?? scene?.corners;
+      if (!scene || !coordinates || !available) continue;
+      const url = session
+        ? `/api/layers/${id}.png?run_id=${encodeURIComponent(session.run_id)}`
+        : `/api/observations/${encodeURIComponent(scene.chip_id)}/s1.png`;
+      map.addSource(id, { type: "image", url, coordinates });
+      map.addLayer(
+        {
+          id,
+          type: "raster",
+          source: id,
+          paint: {
+            "raster-fade-duration": 0,
+            "raster-resampling": id === "mask" ? "nearest" : "linear",
+          },
+        },
+        "boundary",
+      );
+    }
+    const bounds = scene?.bounds;
+    const outline: Feature[] = bounds
+      ? [
+          {
+            type: "Feature",
+            geometry: {
+              type: "Polygon",
+              coordinates: [
+                [
+                  [bounds[0], bounds[1]],
+                  [bounds[2], bounds[1]],
+                  [bounds[2], bounds[3]],
+                  [bounds[0], bounds[3]],
+                  [bounds[0], bounds[1]],
+                ],
+              ],
+            },
+            properties: {},
+          },
+        ]
+      : [];
+    (map.getSource("scene-extent") as GeoJSONSource | undefined)?.setData(
+      features(outline),
+    );
+    (map.getSource("assets-data") as GeoJSONSource | undefined)?.setData(
+      features(session?.assets.features ?? []),
+    );
+    (map.getSource("candidate-data") as GeoJSONSource | undefined)?.setData(
+      features(session?.candidates.features ?? []),
+    );
+    const selected = new Set(plan?.plans.C ?? []);
+    (map.getSource("plan-data") as GeoJSONSource | undefined)?.setData(
+      features(
+        session?.candidates.features.filter((item) =>
+          selected.has(String(item.properties.candidate_id)),
+        ) ?? [],
+      ),
+    );
+    updateVisibility();
+  };
+
+  useEffect(() => {
+    if (!host.current) return;
+    const probe = document.createElement("canvas");
+    if (!probe.getContext("webgl2") && !probe.getContext("webgl")) {
+      setUnavailable("WebGL не поддерживается этим браузером");
+      return;
+    }
+    let map: Map;
+    let styleReady = false;
+    let fallbackUsed = false;
+    try {
+      map = new maplibregl.Map({
+        container: host.current,
+        style: mapProviders.map.style,
+        center: [39, 13],
+        zoom: overviewZoom(),
+        minZoom: minimumZoom(),
+        attributionControl: false,
+        cooperativeGestures: false,
+        dragRotate: false,
+        pitchWithRotate: false,
+        touchPitch: false,
+        maxPitch: 0,
+      });
+    } catch (cause) {
+      setUnavailable(
+        cause instanceof Error ? cause.message : "WebGL недоступен",
+      );
+      return;
+    }
+    mapRef.current = map;
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-left");
+    const attribution = host.current.querySelector<HTMLDetailsElement>(
+      ".maplibregl-ctrl-attrib",
+    );
+    // MapLibre opens compact attribution on first load. Start with its info
+    // button collapsed, then leave user toggling entirely to MapLibre.
+    const attributionObserver = new MutationObserver(() => {
+      if (!attribution?.classList.contains("maplibregl-compact")) return;
+      attributionObserver.disconnect();
+      attribution.removeAttribute("open");
+      attribution.classList.remove("maplibregl-compact-show");
+    });
+    if (attribution) {
+      attributionObserver.observe(attribution, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+      if (attribution.classList.contains("maplibregl-compact")) {
+        attributionObserver.disconnect();
+        attribution.removeAttribute("open");
+        attribution.classList.remove("maplibregl-compact-show");
+      }
+    }
+    map.addControl(
+      new maplibregl.NavigationControl({ showCompass: false }),
+      "bottom-right",
+    );
+    const onStyle = () => {
+      styleReady = true;
+      map.setProjection({ type: "globe" });
+      if (map.getLayer("background"))
+        map.setPaintProperty("background", "background-color", "#2b3336");
+      if (map.getLayer("water"))
+        map.setPaintProperty("water", "fill-color", "#151d21");
+      for (const id of [
+        "place_country_major",
+        "place_country_minor",
+        "place_city_large",
+        "place_city",
+      ]) {
+        if (map.getLayer(id)) map.setPaintProperty(id, "text-color", "#a3aab4");
+      }
+      map.addSource("optical-data", {
+        type: "raster",
+        tiles: [...mapProviders.optical.tiles],
+        tileSize: 256,
+        maxzoom: mapProviders.optical.maxzoom,
+        attribution: mapProviders.optical.attribution,
+      });
+      map.addLayer({
+        id: "optical",
+        type: "raster",
+        source: "optical-data",
+        layout: { visibility: "none" },
+        paint: { "raster-opacity": 1, "raster-fade-duration": 0 },
+      });
+      map.addSource("observations", {
+        type: "geojson",
+        data: markers(
+          current.current.scenes.filter((item) => item.status !== "analyzed"),
+        ),
+        cluster: true,
+        clusterRadius: 38,
+        clusterMaxZoom: 9,
+      });
+      map.addLayer({
+        id: "cluster",
+        type: "circle",
+        source: "observations",
+        filter: ["has", "point_count"],
+        paint: {
+          "circle-color": "#e3eaed",
+          "circle-opacity": 0.92,
+          "circle-radius": 14,
+          "circle-stroke-color": "#080b0d",
+          "circle-stroke-opacity": 0.9,
+          "circle-stroke-width": 2,
+        },
+      });
+      map.addLayer({
+        id: "cluster-count",
+        type: "symbol",
+        source: "observations",
+        filter: ["has", "point_count"],
+        layout: {
+          "text-field": ["get", "point_count_abbreviated"],
+          "text-size": 12,
+          "text-font": ["Noto Sans Regular"],
+        },
+        paint: { "text-color": "#11171a" },
+      });
+      map.addLayer({
+        id: "observation",
+        type: "circle",
+        source: "observations",
+        filter: ["!", ["has", "point_count"]],
+        paint: {
+          "circle-color": "#f1f5f6",
+          "circle-opacity": 1,
+          "circle-radius": 6,
+          "circle-stroke-color": "#111719",
+          "circle-stroke-width": 2,
+        },
+      });
+      map.addSource("analyzed-observations", {
+        type: "geojson",
+        data: markers(
+          current.current.scenes.filter((item) => item.status === "analyzed"),
+        ),
+      });
+      map.addLayer({
+        id: "analyzed",
+        type: "circle",
+        source: "analyzed-observations",
+        paint: {
+          "circle-color": "#f3f6f7",
+          "circle-opacity": 1,
+          "circle-radius": 8,
+          "circle-stroke-color": "#131a1d",
+          "circle-stroke-width": 2.5,
+        },
+      });
+      map.addSource("scene-extent", { type: "geojson", data: empty });
+      map.addLayer({
+        id: "boundary",
+        type: "line",
+        source: "scene-extent",
+        paint: {
+          "line-color": "#d3e2f3",
+          "line-width": 1.6,
+          "line-dasharray": [3, 2],
+        },
+      });
+      map.addSource("candidate-data", { type: "geojson", data: empty });
+      map.addLayer({
+        id: "candidate-hit",
+        type: "fill",
+        source: "candidate-data",
+        paint: { "fill-color": "#4D9FFF", "fill-opacity": 0.01 },
+      });
+      map.addLayer({
+        id: "candidates",
+        type: "line",
+        source: "candidate-data",
+        paint: {
+          "line-color": "#d9e3ed",
+          "line-opacity": 0.7,
+          "line-width": 1.4,
+        },
+      });
+      map.addSource("plan-data", { type: "geojson", data: empty });
+      map.addLayer({
+        id: "plan-fill",
+        type: "fill",
+        source: "plan-data",
+        paint: { "fill-color": "#4D9FFF", "fill-opacity": 0.19 },
+      });
+      map.addLayer({
+        id: "plan-line",
+        type: "line",
+        source: "plan-data",
+        paint: { "line-color": "#8bc2ff", "line-width": 2.4 },
+      });
+      map.addLayer({
+        id: "zone-focus",
+        type: "line",
+        source: "candidate-data",
+        filter: ["==", ["get", "candidate_id"], ""],
+        paint: { "line-color": "#fff", "line-width": 3.5 },
+      });
+      map.addSource("assets-data", { type: "geojson", data: empty });
+      map.addLayer({
+        id: "assets",
+        type: "circle",
+        source: "assets-data",
+        paint: {
+          "circle-radius": 6,
+          "circle-color": "#f5f5f7",
+          "circle-stroke-color": "#142439",
+          "circle-stroke-width": 2,
+        },
+      });
+      map.addLayer({
+        id: "asset-focus",
+        type: "circle",
+        source: "assets-data",
+        filter: ["==", ["get", "asset_id"], ""],
+        paint: {
+          "circle-radius": 12,
+          "circle-color": "#4D9FFF",
+          "circle-opacity": 0.25,
+          "circle-stroke-color": "#4D9FFF",
+          "circle-stroke-width": 2,
+        },
+      });
+      updateScene();
+      setReady((value) => value + 1);
+      current.current.onIssue(
+        fallbackUsed
+          ? "Внешняя карта недоступна. Показаны локальные данные на нейтральном фоне."
+          : null,
+      );
+    };
+    map.on("style.load", onStyle);
+    map.on("error", () =>
+      current.current.onIssue(
+        map.isStyleLoaded()
+          ? "Часть картографических данных недоступна. Локальные данные и анализ сохранены."
+          : "Не удалось загрузить географическую подложку. Локальные данные и анализ доступны.",
+      ),
+    );
+    const timeout = window.setTimeout(() => {
+      if (!styleReady) {
+        fallbackUsed = true;
+        map.setStyle({
+          version: 8,
+          sources: {},
+          layers: [
+            {
+              id: "fallback",
+              type: "background",
+              paint: { "background-color": "#111318" },
+            },
+          ],
+        });
+        current.current.onIssue(
+          "Внешняя карта недоступна. Показаны локальные данные на нейтральном фоне.",
+        );
+      }
+    }, 8000);
+    const selectMarker = (event: {
+      features?: Array<{ properties?: Record<string, unknown> }>;
+    }) => {
+      const id = event.features?.[0]?.properties?.chip_id;
+      const scene = current.current.scenes.find((item) => item.chip_id === id);
+      if (scene) current.current.onSelectScene(scene);
+    };
+    map.on("click", "observation", selectMarker);
+    map.on("click", "analyzed", selectMarker);
+    map.on("click", "cluster", (event) => {
+      if (
+        map.queryRenderedFeatures(event.point, { layers: ["analyzed"] }).length
+      )
+        return;
+      const feature = event.features?.[0];
+      const source = map.getSource("observations") as GeoJSONSource | undefined;
+      if (source && feature?.geometry.type === "Point") {
+        const center = feature.geometry.coordinates as [number, number];
+        source
+          .getClusterExpansionZoom(Number(feature.properties?.cluster_id))
+          .then((zoom) =>
+            map.easeTo({
+              center,
+              zoom,
+              duration: reducedMotion() ? 0 : 400,
+            }),
+          );
+      }
+    });
+    const showPreview = (event: {
+      features?: Array<{ properties?: Record<string, unknown> }>;
+    }) => {
+      map.getCanvas().style.cursor = "pointer";
+      const scene = current.current.scenes.find(
+        (item) => item.chip_id === event.features?.[0]?.properties?.chip_id,
+      );
+      if (!scene?.position) return;
+      popup.current?.remove();
+      const node = document.createElement("div");
+      node.className = "map-preview";
+      const title = document.createElement("strong");
+      title.textContent = scene.territory.replaceAll("-", " ");
+      const detail = document.createElement("span");
+      detail.textContent = scene.observation_date
+        ? new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(scene.observation_date))
+        : "Дата неизвестна";
+      node.append(title, detail);
+      popup.current = new maplibregl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        offset: 18,
+      })
+        .setLngLat([scene.position.lon, scene.position.lat])
+        .setDOMContent(node)
+        .addTo(map);
+    };
+    map.on("mouseenter", "observation", showPreview);
+    map.on("mouseenter", "analyzed", showPreview);
+    map.on("mouseleave", "observation", () => {
+      map.getCanvas().style.cursor = "";
+      popup.current?.remove();
+    });
+    map.on("mouseleave", "analyzed", () => {
+      map.getCanvas().style.cursor = "";
+      popup.current?.remove();
+    });
+    map.on("click", "assets", (event) => {
+      const id = event.features?.[0]?.properties?.asset_id;
+      if (typeof id === "string") current.current.onSelectAsset(id);
+    });
+    map.on("click", "candidate-hit", (event) => {
+      if (map.queryRenderedFeatures(event.point, { layers: ["assets"] }).length)
+        return;
+      const id = event.features?.[0]?.properties?.candidate_id;
+      if (typeof id === "string") current.current.onSelectZone(id);
+    });
+    const observer = new ResizeObserver(() => {
+      map.setMinZoom(minimumZoom());
+      map.resize();
+    });
+    observer.observe(host.current);
+    return () => {
+      window.clearTimeout(timeout);
+      attributionObserver.disconnect();
+      observer.disconnect();
+      popup.current?.remove();
+      map.remove();
+      mapRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    (
+      mapRef.current?.getSource("observations") as GeoJSONSource | undefined
+    )?.setData(
+      markers(props.scenes.filter((item) => item.status !== "analyzed")),
+    );
+    (
+      mapRef.current?.getSource("analyzed-observations") as
+        | GeoJSONSource
+        | undefined
+    )?.setData(
+      markers(props.scenes.filter((item) => item.status === "analyzed")),
+    );
+  }, [props.scenes, ready]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || !map.getLayer("boundary")) return;
+    updateScene();
+    if (!props.scene?.bounds || lastScene.current === props.scene.chip_id)
+      return;
+    lastScene.current = props.scene.chip_id;
+    popup.current?.remove();
+    map.stop();
+    const [west, south, east, north] = props.scene.bounds;
+    map.fitBounds(
+      [
+        [west, south],
+        [east, north],
+      ],
+      {
+        padding:
+          window.innerWidth < 700
+            ? { top: 70, right: 22, bottom: 255, left: 22 }
+            : { top: 80, right: 420, bottom: 90, left: 340 },
+        maxZoom: 12.5,
+        duration: reducedMotion() ? 0 : 850,
+      },
+    );
+  }, [props.scene?.chip_id, props.session?.run_id, ready]);
+  useEffect(() => {
+    updateVisibility();
+  }, [
+    props.baseMap,
+    props.visibleLayers,
+    props.overlayOpacity,
+    props.selectedAsset,
+    props.selectedZone,
+    props.scene?.chip_id,
+    ready,
+  ]);
+  useEffect(() => {
+    const selected = new Set(props.plan?.plans.C ?? []);
+    (
+      mapRef.current?.getSource("plan-data") as GeoJSONSource | undefined
+    )?.setData(
+      features(
+        props.session?.candidates.features.filter((item) =>
+          selected.has(String(item.properties.candidate_id)),
+        ) ?? [],
+      ),
+    );
+  }, [props.plan, props.session, ready]);
+  useEffect(() => {
+    const map = mapRef.current;
+    const feature = props.session?.assets.features.find(
+      (item) => item.properties.asset_id === props.selectedAsset,
+    );
+    if (map && feature?.geometry.type === "Point")
+      map.easeTo({
+        center: feature.geometry.coordinates as [number, number],
+        duration: reducedMotion() ? 0 : 350,
+      });
+  }, [props.selectedAsset]);
+  useEffect(() => {
+    if (props.active) mapRef.current?.resize();
+  }, [props.active]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || !props.active || props.scene ||
+        (!props.overviewRequest && !lastScene.current)) return;
+    lastScene.current = null;
+    map.stop();
+    map.easeTo({
+      center: [39, 13],
+      zoom: overviewZoom(),
+      duration: reducedMotion() ? 0 : 600,
+    });
+  }, [props.overviewRequest, props.scene?.chip_id, props.active, ready]);
+  return (
+    <div className="map-host">
+      <div
+        ref={host}
+        className="map-canvas"
+        aria-label="Интерактивная Земля и наблюдения"
+      />
+      {unavailable && (
+        <div className="map-unavailable" role="alert">
+          Карта недоступна: {unavailable}. Выберите сцену в списке и откройте
+          анализ.
+        </div>
+      )}
+    </div>
+  );
+}

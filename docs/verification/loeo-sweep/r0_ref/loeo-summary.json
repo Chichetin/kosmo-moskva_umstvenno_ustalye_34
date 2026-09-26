@@ -1,0 +1,262 @@
+{
+  "config": {
+    "channels": [
+      "vv",
+      "vh",
+      "vv_minus_vh"
+    ],
+    "base": 16,
+    "dropout": 0.1,
+    "batch": 16,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "dice_weight": 0.5,
+    "db_jitter": 1.0,
+    "epochs": 60,
+    "crop": 256,
+    "seed": 20260925
+  },
+  "eval_epochs": [
+    19,
+    60
+  ],
+  "max_chips": 0,
+  "baseline_shipped": {
+    "threshold_db": -23.0,
+    "fitted_on": "train"
+  },
+  "folds": [
+    {
+      "event": "Ghana",
+      "mean": [
+        -10.521741556670136,
+        -17.439326010137602,
+        6.9171189546871155
+      ],
+      "std": [
+        4.012814878786705,
+        4.50282372852614,
+        3.488323713467653
+      ],
+      "baseline_fold_t": -23.7,
+      "baseline_fold_train_iou": 0.3835504848282421,
+      "steps_per_epoch": 32,
+      "seconds": 74,
+      "valid_mask_sha256": "7a501301f60ba68eeb5aa7b100ca52cab22a6ce15baf4bc981cb3cdd0fc56ce3",
+      "ranking": {
+        "unet_e19": {
+          "ap": 0.6808284064394996,
+          "oracle_iou": 0.5679421203547217,
+          "oracle_score_gt": 0.07
+        },
+        "unet_e60": {
+          "ap": 0.660231913965101,
+          "oracle_iou": 0.5500566013689284,
+          "oracle_score_gt": 0.03
+        },
+        "baseline": {
+          "ap": 0.5683298964915017,
+          "oracle_iou": 0.43103492240732566,
+          "oracle_score_gt": 21.4
+        }
+      },
+      "train_chips": 258,
+      "held_out_chips": 48
+    },
+    {
+      "event": "India",
+      "mean": [
+        -10.692372114662138,
+        -17.534172725049434,
+        6.840474557920811
+      ],
+      "std": [
+        3.590138313360597,
+        4.190162321018113,
+        3.4494063743662156
+      ],
+      "baseline_fold_t": -24.2,
+      "baseline_fold_train_iou": 0.36083280438495285,
+      "steps_per_epoch": 29,
+      "seconds": 70,
+      "valid_mask_sha256": "8633298e4ce220d601eb244d11ca6b3a626ab04fe72e88dd15e97d3d68358905",
+      "ranking": {
+        "unet_e19": {
+          "ap": 0.7589041412895627,
+          "oracle_iou": 0.5314009496630696,
+          "oracle_score_gt": 0.14
+        },
+        "unet_e60": {
+          "ap": 0.7630413957688137,
+          "oracle_iou": 0.5431713120860804,
+          "oracle_score_gt": 0.1
+        },
+        "baseline": {
+          "ap": 0.6854827298052942,
+          "oracle_iou": 0.49319604122746347,
+          "oracle_score_gt": 21.5
+        }
+      },
+      "train_chips": 238,
+      "held_out_chips": 68
+    },
+    {
+      "event": "Pakistan",
+      "mean": [
+        -10.39076716846805,
+        -17.097281298593078,
+        6.7063086308436715
+      ],
+      "std": [
+        3.864705661034665,
+        4.351492860527512,
+        3.3687235447596033
+      ],
+      "baseline_fold_t": -23.3,
+      "baseline_fold_train_iou": 0.4084560392250968,
+      "steps_per_epoch": 34,
+      "seconds": 79,
+      "valid_mask_sha256": "50b56f7899e0baa2e425f19918e98980c5fbfaa6019e5cf8065cec2226e8e6da",
+      "ranking": {
+        "unet_e19": {
+          "ap": 0.400566222360815,
+          "oracle_iou": 0.3058710084581728,
+          "oracle_score_gt": 0.82
+        },
+        "unet_e60": {
+          "ap": 0.42829212092136765,
+          "oracle_iou": 0.32852794325956136,
+          "oracle_score_gt": 0.78
+        },
+        "baseline": {
+          "ap": 0.25226817107492505,
+          "oracle_iou": 0.20756932686442886,
+          "oracle_score_gt": 24.6
+        }
+      },
+      "train_chips": 278,
+      "held_out_chips": 28
+    },
+    {
+      "event": "Paraguay",
+      "mean": [
+        -10.427212814723728,
+        -17.17256899702196,
+        6.74544677213585
+      ],
+      "std": [
+        3.9497238316395147,
+        4.4905281498646925,
+        3.3960468510757535
+      ],
+      "baseline_fold_t": -23.5,
+      "baseline_fold_train_iou": 0.35020379993216516,
+      "steps_per_epoch": 29,
+      "seconds": 61,
+      "valid_mask_sha256": "e24f53b049b64160890ee0489cfa6c27619aeb428709ff4d893d9fd4d0fe4f2b",
+      "ranking": {
+        "unet_e19": {
+          "ap": 0.7494221026850971,
+          "oracle_iou": 0.4856810876395072,
+          "oracle_score_gt": 0.18
+        },
+        "unet_e60": {
+          "ap": 0.7660501692123961,
+          "oracle_iou": 0.5095644821984928,
+          "oracle_score_gt": 0.62
+        },
+        "baseline": {
+          "ap": 0.6812463730568926,
+          "oracle_iou": 0.48991667552625984,
+          "oracle_score_gt": 23.5
+        }
+      },
+      "train_chips": 239,
+      "held_out_chips": 67
+    },
+    {
+      "event": "Somalia",
+      "mean": [
+        -10.208631253136879,
+        -17.09820343369398,
+        6.889041248315347
+      ],
+      "std": [
+        3.8832034486321283,
+        4.410642081880569,
+        3.4428213269472794
+      ],
+      "baseline_fold_t": -23.4,
+      "baseline_fold_train_iou": 0.41385251307157167,
+      "steps_per_epoch": 35,
+      "seconds": 67,
+      "valid_mask_sha256": "d287844cb2071ab0d28ff0a79a9fd4fe776d84885a327937127bf1cb463139f5",
+      "ranking": {
+        "unet_e19": {
+          "ap": 0.3605266695049548,
+          "oracle_iou": 0.25176179460971543,
+          "oracle_score_gt": 0.14
+        },
+        "unet_e60": {
+          "ap": 0.36605016491171066,
+          "oracle_iou": 0.2550913804628385,
+          "oracle_score_gt": 0.37
+        },
+        "baseline": {
+          "ap": 0.16808572686204323,
+          "oracle_iou": 0.13958760265439477,
+          "oracle_score_gt": 22.9
+        }
+      },
+      "train_chips": 280,
+      "held_out_chips": 26
+    },
+    {
+      "event": "USA",
+      "mean": [
+        -10.132124772521061,
+        -17.13152241681879,
+        6.998618424815942
+      ],
+      "std": [
+        3.947127013520782,
+        4.538833858701836,
+        3.448694621300268
+      ],
+      "baseline_fold_t": -23.0,
+      "baseline_fold_train_iou": 0.37798276874115827,
+      "steps_per_epoch": 29,
+      "seconds": 64,
+      "valid_mask_sha256": "cf89ac0b49f7819ea5581c1a8e19aed53fe9f4451a11d1472361f62e5a465bbc",
+      "ranking": {
+        "unet_e19": {
+          "ap": 0.6790502800760025,
+          "oracle_iou": 0.5322605780009753,
+          "oracle_score_gt": 0.5
+        },
+        "unet_e60": {
+          "ap": 0.6559027075231341,
+          "oracle_iou": 0.5282645498040824,
+          "oracle_score_gt": 0.76
+        },
+        "baseline": {
+          "ap": 0.5897185162125177,
+          "oracle_iou": 0.4506431123022646,
+          "oracle_score_gt": 25.0
+        }
+      },
+      "train_chips": 237,
+      "held_out_chips": 69
+    }
+  ],
+  "seconds": 416,
+  "split_sha256": "0098346e0f87297501409a1a8522afab6209e35f56e8cf1b68996909c8b63c75",
+  "device": "NVIDIA GeForce RTX 4080",
+  "versions": {
+    "python": "3.12.13",
+    "torch": "2.11.0+cu128",
+    "numpy": "2.5.3"
+  },
+  "command": "python -m floodvalue.model.unet.loeo --epochs 60 --eval-epochs 19,60 --crop 256 --seed 20260925",
+  "commit": "1eaf2cc9e5724a36501622e2349246b3fafb7ff4"
+}
