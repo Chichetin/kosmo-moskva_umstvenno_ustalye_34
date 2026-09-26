@@ -2020,21 +2020,41 @@ details.context-foot summary { cursor: pointer; margin-bottom: 6px; }
   }
 }
 
-/* Analysis page: «К карте» and «Все наблюдения» lead off the whole screen, so they sit in the top
-   bar right after the navigation, not in the head of the selected scene. */
-.top-analysis-actions {
+/* Analysis page: «К карте» and «Все наблюдения» lead off the whole screen, so they sit above
+   «Локации» (the strip under the top bar), not in the head of the selected scene. The column
+   (actions + locations) sticks as one; vh inside the zoomed shell is divided by the zoom. */
+.analysis-side {
+  position: sticky;
+  top: 64px;
+  align-self: start;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-left: 28px;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  height: calc(100vh / var(--ui-zoom) - 88px);
+  margin-top: 64px;
 }
 
-.top-analysis-actions button {
+.analysis-side .analysis-locations {
+  position: static;
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  margin-top: 0;
+}
+
+.analysis-rail {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.analysis-rail button {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   height: 32px;
-  padding: 0 12px;
+  padding: 0 11px;
   border: 0;
   border-radius: var(--radius);
   background: #171b1e;
@@ -2044,12 +2064,18 @@ details.context-foot summary { cursor: pointer; margin-bottom: 6px; }
   transition: background 160ms ease;
 }
 
-.top-analysis-actions button:hover {
+.analysis-rail button:hover {
   background: #22292d;
 }
 
 @media (max-width: 700px) {
-  .top-analysis-actions {
-    display: none; /* «Земля» in the navigation leads back to the map on a phone */
+  .analysis-side {
+    position: static;
+    height: auto;
+    margin-top: 100px;
+  }
+  .analysis-side .analysis-locations {
+    flex: none;
+    height: 248px;
   }
 }
