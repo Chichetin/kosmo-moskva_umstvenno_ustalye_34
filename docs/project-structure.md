@@ -41,7 +41,7 @@
     `S1_LAYER`; calibration — `layer_path`, `parse_chip_id`; model — `layer_path`,
     `raw_dir`, `parse_chip_id`, `S1_LAYER`, `JRC_LAYER`; context — `layer_path`,
     `raw_dir`, `parse_chip_id`; prewater — `layer_path`, `raw_dir`, `parse_chip_id`,
-    `load_label`, `JRC_LAYER` (D-058). `layer_path`, `raw_dir`, `JRC_LAYER` — только
+    `load_label` (D-058), `JRC_LAYER` (D-060). `layer_path`, `raw_dir`, `JRC_LAYER` — только
     перечисленным в `FILES` файлам (путь к слою мимо замка `load_label`);
   - split `floodvalue.data.split`: `chip_ids` (§4 контрактов) — baseline, model,
     calibration. Сверх §4 (D-060): `load_split` — baseline, model, calibration;
