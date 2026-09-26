@@ -72,11 +72,13 @@ def test_page_fonts_are_served_with_licence(app):
 
 def test_pages_follow_operator_visual_system():
     """#247: the public pages share the operator console's look — one typeface, dark only,
-    corners only through the 2 px / 0 tokens (dots may be round), no decorative scene."""
+    corners only through the 2 px / 0 tokens (dots may be round), no decorative scene — only the operator's backdrop."""
     css = (STATIC / "report.css").read_text(encoding="utf-8")
     assert "--radius: 2px" in css and "--radius-panel: 0" in css
     assert "Science Gothic" in css and "prefers-color-scheme" not in css
-    assert "gradient(" not in css
+    assert ".leaflet-attribution-flag { display: none" in css  # no flag in the map attribution
+    content = re.sub(r"\.backdrop \{[^}]*\}", "", css)  # the operator backdrop's still fallback
+    assert "gradient(" not in content
     shadows = re.findall(r"box-shadow:\s*([^;}]+)", css)
     assert all(s.strip().startswith(("none", "0 0 0")) for s in shadows), shadows  # rings only
     radii = re.findall(r"border-radius:\s*([^;!}]+)", css)
@@ -85,3 +87,4 @@ def test_pages_follow_operator_visual_system():
         html = (STATIC / name).read_text(encoding="utf-8")
         assert 'class="scene"' not in html and "wave" not in html, name
         assert 'content="dark"' in html, name
+        assert 'class="backdrop"' in html and "/media/static/backdrop.js" in html, name
