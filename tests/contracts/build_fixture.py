@@ -1,9 +1,9 @@
-"""Build the synthetic reference set tests/fixtures/good (12 files, 64×64 raster).
+"""Build the synthetic reference set tests/fixtures/good (12 files + optional baseline_mask.tif, 64×64 raster).
 
     uv run --frozen python tests/contracts/build_fixture.py tests/fixtures/good
 
 Synthetic chip `Synthetic_000001` (not Sen1Floods11): p is a diagonal gradient with a 6×6
-nodata corner, threshold 0.5. Prices follow configs/pricing.yaml; the arithmetic here is
+nodata corner, threshold 0.5; the optional baseline_mask.tif is p >= 0.6 on the same grid. Prices follow configs/pricing.yaml; the arithmetic here is
 written independently of the validator on purpose.
 """
 
@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CHIP = "Synthetic_000001"
 LON0, LAT0, RES, SIZE = 80.0, 7.80, 0.0005, 64
 THRESHOLD = 0.5
+BASELINE_CUT = 0.6  # synthetic stand-in for the VH rule of the baseline mask
 BUDGET = 5000.0
 DEADLINE = "2017-05-31T00:00:00+00:00"
 
@@ -114,6 +115,10 @@ def build(out: Path) -> None:
         dst.write(p, 1)
     with rasterio.open(out / "flood_mask.tif", "w", dtype="uint8", nodata=255, **profile) as dst:
         dst.write(mask.astype(np.uint8), 1)
+    # optional baseline mask (contracts §2, #115): its own rule, 255 exactly where S1 has no data
+    base = np.where(p == -9999.0, 255, (p.astype(np.float64) >= BASELINE_CUT).astype(np.uint8))
+    with rasterio.open(out / "baseline_mask.tif", "w", dtype="uint8", nodata=255, **profile) as dst:
+        dst.write(base.astype(np.uint8), 1)
 
     # assets and losses
     feats, asset_rows, loss_rows, points = [], [], [], {}

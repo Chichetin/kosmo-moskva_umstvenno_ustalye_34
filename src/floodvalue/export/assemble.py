@@ -259,18 +259,25 @@ def config_sources(pricing: dict, event_date: str) -> list[dict]:
 
 
 def eval_summary_file(part: str) -> str:
-    """Repo-relative path of the eval-test summary of a split part (written by eval-test)."""
-    return f"docs/verification/eval-{part}-summary.json"
+    """Repo-relative path of the eval-test summary of a split part (written by eval-test).
+
+    Same prefix as model.eval_test.prefix_of: test -> test-eval, others -> eval-<part>.
+    """
+    prefix = "test-eval" if part == "test" else f"eval-{part}"
+    return f"docs/verification/{prefix}-summary.json"
 
 
 def proxy_check(summary: dict | None, source: str, chip_id: str, part: str,
-                prediction: dict) -> dict:
+                prediction: dict, *, models_match: bool) -> dict:
     """run_metadata.proxy_check (contracts §8) from the eval-<part> summary, #107.
 
     The numbers are taken only when the summary belongs to the chip's split part, its demo chip
     is this chip and its main method and threshold match prediction.json of the set; otherwise
-    the check stays `planned` with the reason. Only test is independent (status `done`); on
-    validation/dev the numbers are preliminary (the part tuned the method, D-012/D-016).
+    the check stays `planned` with the reason. `models_match` — models/ at the summary's
+    commit equals the current tree (the caller asks git; unknown -> False): a retrained model
+    with the same threshold must not inherit the old numbers. Only test is independent (status
+    `done`, and only with the demo chip's n_points > 0 in the summary); on validation/dev the
+    numbers are preliminary (the part tuned the method, D-012/D-016).
     """
     def planned(reason: str) -> dict:
         return {"status": "planned", "test_chip": None, "control_points": None,
@@ -294,8 +301,17 @@ def proxy_check(summary: dict | None, source: str, chip_id: str, part: str,
         return planned(f"сводка {source} устарела: часть {summary.get('part')}, метод "
                        f"{s_method}, порог {s_thr}; у комплекта часть {part}, метод {p_method}, "
                        f"порог {p_thr} — перезапустить eval-test --part {part}")
+    if not models_match:
+        return planned(f"сводка {source} посчитана на других весах: models/ в её commit "
+                       f"{summary.get('commit')} не совпадает с текущим деревом (или commit "
+                       f"недоступен) — перезапустить eval-test --part {part}")
     res = pc.get("result") or {}
     independent = part == "test"
+    demo = res.get("demo_chip") if isinstance(res.get("demo_chip"), dict) else {}
+    demo_points = demo.get("n_points")
+    if independent and not (isinstance(demo_points, int) and demo_points > 0):
+        return planned(f"в сводке {source} нет demo_chip с n_points > 0 для {chip_id} "
+                       f"(n_points = {demo_points}) — без точек проверка не выполнена")
     return {"status": "done" if independent else "planned", "test_chip": chip_id,
             "control_points": pc.get("control_points"), "fixed_v_q": True,
             "n_points": pc.get("n_points"), "error_metric": pc.get("error_metric"),
@@ -454,7 +470,8 @@ def run_metadata(*, run_id: str, chip_id: str, event_id: str, event_date: str, c
                                   else str(unc.get("units", "не задано"))),
                         "method": f"{unc.get('name', 'n/a')} ({unc.get('status', 'n/a')})",
                         "raster": uncertainty_raster},
-        "proxy_check": proxy or proxy_check(None, "", chip_id, "none", prediction),
+        "proxy_check": proxy or proxy_check(None, "", chip_id, "none", prediction,
+                                            models_match=False),
         "metrics": {"files": metrics_files},
         "reproduce": reproduce,
         "seeds": {"portfolio_seed": assets_meta["seed"], "split_seed": split.get("seed")},

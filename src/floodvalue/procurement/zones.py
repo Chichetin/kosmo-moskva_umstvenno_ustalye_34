@@ -389,6 +389,11 @@ def build_catalog(assets: Iterable[Mapping[str, Any]],
             props.update(_single_price(props, pricing_cfg, as_of))
             if decision_deadline is not None:
                 props["exclusion_reason"] = exclusion_reason(props, decision_deadline)
+                if props["exclusion_reason"] is not None:
+                    # An excluded position observes nothing by the deadline: no coverage;
+                    # assets inside its contour are kept under a separate name.
+                    props["covers_asset_ids"] = []
+                    props["inside_geometry_asset_ids"] = list(covers)
             feats.append({"type": "Feature", "geometry": mapping(poly), "properties": props})
     return {"type": "FeatureCollection", "features": feats, "build": build}
 
