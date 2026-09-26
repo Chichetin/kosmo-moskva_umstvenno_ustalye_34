@@ -12,6 +12,7 @@ import numpy as np
 import yaml
 from rasterio import Affine
 
+from floodvalue.contracts.geo import product_half_up
 from floodvalue.paths import CONFIGS_DIR
 
 PROB_NODATA = -9999.0
@@ -29,8 +30,9 @@ P_EXTRACTION_RULE = (
     "p_flood = value of flood_probability.tif at the asset pixel (row, col) of the placement, "
     "no interpolation, independent of flood_mask.tif and threshold; nodata (-9999 or NaN) "
     "or a pixel outside the raster -> status=no_data with empty p_flood/expected_loss_rub/"
-    "uncertainty/rank. EL = p_flood * asset_value_rub * vulnerability_coef, never zeroed "
-    "below the mask threshold."
+    "uncertainty/rank. EL = p_flood * asset_value_rub * vulnerability_coef, exact decimal "
+    "product of the written p_flood, V and q, ROUND_HALF_UP to 0.01 rub; never zeroed below "
+    "the mask threshold. rank is taken on this written EL (1 = max, ties by asset_id)."
 )
 STATUS_RULE = (
     "ok: finite p at the asset pixel; no_data: p nodata at the asset pixel. partial is not "
@@ -52,7 +54,7 @@ UNCERTAINTY_FALLBACK_RULE = (
 EL_RANGE_RULE = (
     "p_low/p_high = flood_probability_range.tif (min/max over the ensemble members of the "
     "calibrated member p) at the asset pixel; el_low_rub = p_low*V*q, el_high_rub = p_high*V*q "
-    "rounded to 0.01 rub (EL spread of the seed ensemble, not a confidence interval of actual "
+    "ROUND_HALF_UP to 0.01 rub (EL spread of the seed ensemble, not a confidence interval of actual "
     "losses); "
     "mask_unstable = p_low < threshold <= p_high (the mask may flip for another seed). Empty "
     "without the range raster or for status != ok."
@@ -148,7 +150,9 @@ def extract_p(
 
 
 def expected_loss(p: float, value_rub: float, vulnerability: float) -> float:
-    return p * value_rub * vulnerability
+    """EL = p * V * q in rubles to the kopeck: exact decimal product of the written factors,
+    ROUND_HALF_UP to 0.01 (not binary float noise, not banker's round)."""
+    return product_half_up([p, value_rub, vulnerability], "0.01")
 
 
 def binary_entropy(p: float) -> float:
@@ -195,9 +199,9 @@ def assess_assets(assets: list[Asset], prob_raster: np.ndarray,
             "p_low": lo if has_range else None,
             "p_high": hi if has_range else None,
             # rubles to the kopeck: a spread for ranking, not an exact amount
-            "el_low_rub": round(expected_loss(lo, a.asset_value_rub, a.vulnerability_coef), 2)
+            "el_low_rub": expected_loss(lo, a.asset_value_rub, a.vulnerability_coef)
             if has_range else None,
-            "el_high_rub": round(expected_loss(hi, a.asset_value_rub, a.vulnerability_coef), 2)
+            "el_high_rub": expected_loss(hi, a.asset_value_rub, a.vulnerability_coef)
             if has_range else None,
         })
     return rows

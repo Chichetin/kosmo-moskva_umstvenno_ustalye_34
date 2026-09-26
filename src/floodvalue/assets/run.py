@@ -43,10 +43,11 @@ from floodvalue.assets.sensitivity import (
     el_sensitivity,
     inspection_order_changes,
 )
+from floodvalue.contracts import load_run_config
 from floodvalue.paths import data_dir, output_dir
 
-# Portfolio seed. TODO: read from configs/run.yaml once it lands in main (contracts §5).
-PORTFOLIO_SEED = 20260925
+# Portfolio seed: configs/run.yaml portfolio_seed (contracts §5, RunConfig).
+SEED_SOURCE = "configs/run.yaml: portfolio_seed"
 
 ASSETS_FIELDS = ["asset_id", "chip_id", "asset_class", "asset_value_rub", "vulnerability_coef",
                  "longitude", "latitude"]
@@ -145,8 +146,9 @@ def run(args) -> int:
     unc_meta = uncertainty_meta(unc_raster is not None, p_range is not None,
                                 prediction.get("uncertainty") or {})
 
+    seed = load_run_config().portfolio_seed
     s1_valid = np.isfinite(s1).all(axis=0)
-    assets = place_assets(s1_valid, transform, PORTFOLIO_SEED, load_asset_types())
+    assets = place_assets(s1_valid, transform, seed, load_asset_types())
     loss_rows = assess_assets(assets, prob, unc_raster, p_range)
     for r in loss_rows:
         r["mask_unstable"] = mask_unstable(
@@ -184,11 +186,11 @@ def run(args) -> int:
     meta = {
         "chip_id": chip_id,
         "s1_file": s1_path(chip_id).name,
-        "seed": PORTFOLIO_SEED,
-        "seed_source": "floodvalue.assets.run.PORTFOLIO_SEED (configs/run.yaml not yet available)",
+        "seed": seed,
+        "seed_source": SEED_SOURCE,
         "placement_rule": PLACEMENT_RULE,
         "p_extraction_rule": P_EXTRACTION_RULE,
-        "el_model": "EL = p_flood * asset_value_rub * vulnerability_coef",
+        "el_model": "EL = p_flood * asset_value_rub * vulnerability_coef, ROUND_HALF_UP to 0.01 rub",
         "status_rule": STATUS_RULE,
         "uncertainty": unc_meta,
         "unassessed_asset_ids": [r["asset_id"] for r in loss_rows if r["status"] != "ok"],
