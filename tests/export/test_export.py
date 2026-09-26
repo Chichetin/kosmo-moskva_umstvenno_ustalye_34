@@ -482,3 +482,62 @@ def test_set_without_baseline_mask_is_valid_but_warns(env):
     assert _failing(validate_run(dest)) == set()
     meta = json.loads((dest / F.RUN_METADATA).read_text(encoding="utf-8"))
     assert [w for w in meta["warnings"] if "baseline_mask.tif" in w and "--mask-only" in w]
+
+
+def _prewater_files(work, status="ok"):
+    """What `python -m floodvalue prewater` leaves in the work dir (#149), written by hand:
+    export must handle it as files only, without importing floodvalue.prewater."""
+    source = {"id": f"pc:sentinel-1-rtc:{CHIP}", "file": "pre_event_water.tif",
+              "url": "https://planetarycomputer.microsoft.com/api/stac/v1/collections/sentinel-1-rtc",
+              "version": "Planetary Computer STAC sentinel-1-rtc, 6 сцен(ы)",
+              "observation_date": "2017-03-28", "available_date": "2026-09-26",
+              "license": "CC-BY-4.0", "purpose": "вода до события", "limitations": "окно до события",
+              "after_event_note": "RTC обработан позже по наблюдениям до события"}
+    meta = {"chip_id": CHIP, "status": status, "warning": None if status == "ok" else "HTTP 429",
+            "sources": [source] if status == "ok" else []}
+    (work / "pre_event_water.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+    if status == "ok":
+        with rasterio.open(work / "flood_mask.tif") as r:
+            profile = r.profile
+        with rasterio.open(work / "pre_event_water.tif", "w", **profile) as dst:
+            dst.write(np.zeros((1, H, W), dtype="uint8"))
+    return source
+
+
+def test_prewater_layer_is_optional_and_changes_nothing_of_the_12_files(env):
+    """#149 p.4: the pre-event layer only adds optional files and its sources; p, mask,
+    threshold, assets, EL and the plan stay byte-for-byte the same."""
+    work, args = _stages(env)
+    assert export_run.run(args) == 0
+    _, short, _ = export_run.git_commit()
+    dest = env / f"{CHIP}_5000_{short}"
+    unchanged = (F.FLOOD_PROBABILITY, F.FLOOD_MASK, F.ASSETS_GEOJSON, F.ASSETS_CSV, F.ASSET_LOSS,
+                 F.CANDIDATE_ORDERS, F.PROCUREMENT_PLAN, F.STRATEGY_PLANS,
+                 F.STRATEGY_COMPARISON, F.SENSITIVITY, "metrics.csv")
+    before = {n: (dest / n).read_bytes() for n in unchanged}
+    meta_before = json.loads((dest / F.RUN_METADATA).read_text(encoding="utf-8"))
+
+    source = _prewater_files(work)
+    assert export_run.run(args) == 0
+    assert {n: (dest / n).read_bytes() for n in unchanged} == before
+    assert (dest / "pre_event_water.tif").is_file() and (dest / "pre_event_water.json").is_file()
+    meta = json.loads((dest / F.RUN_METADATA).read_text(encoding="utf-8"))
+    assert meta["threshold"] == meta_before["threshold"]
+    assert meta["expected_loss"] == meta_before["expected_loss"]
+    manifest = json.loads((dest / F.SOURCE_MANIFEST).read_text(encoding="utf-8"))
+    assert source in manifest["sources"]
+    assert _failing(validate_run(dest)) == set()  # still 12/12
+
+
+def test_prewater_not_built_is_a_warning_without_sources(env):
+    work, args = _stages(env)
+    _prewater_files(work, status="unavailable")
+    assert export_run.run(args) == 0
+    _, short, _ = export_run.git_commit()
+    dest = env / f"{CHIP}_5000_{short}"
+    meta = json.loads((dest / F.RUN_METADATA).read_text(encoding="utf-8"))
+    assert [w for w in meta["warnings"] if "pre_event_water.json" in w and "unavailable" in w]
+    manifest = json.loads((dest / F.SOURCE_MANIFEST).read_text(encoding="utf-8"))
+    assert not [s for s in manifest["sources"] if "sentinel-1-rtc" in str(s.get("id"))]
+    assert not (dest / "pre_event_water.tif").exists()
+    assert _failing(validate_run(dest)) == set()
