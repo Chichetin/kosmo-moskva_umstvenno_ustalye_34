@@ -592,3 +592,150 @@ def test_decision_risk_block_reaches_run_metadata_and_columns_validate(env):
         rows = list(csv.DictReader(f))
     assert all(r["addressed_decision_risk_rub"] != "" for r in rows)
     assert _failing(validate_run(dest)) == set()
+
+
+# --- #260: complete and single-chip result set ---------------------------------------------------
+
+def _raster_like(work, name, count=1, shift=0.0):
+    """A float32 raster on the grid of flood_probability.tif, optionally shifted in longitude
+    (a stale file of another chip)."""
+    with rasterio.open(work / F.FLOOD_PROBABILITY) as r:
+        profile = r.profile
+    t = profile["transform"]
+    profile.update(count=count, transform=rasterio.Affine(t.a, t.b, t.c + shift, t.d, t.e, t.f))
+    with rasterio.open(work / name, "w", **profile) as dst:
+        dst.write(np.full((count, H, W), 0.5, dtype="float32"))
+
+
+def _meta(dest):
+    return json.loads((dest / F.RUN_METADATA).read_text(encoding="utf-8"))
+
+
+def test_probability_range_raster_is_part_of_the_set(env):
+    # #260 p.1: prediction.json.range_file points at it — it must travel with the set
+    work, args = _stages(env)
+    _raster_like(work, "flood_probability_range.tif", count=2)
+    assert export_run.run(args) == 0
+    _, short, _ = export_run.git_commit()
+    dest = env / f"{CHIP}_5000_{short}"
+    assert (dest / "flood_probability_range.tif").read_bytes() == \
+        (work / "flood_probability_range.tif").read_bytes()
+    (work / "flood_probability_range.tif").unlink()
+    assert export_run.run(args) == 0
+    assert not (dest / "flood_probability_range.tif").exists()  # stale copy removed
+
+
+def test_procurement_of_another_chip_is_refused(env, capsys):
+    # #260 p.2: predict/assets of one chip + procure of another -> no mixed set
+    work, args = _stages(env)
+    path = work / "procurement_metadata.json"
+    proc = json.loads(path.read_text(encoding="utf-8"))
+    proc["chip_id"] = "Other_000002"
+    path.write_text(json.dumps(proc, ensure_ascii=False), encoding="utf-8")
+    assert export_run.run(args) == 1
+    out = capsys.readouterr().out
+    assert "procurement_metadata.json" in out and "Other_000002" in out
+
+
+def test_off_grid_extra_raster_is_dropped_from_the_set_with_a_warning(env):
+    # #260 p.3: an extra raster of another grid (stale, another chip) never enters the set
+    work, args = _stages(env)
+    _raster_like(work, "uncertainty.tif", shift=0.5)
+    assert export_run.run(args) == 0
+    _, short, _ = export_run.git_commit()
+    dest = env / f"{CHIP}_5000_{short}"
+    assert not (dest / "uncertainty.tif").exists()
+    assert (work / "uncertainty.tif").exists()  # the work dir of the stages is not touched
+    meta = _meta(dest)
+    assert [w for w in meta["warnings"] if "uncertainty.tif" in w and "сетк" in w]
+    assert meta["uncertainty"]["raster"] is None
+    assert _failing(validate_run(dest)) == set()
+
+
+def test_in_place_export_removes_stale_raster_of_another_chip(env):
+    # #260 p.3, dest == work (--out): a baseline_mask.tif of another chip's grid is removed
+    work = env / "custom"
+    baseline_predict.predict_chip(CHIP, work)
+    args = argparse.Namespace(chip=CHIP, budget=5000.0, out=str(work))
+    assert assets_run.run(args) == 0 and procure_run.run(args) == 0
+    _raster_like(work, "baseline_mask.tif", shift=-1.0)
+    _raster_like(work, "flood_probability_range.tif", count=2)  # same grid: stays
+    assert export_run.run(args) == 0
+    assert not (work / "baseline_mask.tif").exists()
+    assert (work / "flood_probability_range.tif").exists()
+    assert [w for w in _meta(work)["warnings"] if "baseline_mask.tif" in w and "сетк" in w]
+    assert _failing(validate_run(work)) == set()
+
+
+@pytest.mark.parametrize("in_place", [False, True])
+def test_prewater_rasters_not_in_the_set_when_layer_not_built(env, in_place):
+    # #260 p.3: status != ok -> pre-event rasters (leftovers of an earlier run) stay out
+    if in_place:
+        work = env / "custom"
+        baseline_predict.predict_chip(CHIP, work)
+        args = argparse.Namespace(chip=CHIP, budget=5000.0, out=str(work))
+        assert assets_run.run(args) == 0 and procure_run.run(args) == 0
+    else:
+        work, args = _stages(env)
+    _prewater_files(work, status="unavailable")
+    _raster_like(work, "pre_event_water.tif")
+    _raster_like(work, "new_water_probability.tif")
+    assert export_run.run(args) == 0
+    _, short, _ = export_run.git_commit()
+    dest = work if in_place else env / f"{CHIP}_5000_{short}"
+    assert not (dest / "pre_event_water.tif").exists()
+    assert not (dest / "new_water_probability.tif").exists()
+    assert (dest / "pre_event_water.json").exists()  # documents that the layer is unavailable
+    assert _failing(validate_run(dest)) == set()
+
+
+def test_prewater_of_another_chip_adds_no_sources_and_no_files(env):
+    work, args = _stages(env)
+    _prewater_files(work)
+    meta_path = work / "pre_event_water.json"
+    pw = json.loads(meta_path.read_text(encoding="utf-8"))
+    pw["chip_id"] = "Other_000002"
+    meta_path.write_text(json.dumps(pw, ensure_ascii=False), encoding="utf-8")
+    assert export_run.run(args) == 0
+    _, short, _ = export_run.git_commit()
+    dest = env / f"{CHIP}_5000_{short}"
+    manifest = json.loads((dest / F.SOURCE_MANIFEST).read_text(encoding="utf-8"))
+    assert not [s for s in manifest["sources"] if "sentinel-1-rtc" in str(s.get("id"))]
+    assert not (dest / "pre_event_water.json").exists()
+    assert not (dest / "pre_event_water.tif").exists()
+    assert [w for w in _meta(dest)["warnings"] if "pre_event_water.json" in w
+            and "Other_000002" in w]
+
+
+def test_commit_dirty_sees_untracked_but_not_ignored_files(tmp_path):
+    # #260 p.4: an untracked src/ file changes the run; ignored data/outputs do not
+    import subprocess
+
+    def git(*a):
+        subprocess.run(["git", "-C", str(tmp_path), *a], check=True, capture_output=True)
+    git("init", "-q")
+    git("config", "user.email", "t@t")
+    git("config", "user.name", "t")
+    (tmp_path / ".gitignore").write_text("/outputs/\n*.tif\n", encoding="utf-8")
+    (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+    git("add", ".gitignore", "a.py")
+    git("commit", "-q", "-m", "init")
+    (tmp_path / "outputs").mkdir()
+    (tmp_path / "outputs" / "run.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "p.tif").write_bytes(b"x")
+    assert export_run.git_commit(tmp_path)[2] is False
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "new.py").write_text("y = 2\n", encoding="utf-8")
+    assert export_run.git_commit(tmp_path)[2] is True
+
+
+def test_prewater_rasters_without_their_metadata_stay_out(env):
+    # #260 p.3: without pre_event_water.json the layer status is unknown -> not in the set
+    work, args = _stages(env)
+    _raster_like(work, "pre_event_water.tif")
+    assert export_run.run(args) == 0
+    _, short, _ = export_run.git_commit()
+    dest = env / f"{CHIP}_5000_{short}"
+    assert not (dest / "pre_event_water.tif").exists()
+    assert [w for w in _meta(dest)["warnings"] if "pre_event_water.tif" in w
+            and "pre_event_water.json" in w]

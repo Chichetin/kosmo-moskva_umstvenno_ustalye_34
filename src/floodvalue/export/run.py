@@ -26,6 +26,9 @@ from datetime import UTC, datetime
 from importlib import metadata as importlib_metadata
 from pathlib import Path
 
+import numpy as np
+import rasterio
+import rasterio.errors
 import yaml
 
 from floodvalue.contracts import files as F
@@ -35,10 +38,15 @@ from floodvalue.paths import CONFIGS_DIR, MODELS_DIR, REPO_ROOT, SPLITS_DIR, dat
 
 COPIED = (F.FLOOD_PROBABILITY, F.FLOOD_MASK, F.ASSETS_GEOJSON, F.ASSETS_CSV, F.ASSET_LOSS,
           F.CANDIDATE_ORDERS, F.PROCUREMENT_PLAN, F.STRATEGY_PLANS, F.STRATEGY_COMPARISON)
-OPTIONAL = ("baseline_mask.tif", "uncertainty.tif", "prediction.json", "assets_metadata.json",
-            "procurement_metadata.json", "procurement_sensitivity.csv", "assets_sensitivity.csv",
-            "pre_event_water.tif", "pre_event_water.json", "new_water_probability.tif")
+PREWATER_RASTERS = ("pre_event_water.tif", "new_water_probability.tif")
+# extra rasters (contracts §2): enter the set only on the grid of flood_probability.tif (#260)
+EXTRA_RASTERS = ("baseline_mask.tif", "uncertainty.tif", "flood_probability_range.tif",
+                 *PREWATER_RASTERS)
 PREWATER_META = "pre_event_water.json"  # #149: written by `prewater`, read here as a file only
+OPTIONAL = (*EXTRA_RASTERS, "prediction.json", "assets_metadata.json",
+            "procurement_metadata.json", "procurement_sensitivity.csv", "assets_sensitivity.csv",
+            PREWATER_META)
+GRID_ATOL = 1e-9  # degrees; S1 and label steps differ by ~1e-17 (CLAUDE.md), a pixel is ~9e-5
 STAGE_META = ("prediction.json", "assets_metadata.json", "procurement_metadata.json",
               "procurement_sensitivity.csv")
 BASELINE_METRICS = "docs/verification/baseline-metrics.csv"
@@ -76,14 +84,16 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def git_commit() -> tuple[str, str, bool]:
-    """(full sha, short sha, working tree dirty); ('unknown', 'nogit', True) outside git."""
+def git_commit(repo: Path = REPO_ROOT) -> tuple[str, str, bool]:
+    """(full sha, short sha, working tree dirty); ('unknown', 'nogit', True) outside git.
+    Dirty = a tracked change or an untracked file not covered by .gitignore (#260): data/,
+    outputs/ and rasters are ignored, a new file in src/ or configs/ is not."""
     def git(*a: str) -> str:
-        return subprocess.run(["git", "-C", str(REPO_ROOT), *a], check=True,
+        return subprocess.run(["git", "-C", str(repo), *a], check=True,
                               capture_output=True, text=True).stdout.strip()
     try:
         full, short = git("rev-parse", "HEAD"), git("rev-parse", "--short=7", "HEAD")
-        dirty = bool(git("status", "--porcelain", "--untracked-files=no"))
+        dirty = bool(git("status", "--porcelain", "--untracked-files=all"))
     except (OSError, subprocess.CalledProcessError):
         return "unknown", "nogit", True
     return full, short, dirty
@@ -126,6 +136,50 @@ def _work_dir(args, chip_id: str) -> Path:
     if getattr(args, "out", None) and (Path(args.out) / "assets_metadata.json").is_file():
         return Path(args.out)
     return output_dir() / chip_id
+
+
+def _same_grid(path: Path, ref: Path) -> bool:
+    """Same CRS, shape and transform (allclose) as the reference raster; unreadable -> False."""
+    try:
+        with rasterio.open(path) as a, rasterio.open(ref) as b:
+            return (a.crs == b.crs and (a.width, a.height) == (b.width, b.height)
+                    and np.allclose(tuple(a.transform)[:6], tuple(b.transform)[:6],
+                                    rtol=0.0, atol=GRID_ATOL))
+    except rasterio.errors.RasterioIOError:
+        return False
+
+
+def _rejected_extras(chip_id: str, work: Path, warnings: list[str]) -> set[str]:
+    """Optional files of `work` that must not enter the set of `chip_id` (#260):
+    pre-event files of another chip, pre-event rasters of a layer that is not built (status !=
+    ok or no pre_event_water.json), extra rasters off the grid of flood_probability.tif."""
+    rejected: set[str] = set()
+    present = [n for n in PREWATER_RASTERS if (work / n).is_file()]
+    if (work / PREWATER_META).is_file():
+        prewater = _read_json(work / PREWATER_META)
+        if prewater.get("chip_id") not in (None, chip_id):
+            rejected |= {PREWATER_META, *PREWATER_RASTERS}
+            warnings.append(f"{PREWATER_META}: chip_id {prewater.get('chip_id')} ≠ {chip_id} — "
+                            "слой «вода до события» другого чипа в комплект не взят")
+        elif prewater.get("status") != "ok":
+            rejected |= set(PREWATER_RASTERS)
+            if present:
+                warnings.append(f"{present}: слой «вода до события» не построен "
+                                f"({prewater.get('status')}) — растры прошлого запуска "
+                                "в комплект не взяты")
+    else:
+        rejected |= set(PREWATER_RASTERS)
+        if present:
+            warnings.append(f"{present} без {PREWATER_META}: статус слоя неизвестен — "
+                            "в комплект не взяты")
+    for name in EXTRA_RASTERS:
+        if name in rejected or not (work / name).is_file():
+            continue
+        if not _same_grid(work / name, work / F.FLOOD_PROBABILITY):
+            rejected.add(name)
+            warnings.append(f"{name}: сетка не совпадает с {F.FLOOD_PROBABILITY} (устаревший "
+                            f"растр другого чипа или запуска) — в комплект не взят")
+    return rejected
 
 
 def _metrics(work_prediction: dict, dest: Path, warnings: list[str]) -> list[str]:
@@ -179,7 +233,8 @@ def export(chip_id: str, work: Path, dest: Path | None = None,
     prediction = _read_json(work / "prediction.json")
     assets_meta = _read_json(work / "assets_metadata.json")
     proc_meta = _read_json(work / "procurement_metadata.json")
-    for name, meta in (("prediction.json", prediction), ("assets_metadata.json", assets_meta)):
+    for name, meta in (("prediction.json", prediction), ("assets_metadata.json", assets_meta),
+                       ("procurement_metadata.json", proc_meta)):
         if meta.get("chip_id") not in (None, chip_id):
             raise ValueError(f"{work / name}: chip_id {meta.get('chip_id')} ≠ {chip_id}")
     budget = float(proc_meta["budget_rub"])
@@ -202,16 +257,20 @@ def export(chip_id: str, work: Path, dest: Path | None = None,
         warnings.append("основной метод — временно baseline-сигмоида (D-009): "
                         "floodvalue.model.predict ещё не влит (#16/#17)")
 
+    rejected = _rejected_extras(chip_id, work, warnings)
     if dest.resolve() != work.resolve():
         for name in COPIED:
             shutil.copy2(work / name, dest / name)
         for name in OPTIONAL:
-            if (work / name).is_file():
+            if (work / name).is_file() and name not in rejected:
                 shutil.copy2(work / name, dest / name)
             elif (dest / name).exists():
                 (dest / name).unlink()  # stale file of an earlier export into the same dir
+    else:  # --out: the set is the work dir itself, only files found stale are removed (#260)
+        for name in rejected:
+            (work / name).unlink(missing_ok=True)
 
-    if not (work / "baseline_mask.tif").is_file():
+    if not (dest / "baseline_mask.tif").is_file():
         warnings.append("нет baseline_mask.tif (доп. растр §2): маски baseline в комплекте нет — "
                         "uv run --frozen python -m floodvalue.baseline.predict --chip "
                         f"{chip_id} --mask-only (make all делает это сам)")
@@ -253,8 +312,8 @@ def export(chip_id: str, work: Path, dest: Path | None = None,
     if not event_date:
         raise ValueError(f"в source_manifest_s1.json у {chip_id} нет observation_date (дата события)")
     manifest["sources"] += assemble.config_sources(pricing, str(event_date))
-    if (work / PREWATER_META).is_file():  # optional layer (#149): its archive scenes are inputs too
-        prewater = _read_json(work / PREWATER_META)
+    if (dest / PREWATER_META).is_file():  # optional layer (#149): its archive scenes are inputs too
+        prewater = _read_json(dest / PREWATER_META)
         if prewater.get("status") == "ok":
             manifest["sources"] += prewater.get("sources", [])
         else:
