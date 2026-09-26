@@ -332,9 +332,13 @@ def covered_expected_loss(zones: list, points: dict[str, Point], el: dict[str, f
     return sum(v for aid, v in el.items() if any(z.covers(points[aid]) for z in zones))
 
 
-def decision_risk_rub(p: float, value_rub: float, vulnerability: float) -> float:
-    """Expected cost of a wrong decision R = V·q·min(p, 1−p), rub. (scenario, D-049)."""
-    return value_rub * vulnerability * min(p, 1.0 - p)
+def decision_risk_from_el(el: float, p: float) -> float:
+    """Expected cost of a wrong decision R = V·q·min(p, 1−p), rub. (scenario, D-049), from the
+    written EL and p of asset_loss.csv (V·q = EL/p), exactly as procurement does: EL rounded to
+    the kopeck would otherwise drift from V·q·min(p, 1−p) by up to 0,005 per asset (#146)."""
+    if p <= 0.5:
+        return el
+    return el * (1.0 - p) / p
 
 
 def _optional_number(extra: dict, field: str) -> tuple[bool, float | None]:
@@ -360,16 +364,19 @@ def _check_decision_risk(report: "_Report", name: str, row, used: list | None,
     s = row.strategy
     if has_r and addressed is None:
         report.add(name, f"{s}: addressed_decision_risk_rub пуст")
-    if used is None or not has_r or addressed is None:
+    if used is None or not (has_r or has_share):
         return
-    if s == "A" and meta and (meta.strategies.model_extra or {}).get("coverage_A"):
-        return  # A's coverage is declared separately; nothing to recompute here
-    expected = covered_expected_loss(used, {a: by_id[a][1] for a in risk_by_id}, risk_by_id)
-    if abs(expected - addressed) > EL_TOL:
+    a_declared = s == "A" and meta and (meta.strategies.model_extra or {}).get("coverage_A")
+    if a_declared:  # A's coverage is declared separately: check only share ↔ addressed below
+        expected = addressed
+    else:
+        expected = covered_expected_loss(used, {a: by_id[a][1] for a in risk_by_id}, risk_by_id)
+    if has_r and addressed is not None and not a_declared and abs(expected - addressed) > EL_TOL:
         report.add(name, f"{s}: addressed_decision_risk_rub={addressed} ≠ пересчёту {expected:.2f} "
                          "(Σ V·q·min(p, 1−p) ok-объектов, покрытых зонами к сроку)")
-    if not has_share:
+    if not has_share or expected is None:
         return
+    addressed = expected if addressed is None else addressed
     total = sum(risk_by_id.values())
     if total > 0 and share is None:
         report.add(name, f"{s}: decision_risk_share пуст при ненулевой Σ R портфеля")
@@ -556,8 +563,7 @@ def validate_run(run_dir: Path, assets_config: Path | None = None,
             p_pix = _sample(raster, pt.x, pt.y)[1] if raster is not None else None
             if r.status == "ok":
                 el_by_id[r.asset_id] = r.expected_loss_rub
-                risk_by_id[r.asset_id] = decision_risk_rub(r.p_flood, a.asset_value_rub,
-                                                           a.vulnerability_coef)
+                risk_by_id[r.asset_id] = decision_risk_from_el(r.expected_loss_rub, r.p_flood)
                 expected = r.p_flood * a.asset_value_rub * a.vulnerability_coef
                 if abs(expected - r.expected_loss_rub) > EL_TOL + 1e-9 * expected:
                     report.add(name, f"{r.asset_id}: EL={r.expected_loss_rub} ≠ p·V·q={expected:.2f}")

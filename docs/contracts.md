@@ -160,8 +160,9 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
   у A платных зон нет, поэтому её `covered_expected_loss_rub` = 0, иное — только с
   объяснением в `run_metadata.strategies.coverage_A`. Доп. столбцы (D-049, #142), если есть:
   `addressed_decision_risk_rub` = Σ R = V·q·min(p, 1−p) `ok`-объектов, покрытых теми же
-  зонами, что `covered_expected_loss_rub` (у A — 0), V и q — из `assets.geojson` (допуск
-  0,01), пустое значение — ошибка; `decision_risk_share` = addressed / Σ R портфеля (допуск
+  зонами, что `covered_expected_loss_rub` (у A — 0, иное — только с `coverage_A`); R — из EL и
+  p строки `asset_loss.csv` (EL при p ≤ 0,5, EL·(1−p)/p иначе — как в procurement, чтобы EL в
+  копейках не давал расхождения), допуск 0,01; пустое значение — ошибка; `decision_risk_share` = addressed / Σ R портфеля (допуск
   1e-4), пусто ⇔ Σ R = 0. Отсутствие обоих столбцов (старые комплекты) — не ошибка.
 - `metrics.csv` комплекта (§7): каждая строка `method=main` (любой `split` —
   dev/validation/test — и любой `event`) имеет `threshold`, равный `run_metadata.threshold`
@@ -202,7 +203,7 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
  "zones": {"construction", "availability_rule", "area_method", "unknown_dates_rule"},
  "strategies": {"rule_B", "rule_C", "other_costs", "coverage_aggregation",
                 "coverage_share_note": null,
-                "decision_risk": {"formula", "status", "meaning", "columns", "excluded"}},  # D-049, из procurement_metadata.json
+                "decision_risk": {"formula", "status", "meaning", "columns", "excluded"} | null},  # необязательно; D-049, копия из procurement_metadata.json
  "uncertainty": {"meaning", "units", "method", "raster": null},
  "proxy_check": {"status": "done|planned|not_done", "test_chip", "control_points",
                  "fixed_v_q", "n_points", "error_metric", "result"},

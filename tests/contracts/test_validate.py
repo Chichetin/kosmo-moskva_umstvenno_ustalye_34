@@ -905,3 +905,65 @@ def test_set_without_decision_risk_columns_still_passes(run_dir):
         w.writerows(rows)
     assert "decision_risk" not in path.read_text(encoding="utf-8")
     assert F.STRATEGY_COMPARISON not in failing(run_dir)
+
+
+def test_decision_risk_uses_written_el_so_kopeck_rounding_passes(run_dir):
+    """reviewer #173: with EL rounded to the kopeck (#146) V·q·min(p, 1−p) drifts from the
+    procurement value EL·min(p, 1−p)/p by up to 0,005 per asset (and the fixture EL is itself rounded). Shift every ok EL by +0,009
+    (inside the EL = p·V·q tolerance), write the R columns the way procurement does: must pass."""
+    from datetime import datetime
+    from shapely.geometry import Point, shape
+
+    meta = json.loads((run_dir / F.RUN_METADATA).read_text(encoding="utf-8"))
+    deadline = datetime.fromisoformat(meta["budget"]["decision_deadline"])
+    plans = json.loads((run_dir / F.STRATEGY_PLANS).read_text(encoding="utf-8"))
+    zones = {f["properties"]["candidate_id"]: f for f in
+             json.loads((run_dir / F.CANDIDATE_ORDERS).read_text(encoding="utf-8"))["features"]}
+    points = {f["properties"]["asset_id"]: Point(f["geometry"]["coordinates"]) for f in
+              json.loads((run_dir / F.ASSETS_GEOJSON).read_text(encoding="utf-8"))["features"]}
+    risk, el_ok = {}, {}
+
+    def shift(rows):
+        for r in rows:
+            if r["status"] == "ok":
+                el = float(r["expected_loss_rub"])
+                if el > 1e6:  # one sign, drifts add up; within EL tolerance 0,01 + 1e-9·EL
+                    el += 0.009
+                    r["expected_loss_rub"] = f"{el:.3f}"
+                p = float(r["p_flood"])
+                el_ok[r["asset_id"]] = el
+                risk[r["asset_id"]] = el if p <= 0.5 else el * (1 - p) / p
+    edit_csv(run_dir / F.ASSET_LOSS, shift)
+    assert any(float(r) > 0 for r in risk.values())
+
+    def usable(cid):
+        pr = zones[cid]["properties"]
+        return (pr["data_role"] == "event_observation" and pr.get("available_at")
+                and datetime.fromisoformat(pr["available_at"]) <= deadline)
+
+    def write(rows):
+        total = sum(risk.values())
+        for r in rows:
+            used = [shape(zones[c]["geometry"]) for c in plans[r["strategy"]] if usable(c)]
+            covered = [a for a in risk if any(z.covers(points[a]) for z in used)]
+            addressed = sum(risk[a] for a in covered)
+            r["covered_expected_loss_rub"] = f"{sum(el_ok[a] for a in covered):.2f}"
+            r["coverage_share"] = repr(round(sum(el_ok[a] for a in covered) / sum(el_ok.values()), 6))
+            r["addressed_decision_risk_rub"] = f"{addressed:.2f}"
+            r["decision_risk_share"] = repr(round(addressed / total, 6))
+    edit_csv(run_dir / F.STRATEGY_COMPARISON, write)
+    assert F.STRATEGY_COMPARISON not in failing(run_dir)
+
+
+def test_share_is_checked_without_the_rub_column(run_dir):
+    path = run_dir / F.STRATEGY_COMPARISON
+    with open(path, encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+    for r in rows:
+        r.pop("addressed_decision_risk_rub")
+    row(rows, strategy="C")["decision_risk_share"] = "0.9"
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w.writeheader()
+        w.writerows(rows)
+    assert "decision_risk_share=0.9" in only(failing(run_dir), F.STRATEGY_COMPARISON)
