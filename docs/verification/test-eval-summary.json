@@ -1,0 +1,378 @@
+{
+ "part": "test",
+ "commit": "e7a78e777f880f14954ac6341680fd6eb303f7c2",
+ "config_sha256": "e8fa3dae8067cb421e9a4d014c1ccceb90bde83999d40731b229e199ba8931c8",
+ "main_method": "unet",
+ "threshold": 0.37,
+ "threshold_status": "calibrated (platt) and chosen on validation, D-029",
+ "n_chips": 75,
+ "valid_mask_sha256": {
+  "Bolivia": "38afa587db1e1d52d55622b9cd391664e391e430a5e03dfad48a7aedbc166c61",
+  "Mekong": "2306ef9c473095347ab11b8f0d34dec945438feadcf632d00af01228f8af5984",
+  "Spain": "2a13f23d12e5541856fe8cb506285a5b85adca2e3a5dce3cb205153c522637b2",
+  "ALL": "3462e3ca96a5e4162c9c41f24090752e924d12cc4df13fe9b5295de29d0ed077"
+ },
+ "bootstrap_delta_iou": {
+  "Bolivia": {
+   "delta": 0.10650264884088145,
+   "ci95": [
+    0.07774791706931924,
+    0.13108802761163194
+   ],
+   "share_gt_0": 1.0,
+   "n": 2000,
+   "n_used": 2000
+  },
+  "Mekong": {
+   "delta": 0.05748770516995927,
+   "ci95": [
+    -0.020782261205983178,
+    0.11203300973791551
+   ],
+   "share_gt_0": 0.937,
+   "n": 2000,
+   "n_used": 2000
+  },
+  "Spain": {
+   "delta": 0.0165159841653838,
+   "ci95": [
+    -0.009843028209537438,
+    0.048451753444336026
+   ],
+   "share_gt_0": 0.8935,
+   "n": 2000,
+   "n_used": 2000
+  },
+  "ALL": {
+   "delta": 0.047264391702731556,
+   "ci95": [
+    0.012494401609286726,
+    0.07873058709822739
+   ],
+   "share_gt_0": 0.9955,
+   "n": 2000,
+   "n_used": 2000
+  }
+ },
+ "calibration": {
+  "Bolivia": {
+   "ece": 0.026340432166232632,
+   "mce": 0.13000110687218314,
+   "brier": 0.0462093089347154,
+   "log_loss": 0.17007774582107146,
+   "mean_p": 0.15550841455210698,
+   "water_share": 0.1599970117906809,
+   "n_pixels": 2824434,
+   "bootstrap": {
+    "ece_ci95": [
+     0.016388232106836015,
+     0.04762733970002385
+    ],
+    "log_loss_ci95": [
+     0.10583113669611824,
+     0.24612455369987282
+    ],
+    "n": 2000,
+    "n_used": 2000,
+    "seed": 20260925,
+    "n_chips": 15
+   },
+   "raw": {
+    "ece": 0.07335045763500975,
+    "mce": 0.39273420289114613,
+    "brier": 0.06425661224599236,
+    "log_loss": 0.20755230018936927,
+    "mean_p": 0.10987292203134302,
+    "water_share": 0.1599970117906809,
+    "n_pixels": 2824434
+   }
+  },
+  "Mekong": {
+   "ece": 0.027329026597896107,
+   "mce": 0.3232355418388625,
+   "brier": 0.03355206937186995,
+   "log_loss": 0.12029838381469429,
+   "mean_p": 0.26575132695603015,
+   "water_share": 0.2412265495265024,
+   "n_pixels": 7129920,
+   "bootstrap": {
+    "ece_ci95": [
+     0.015631415078490647,
+     0.04930565031092953
+    ],
+    "log_loss_ci95": [
+     0.08335376423902244,
+     0.16703863768388713
+    ],
+    "n": 2000,
+    "n_used": 2000,
+    "seed": 20260925,
+    "n_chips": 30
+   },
+   "raw": {
+    "ece": 0.03235606806867505,
+    "mce": 0.1657023588702877,
+    "brier": 0.03231097701066696,
+    "log_loss": 0.12228298025529247,
+    "mean_p": 0.23226972808717378,
+    "water_share": 0.2412265495265024,
+    "n_pixels": 7129920
+   }
+  },
+  "Spain": {
+   "ece": 0.07879171179800629,
+   "mce": 0.5235877684881141,
+   "brier": 0.04946667241880978,
+   "log_loss": 0.18352267093207666,
+   "mean_p": 0.21032976103891593,
+   "water_share": 0.13153804924090964,
+   "n_pixels": 7727802,
+   "bootstrap": {
+    "ece_ci95": [
+     0.06753891426979053,
+     0.08969181751293269
+    ],
+    "log_loss_ci95": [
+     0.1444547380988088,
+     0.22382034524127623
+    ],
+    "n": 2000,
+    "n_used": 2000,
+    "seed": 20260925,
+    "n_chips": 30
+   },
+   "raw": {
+    "ece": 0.04315625561762045,
+    "mce": 0.20420803094178167,
+    "brier": 0.031797056434294334,
+    "log_loss": 0.12444381195466843,
+    "mean_p": 0.1746943048585301,
+    "water_share": 0.13153804924090964,
+    "n_pixels": 7727802
+   }
+  },
+  "ALL": {
+   "ece": 0.0436071654640679,
+   "mce": 0.27219005265021334,
+   "brier": 0.042529166905835476,
+   "log_loss": 0.1558813350669852,
+   "mean_p": 0.22392041459499967,
+   "water_share": 0.18031324913093177,
+   "n_pixels": 17682156,
+   "bootstrap": {
+    "ece_ci95": [
+     0.030408133032313076,
+     0.05585441248410927
+    ],
+    "log_loss_ci95": [
+     0.1286886393324688,
+     0.18425479711013912
+    ],
+    "n": 2000,
+    "n_used": 2000,
+    "seed": 20260925,
+    "n_chips": 75
+   },
+   "raw": {
+    "ece": 0.021675396206976876,
+    "mce": 0.06447101854396414,
+    "brier": 0.037189163915720705,
+    "log_loss": 0.1368477225812161,
+    "mean_p": 0.18755610994622685,
+    "water_share": 0.18031324913093177,
+    "n_pixels": 17682156
+   }
+  }
+ },
+ "calibration_bins": 15,
+ "uncertainty": {
+  "Bolivia": {
+   "n_error": 171549,
+   "n_correct": 2652885,
+   "mean_u_error": 0.702757432796793,
+   "mean_u_correct": 0.22182391355052314,
+   "auroc": 0.8790552790616171
+  },
+  "ALL": {
+   "n_error": 1127388,
+   "n_correct": 16554768,
+   "mean_u_error": 0.7010222497646437,
+   "mean_u_correct": 0.1983786976832862,
+   "auroc": 0.8968461093900842
+  },
+  "Mekong": {
+   "n_error": 348931,
+   "n_correct": 6780989,
+   "mean_u_error": 0.6807715994942377,
+   "mean_u_correct": 0.15714386728482624,
+   "auroc": 0.9283178370132142
+  },
+  "Spain": {
+   "n_error": 606908,
+   "n_correct": 7120894,
+   "mean_u_error": 0.7121745343539401,
+   "mean_u_correct": 0.22891074462189642,
+   "auroc": 0.8781640806706064
+  }
+ },
+ "uncertainty_measure": "entropy_p",
+ "climate": {
+  "source": "Ratté-Fortin et al., SSRN 6282373, табл. 2",
+  "classes": {
+   "Bolivia": "Am",
+   "Ghana": "Aw",
+   "India": "Am",
+   "Mekong": "Am",
+   "Nigeria": "Aw",
+   "Pakistan": "BWh",
+   "Paraguay": "Cfa",
+   "Somalia": "BSh",
+   "Spain": "Csa",
+   "Sri-Lanka": "Am",
+   "USA": "Dfa"
+  },
+  "groups": [
+   {
+    "group": "Кёппен Am",
+    "events": [
+     "Bolivia",
+     "Mekong"
+    ],
+    "seen_in_train": true,
+    "n_chips": 45,
+    "iou_main": 0.7938223555859255,
+    "iou_baseline": 0.7254079982220145,
+    "fp_main": 352598,
+    "fn_main": 167882
+   },
+   {
+    "group": "Кёппен Csa",
+    "events": [
+     "Spain"
+    ],
+    "seen_in_train": false,
+    "n_chips": 30,
+    "iou_main": 0.6131248948203148,
+    "iou_baseline": 0.596608910654931,
+    "fp_main": 552244,
+    "fn_main": 54664
+   },
+   {
+    "group": "климат не виден в train",
+    "events": [
+     "Spain"
+    ],
+    "seen_in_train": false,
+    "n_chips": 30,
+    "iou_main": 0.6131248948203148,
+    "iou_baseline": 0.596608910654931,
+    "fp_main": 552244,
+    "fn_main": 54664
+   },
+   {
+    "group": "климат виден в train",
+    "events": [
+     "Bolivia",
+     "Mekong"
+    ],
+    "seen_in_train": true,
+    "n_chips": 45,
+    "iou_main": 0.7938223555859255,
+    "iou_baseline": 0.7254079982220145,
+    "fp_main": 352598,
+    "fn_main": 167882
+   }
+  ]
+ },
+ "jrc_iou": {
+  "main": {
+   "jrc_1": 0.9870103743653125,
+   "jrc_0": 0.6469227082168544
+  },
+  "baseline": {
+   "jrc_1": 0.9707942819274827,
+   "jrc_0": 0.5769597169297768
+  }
+ },
+ "proxy_check": {
+  "status": "done",
+  "test_chip": "Spain_7370579",
+  "control_points": "10 точек портфеля тем же правилом `python -m floodvalue assets` (seed 20260925, только валидность S1; прогноз и метки не читаются); оцениваются точки со статусом ok и меткой 0/1",
+  "fixed_v_q": "configs/assets.yaml (учебные V и q, те же, что в asset_loss.csv)",
+  "n_points": 10,
+  "error_metric": "MAE и сумма |EL − EL_ref|, руб.; EL = p·V·q, EL_ref = y·V·q",
+  "result": {
+   "demo_chip": {
+    "n_placed": 10,
+    "n_points": 10,
+    "n_excluded_label_invalid": 0,
+    "n_excluded_no_data": 0,
+    "mae_rub": 468044.0399999999,
+    "sum_abs_error_rub": 4680440.399999999,
+    "sum_el_rub": 8252215.68,
+    "sum_el_ref_rub": 3600000.0
+   },
+   "all_chips_of_part": {
+    "n_placed": 750,
+    "n_points": 693,
+    "n_excluded_label_invalid": 57,
+    "n_excluded_no_data": 0,
+    "mae_rub": 345304.92389610386,
+    "sum_abs_error_rub": 239296312.26,
+    "sum_el_rub": 585567944.42,
+    "sum_el_ref_rub": 448500000.0
+   },
+   "note": "прокси по ручной метке воды, не фактические потери",
+   "independent": true
+  }
+ },
+ "error_maps": [
+  "Spain_7370579",
+  "Bolivia_432776",
+  "Mekong_1111068",
+  "Spain_7387658"
+ ],
+ "pixel_qc": {
+  "Bolivia": {
+   "n_chips": 15,
+   "s1_nan_share": 0.10330301920572917,
+   "label_invalid_share": 0.2706769307454427,
+   "vv_gt0_share": 4.736304139926874e-05,
+   "vh_gt0_share": 2.2688882107434127e-06,
+   "n_s1_nan_label_01": 43381,
+   "chips_s1_nan_label_01": 5,
+   "chips_with_nan": 8
+  },
+  "Mekong": {
+   "n_chips": 30,
+   "s1_nan_share": 0.0001873016357421875,
+   "label_invalid_share": 0.09322331746419271,
+   "vv_gt0_share": 0.00038879047245864,
+   "vh_gt0_share": 5.977478641006241e-06,
+   "n_s1_nan_label_01": 1262,
+   "chips_s1_nan_label_01": 3,
+   "chips_with_nan": 3
+  },
+  "Spain": {
+   "n_chips": 30,
+   "s1_nan_share": 0.0,
+   "label_invalid_share": 0.017359161376953126,
+   "vv_gt0_share": 0.012498092651367188,
+   "vh_gt0_share": 0.0004094441731770833,
+   "n_s1_nan_label_01": 0,
+   "chips_s1_nan_label_01": 0,
+   "chips_with_nan": 0
+  },
+  "ALL": {
+   "n_chips": 75,
+   "s1_nan_share": 0.02073552449544271,
+   "label_invalid_share": 0.09836837768554688,
+   "vv_gt0_share": 0.005272547212210715,
+   "vh_gt0_share": 0.00017010227379734706,
+   "n_s1_nan_label_01": 44643,
+   "chips_s1_nan_label_01": 8,
+   "chips_with_nan": 11
+  }
+ },
+ "baseline_crosscheck": "не применимо"
+}
