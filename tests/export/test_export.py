@@ -514,3 +514,22 @@ def test_set_without_baseline_mask_is_valid_but_warns(env):
     assert _failing(validate_run(dest)) == set()
     meta = json.loads((dest / F.RUN_METADATA).read_text(encoding="utf-8"))
     assert [w for w in meta["warnings"] if "baseline_mask.tif" in w and "--mask-only" in w]
+
+
+def test_decision_risk_block_reaches_run_metadata_and_columns_validate(env):
+    """#142 (D-049): the decision-risk block of procurement_metadata.json is carried into
+    run_metadata.strategies; the real procurement columns pass the validator's recomputation."""
+    work, args = _stages(env)
+    assert export_run.run(args) == 0
+    _, short, _ = export_run.git_commit()
+    dest = env / f"{CHIP}_5000_{short}"
+    meta = json.loads((dest / F.RUN_METADATA).read_text(encoding="utf-8"))
+    proc = json.loads((work / "procurement_metadata.json").read_text(encoding="utf-8"))
+    risk = meta["strategies"]["decision_risk"]
+    assert risk == proc["decision_risk"]
+    assert "min(p, 1−p)" in risk["formula"] and "не фактическое снижение потерь" in risk["meaning"]
+    assert risk["status"] == "scenario"
+    with open(dest / F.STRATEGY_COMPARISON, encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert all(r["addressed_decision_risk_rub"] != "" for r in rows)
+    assert _failing(validate_run(dest)) == set()
