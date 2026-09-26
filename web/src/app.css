@@ -652,6 +652,36 @@ input:focus-visible,
   font-size: 12px;
   margin: 8px 0;
 }
+.object-priority-card {
+  margin: 0 12px 12px;
+  padding: 16px;
+  border: 1px solid #6b9253;
+  border-left: 4px solid #b9ee72;
+  border-radius: var(--radius-panel);
+  background: #1d2b22;
+  scroll-margin-block: 14px;
+}
+.object-priority-card h2 { margin-bottom: 8px; color: #d8f4bd; }
+.object-priority-card .priority-success { color: #c4f477; }
+.object-priority-card .priority-unavailable { color: #ffb3a5; }
+.priority-action {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 14px;
+  padding: 9px 12px;
+  border: 1px solid #c4f477;
+  border-radius: var(--radius);
+  background: #b9ee72;
+  color: #15220c;
+  font-size: 13px;
+  font-weight: 750;
+  text-align: center;
+}
+.priority-action:hover { background: #d4ff9b; }
+.priority-action.active { background: #294321; color: #d4ff9b; }
+.priority-action.active:hover { background: #35572a; }
+.priority-action:disabled { cursor: not-allowed; opacity: 0.45; }
 .context-foot {
   padding: 0 18px 18px;
   color: #94949c;

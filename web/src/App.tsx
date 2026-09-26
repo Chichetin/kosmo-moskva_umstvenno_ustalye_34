@@ -172,6 +172,7 @@ export default function App() {
   const [layers, setLayers] = useState<LayerFlags>(defaults);
   const [opacity, setOpacity] = useState(0.76);
   const [assetId, setAssetId] = useState<string | null>(null);
+  const selectedObjectRef = useRef<HTMLElement | null>(null);
   const [priorityAssetId, setPriorityAssetId] = useState<string | null>(null);
   const [zoneId, setZoneId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -548,6 +549,11 @@ export default function App() {
     (item) => item.properties.asset_id === assetId,
   );
   const priorityAsset = assets.find((item) => String(item.properties.asset_id) === priorityAssetId);
+  useEffect(() => {
+    if (!mapVisible || !activeAsset) return;
+    const frame = requestAnimationFrame(() => selectedObjectRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
+    return () => cancelAnimationFrame(frame);
+  }, [assetId, mapVisible, activeSession?.run_id]);
   const activeZone = zones.find(
     (item) => item.properties.candidate_id === zoneId,
   );
@@ -869,6 +875,23 @@ export default function App() {
                     ? "Результаты модели доступны"
                     : "Исходный снимок есть; анализ не выполнен"}
               </div>
+              {activeAsset && (
+                <section className="context-section focus-section object-priority-card" ref={selectedObjectRef} aria-label="Выбранный объект">
+                  <h2>Выбранный объект</h2>
+                  <strong>{assetName(activeAsset)}</strong>
+                  <p>{String(activeAsset.properties.asset_id)} · вероятность воды {formatProbability(activeAsset.properties.p_flood)}</p>
+                  <p>Ожидаемый ущерб {formatRub(activeAsset.properties.expected_loss_rub)}</p>
+                  <button
+                    className={`priority-action${priorityAssetId === String(activeAsset.properties.asset_id) ? " active" : ""}`}
+                    disabled={activeAsset.properties.status === "no_data"}
+                    onClick={() => setPriorityAssetId((current) => current === String(activeAsset.properties.asset_id) ? null : String(activeAsset.properties.asset_id))}
+                  >{priorityAssetId === String(activeAsset.properties.asset_id) ? "✓ Приоритет установлен · сбросить" : "Сделать приоритетом"}</button>
+                  {activeAsset.properties.status === "no_data" && <p>Для объекта нет расчёта, поэтому его нельзя включить в план.</p>}
+                  {priorityAssetId === String(activeAsset.properties.asset_id) && currentPlan?.priority && (
+                    <p className={currentPlan.priority.covered ? "priority-success" : "priority-unavailable"} role="status">{currentPlan.priority.reason}</p>
+                  )}
+                </section>
+              )}
               {scene.status === "observation_only" && renderAnalysisAction(scene)}
               {!scene.bounds && (
                 <p className="inline-error">
@@ -1006,7 +1029,7 @@ export default function App() {
                       }
                       aria-label="Изменить бюджет"
                     />
-                    {activeSession.plan_c_saturation_rub != null && (
+                    {!priorityAssetId && activeSession.plan_c_saturation_rub != null && (
                       <p className="budget-saturation">
                         Свыше ≈ {formatRub(activeSession.plan_c_saturation_rub)} состав плана C не меняется.
                       </p>
@@ -1041,25 +1064,9 @@ export default function App() {
                       Подробный анализ <BarChart3 size={17} />
                     </button>
                   </section>
-                  {(activeAsset || activeZone) && (
+                  {activeZone && (
                     <section className="context-section focus-section">
-                      <h2>
-                        {activeAsset ? "Выбранный объект" : "Выбранная зона"}
-                      </h2>
-                      {activeAsset && (
-                        <>
-                          <strong>{assetName(activeAsset)}</strong>
-                          <p>
-                            {String(activeAsset.properties.asset_id)} ·
-                            вероятность воды{" "}
-                            {formatProbability(activeAsset.properties.p_flood)}
-                          </p>
-                          <p>
-                            Ожидаемый ущерб{" "}
-                            {formatRub(activeAsset.properties.expected_loss_rub)}
-                          </p>
-                        </>
-                      )}
+                      <h2>Выбранная зона</h2>
                       {activeZone && (
                         <>
                           <strong>
