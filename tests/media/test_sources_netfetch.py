@@ -143,3 +143,56 @@ def test_budget_stops_requests(public_dns, monkeypatch):
     f.get("https://www.gdacs.org/x")
     with pytest.raises(BudgetExceeded):
         f.get("https://www.gdacs.org/x")
+
+
+def test_cems_keeps_only_flood_activations_with_centroid(public_dns, monkeypatch):
+    from floodvalue.media.sources import fetch_cems
+    from datetime import UTC, datetime
+    body = (FIXTURES / "cems_activations_2026-09-26.json").read_bytes()
+    calls = []
+    monkeypatch.setattr(netfetch.requests, "get",
+                        lambda url, **k: calls.append(url) or FakeResp(200, body))
+    f = fetcher(hosts=("rapidmapping.emergency.copernicus.eu",))
+    items, _ = fetch_cems(f, {"endpoint": "https://rapidmapping.emergency.copernicus.eu/x/",
+                              "lookback_days": 90}, None, now=datetime(2026, 9, 26, tzinfo=UTC))
+    assert [i["external_id"] for i in items] == ["EMSR927", "EMSR926"]
+    assert len(calls) == 1 and items  # "next" is null in the saved answer
+    nepal = next(i for i in items if i["external_id"] == "EMSR927")
+    assert nepal["structured"]["place"]["geometry"]["coordinates"] == [85.35376299877846, 28.212231792029492]
+    assert nepal["structured"]["report_type"] == "occurred"
+    assert nepal["published_at"] == "2026-08-26T09:53:00Z"
+    assert all("Wildfire" not in i["title"] for i in items)
+
+
+def test_cems_stops_at_activations_older_than_lookback(public_dns, monkeypatch):
+    from floodvalue.media.sources import fetch_cems
+    from datetime import UTC, datetime
+    body = (FIXTURES / "cems_activations_2026-09-26.json").read_bytes()
+    monkeypatch.setattr(netfetch.requests, "get", lambda url, **k: FakeResp(200, body))
+    f = fetcher(hosts=("rapidmapping.emergency.copernicus.eu",))
+    items, _ = fetch_cems(f, {"endpoint": "https://rapidmapping.emergency.copernicus.eu/x/",
+                              "lookback_days": 1}, None, now=datetime(2026, 9, 26, tzinfo=UTC))
+    assert items == []
+
+
+def test_gdelt_config_bounds_timeouts_and_retries(settings, public_dns, monkeypatch):
+    """GDELT answers slowly: its own read timeout, two attempts (each one spends the cycle
+    budget), at least 5 s between requests to its host, and a worldwide multilingual query."""
+    from floodvalue.media.config import load_sources
+    from floodvalue.media.pipeline import make_fetcher
+    cfg = next(s for s in load_sources() if s["source_id"] == "gdelt_floods")["config"]
+    f = make_fetcher({"config_json": json.dumps(cfg)}, settings, Budget(20))
+    assert f.timeout[1] >= 30 and f.attempts == 2
+    assert f.min_interval_s["api.gdeltproject.org"] >= 5
+    for word in ("flood", "наводнение", "inondation", "inundación", "Hochwasser", "banjir"):
+        assert word in cfg["query"]
+    calls = []
+
+    def slow(*a, **k):
+        calls.append(k["timeout"])
+        raise requests.ReadTimeout("slow")
+    monkeypatch.setattr(netfetch.requests, "get", slow)
+    f.sleep = lambda s: None
+    with pytest.raises(FetchError, match="сеть"):
+        f.get("https://api.gdeltproject.org/api/v2/doc/doc")
+    assert len(calls) == 2 and f.budget.used == 2 and calls[0][1] >= 30

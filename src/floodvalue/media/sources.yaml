@@ -5,6 +5,30 @@
 # секреты — только в переменных окружения сервера (.env.example).
 # kind: news — публикации СМИ; bulletin — специализированные сводки (не журналистика).
 sources:
+  - source_id: cems_floods
+    name: "Copernicus EMS — активации спутникового картирования паводков"
+    kind: bulletin
+    adapter: cems
+    url: https://rapidmapping.emergency.copernicus.eu/
+    enabled: true
+    terms_status: checked
+    terms_url: https://emergency.copernicus.eu/mapping/ems/terms-and-conditions-use-products
+    terms_checked: "2026-09-26"
+    # Политика данных Copernicus — Регламент (ЕС) № 1159/2013: «free, full and open access»
+    # к данным и информации сервисов Copernicus, с указанием источника. Атрибуция EMS:
+    # «© European Union, Copernicus Emergency Management Service». Храним название активации,
+    # страны, время и центроид — метаданные публичного списка активаций.
+    attribution: "© European Union, Copernicus Emergency Management Service"
+    content_storage_policy: summary
+    poll_interval_s: 1800
+    config:
+      endpoint: https://rapidmapping.emergency.copernicus.eu/backend/dashboard-api/public-activations-info/
+      allowed_hosts: [rapidmapping.emergency.copernicus.eu]
+      min_interval_s: 2
+      lookback_days: 90
+      page_size: 100
+      max_pages: 3
+
   - source_id: gdacs_floods
     name: "GDACS — сводки о наводнениях"
     kind: bulletin
@@ -45,7 +69,12 @@ sources:
       endpoint: https://api.gdeltproject.org/api/v2/doc/doc
       allowed_hosts: [api.gdeltproject.org]
       min_interval_s: 6
-      query: '(flood OR flooding OR "flash flood" OR наводнение OR паводок OR подтопление)'
+      # Каждая повторная попытка — отдельный запрос из бюджета цикла, поэтому обрыв по таймауту
+      # съедал 3–4 запроса. Две попытки по 30 с, пауза между ними не меньше min_interval_s.
+      read_timeout_s: 30
+      attempts: 2
+      # Весь мир: слово «паводок» на основных языках публикаций GDELT; sourcelang не задан.
+      query: '(flood OR flooding OR "flash flood" OR inundation OR наводнение OR паводок OR подтопление OR inondation OR inondations OR inundación OR inundaciones OR Überschwemmung OR Hochwasser OR alluvione OR enchente OR inundação OR banjir OR 洪水 OR فيضان OR sel OR taşkın)'
       maxrecords: 100
       initial_hours: 24
       overlap_minutes: 30
