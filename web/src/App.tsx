@@ -758,6 +758,7 @@ export default function App() {
           inert={!mapVisible}
         >
           <MapPanel
+            assetLabel={assetName}
             scenes={scenes}
             scene={scene}
             session={activeSession}
