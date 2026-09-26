@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from floodvalue.contracts import load_run_config
+from floodvalue.contracts.kopeck import kopeck_sum, ok_rows
 from floodvalue.paths import data_dir, output_dir
 from floodvalue.procurement import strategies, zones
 from floodvalue.procurement.pricing import load_pricing
@@ -202,7 +203,7 @@ def _context(run_dir: Path) -> dict[str, Any]:
     catalog = zones.build_catalog(assets, bounds, decision_at, pricing_cfg, loss=loss,
                                   uncertainty=unc, transform=transform,
                                   decision_deadline=deadline)
-    ok_ids = {r["asset_id"] for r in loss if r["status"] == "ok"}
+    ok_ids = {r["asset_id"] for r in ok_rows(loss)}
     ok_assets = [a for a in assets if a["asset_id"] in ok_ids]
     cov = zones.coverage(catalog, ok_assets, deadline)
     excluded = {f["properties"]["candidate_id"]: r for f in catalog["features"]
@@ -275,7 +276,7 @@ def _cell(v: Any) -> str:
     if isinstance(v, Decimal):
         return f"{v:f}"
     if isinstance(v, float):
-        return repr(v)
+        return repr(v) if math.isfinite(v) else ""  # contract: empty, not "nan" (#235)
     return str(v)
 
 
@@ -326,8 +327,7 @@ def write_outputs(run_dir: Path, budget_rub: float) -> dict[str, Any]:
                                   deadline_hours=SENS_DEADLINE_HOURS)
     _write_csv(run_dir / "procurement_sensitivity.csv", SENS_FIELDS, sens)
     # exact sum of the kopeck EL of asset_loss.csv (#127), same as coverage_share in the CSV
-    denom = float(sum((Decimal(r["expected_loss_rub"]) for r in ctx["loss"] if r["status"] == "ok"),
-                      Decimal(0)))
+    denom = kopeck_sum(r["expected_loss_rub"] for r in ok_rows(ctx["loss"]))
     kinds: dict[str, int] = {}
     for f in ctx["catalog"]["features"]:
         k = f["properties"]["zone_kind"]

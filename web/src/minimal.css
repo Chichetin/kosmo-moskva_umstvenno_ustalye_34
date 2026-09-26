@@ -30,15 +30,15 @@ a:focus-visible,
 input:focus-visible,
 [tabindex]:focus-visible {
   outline: 2px solid #c7d4da;
-  outline-offset: 3px;
+  outline-offset: 0.1875rem;
 }
 
 .topbar {
   position: absolute;
   inset: 0 0 auto;
-  height: 56px;
-  padding: 0 42px;
-  gap: 24px;
+  height: 3.5rem;
+  padding: 0 2.625rem;
+  gap: 1.5rem;
   background: transparent;
   border: 0;
   z-index: 10;
@@ -50,23 +50,23 @@ input:focus-visible,
   top: 0;
   left: 0;
   right: 0;
-  height: 128px;
+  height: 8rem;
   background: linear-gradient(180deg, #050607e8 0%, #050607a8 48%, transparent 100%);
   pointer-events: none;
   z-index: -1;
 }
 
 .brand {
-  gap: 10px;
+  gap: 0.625rem;
   color: #eef1f2;
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 650;
   letter-spacing: -0.035em;
 }
 
 .brand-mark {
-  width: 24px;
-  height: 24px;
+  width: 1.5rem;
+  height: 1.5rem;
   color: #e6ecee;
   background: none;
   border: 0;
@@ -78,31 +78,31 @@ input:focus-visible,
 }
 
 .top-nav {
-  gap: 30px;
+  gap: 1.875rem;
 }
 
 .topbar-map .top-nav {
   position: absolute;
-  top: 77px;
-  left: calc(50% + (clamp(30px, 3.6vw, 58px) + 320px) / 2);
+  top: 4.8125rem;
+  left: calc(50% + (clamp(1.875rem, 3.6vw, 3.625rem) + 20rem) / 2);
   height: auto;
   transform: translateX(-50%);
 }
 
 .topbar-analysis .top-nav {
-  margin-left: 20px;
+  margin-left: 1.25rem;
 }
 
 .top-nav button,
 .top-nav button.active {
   position: relative;
-  height: 34px;
+  height: 2.125rem;
   padding: 0;
   border: 0;
   border-radius: var(--radius-panel);
   background: none;
   color: #838e94;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 550;
   transition: color 200ms ease;
 }
@@ -117,7 +117,7 @@ input:focus-visible,
   position: absolute;
   left: 0;
   right: 0;
-  bottom: -5px;
+  bottom: -0.3125rem;
   height: 1px;
   background: #c8d3d7;
 }
@@ -128,13 +128,13 @@ input:focus-visible,
 
 .top-export,
 .top-export:hover {
-  height: 34px;
+  height: 2.125rem;
   padding: 0;
   border: 0;
   border-radius: var(--radius-panel);
   background: none;
   color: #b7c1c5;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 540;
   transition: color 200ms ease;
 }
@@ -151,18 +151,18 @@ input:focus-visible,
 .export-error {
   position: fixed;
   z-index: 60;
-  top: 64px;
-  right: 24px;
+  top: 4rem;
+  right: 1.5rem;
   display: flex;
   align-items: center;
-  gap: 16px;
-  max-width: min(420px, calc(100vw - 32px));
-  padding: 12px 14px;
+  gap: 1rem;
+  max-width: min(26.25rem, calc(100vw - 2rem));
+  padding: 0.75rem 0.875rem;
   border: 0;
   border-radius: var(--radius-panel);
   background: #241d19;
   color: #e4c4aa;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .export-error button {
@@ -217,22 +217,22 @@ input:focus-visible,
 .map-unavailable {
   background: #08090b;
   color: #b0b9bd;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .map-top-left {
-  left: clamp(30px, 3.6vw, 58px);
-  top: clamp(160px, calc(13vh + 56px), 182px);
+  left: clamp(1.875rem, 3.6vw, 3.625rem);
+  top: clamp(10rem, calc(13vh + 3.5rem), 11.375rem);
   bottom: auto;
-  width: 320px;
+  width: 20rem;
   display: block;
   z-index: 4;
 }
 
 .search-panel {
   height: auto;
-  max-height: min(540px, calc(100vh - 225px));
-  padding: 0 20px;
+  max-height: min(33.75rem, calc(100vh - 14.0625rem));
+  padding: 0 1.25rem;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -247,13 +247,13 @@ input:focus-visible,
 
 .scene-library-head {
   flex: none;
-  padding: 22px 0 16px;
+  padding: 1.375rem 0 1rem;
 }
 
 .scene-library-head h1 {
   margin: 0;
   color: #f0f3f4;
-  font-size: 22px;
+  font-size: 1.375rem;
   line-height: 1.25;
   font-weight: 610;
   letter-spacing: -0.035em;
@@ -261,8 +261,8 @@ input:focus-visible,
 
 .search-box {
   flex: none;
-  height: 44px;
-  margin: 0 0 12px;
+  height: 2.75rem;
+  margin: 0 0 0.75rem;
   padding: 0;
   border: 0;
   border-bottom: 1px solid #ffffff36;
@@ -277,7 +277,7 @@ input:focus-visible,
 
 .search-box input {
   color: #e8edef;
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .search-box input::placeholder {
@@ -286,14 +286,14 @@ input:focus-visible,
 
 .search-toggle {
   flex: none;
-  min-height: 46px;
+  min-height: 2.875rem;
   padding: 0;
   border: 0;
   background: none;
   color: #c4cdd1;
   justify-content: flex-start;
-  gap: 8px;
-  font-size: 14px;
+  gap: 0.5rem;
+  font-size: 0.875rem;
   font-weight: 560;
 }
 
@@ -317,8 +317,8 @@ input:focus-visible,
   min-height: 0;
   max-height: none;
   overflow: auto;
-  margin: 0 -10px;
-  padding: 2px 10px 14px;
+  margin: 0 -0.625rem;
+  padding: 2px 0.625rem 0.875rem;
   border: 0;
   scrollbar-width: none;
 }
@@ -329,11 +329,11 @@ input:focus-visible,
 
 .scene-results > button {
   position: relative;
-  width: calc(100% + 20px);
-  min-height: 70px;
-  gap: 10px;
-  margin: 0 -10px;
-  padding: 11px 10px;
+  width: calc(100% + 1.25rem);
+  min-height: 4.375rem;
+  gap: 0.625rem;
+  margin: 0 -0.625rem;
+  padding: 0.6875rem 0.625rem;
   border: 0;
   border-radius: var(--radius);
   color: #e4e9eb;
@@ -343,8 +343,8 @@ input:focus-visible,
 .scene-results > button::after {
   content: "";
   position: absolute;
-  left: 10px;
-  right: 10px;
+  left: 0.625rem;
+  right: 0.625rem;
   bottom: 0;
   height: 1px;
   background: #ffffff14;
@@ -362,7 +362,7 @@ input:focus-visible,
 
 .scene-results strong {
   color: #e8edef;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 610;
   white-space: nowrap;
   overflow: hidden;
@@ -372,16 +372,16 @@ input:focus-visible,
 .scene-results small {
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  margin-top: 5px;
+  gap: 0.375rem;
+  margin-top: 0.3125rem;
   color: #96a2a8;
-  font: 13px/1.4 "Science Gothic", system-ui, sans-serif;
+  font: 0.8125rem/1.4 "Science Gothic", system-ui, sans-serif;
 }
 
 .scene-results small code {
   display: none;
   color: #8a969c;
-  font: 11px ui-monospace, SFMono-Regular, Consolas, monospace;
+  font: 0.6875rem ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
 .scene-results > button:hover code,
@@ -398,7 +398,7 @@ input:focus-visible,
   border-radius: var(--radius);
   background: none;
   color: #d5e3ea;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-style: normal;
   font-weight: 650;
 }
@@ -406,16 +406,16 @@ input:focus-visible,
 .scene-results p,
 .search-hint {
   color: #929fa5;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.55;
-  padding: 10px 0;
+  padding: 0.625rem 0;
 }
 
 .map-top-center,
 .scene-mode .map-top-center {
   top: auto;
-  bottom: 26px;
-  left: calc(50% + (clamp(30px, 3.6vw, 58px) + 320px) / 2);
+  bottom: 1.625rem;
+  left: calc(50% + (clamp(1.875rem, 3.6vw, 3.625rem) + 20rem) / 2);
   right: auto;
   transform: translateX(-50%);
   z-index: 5;
@@ -426,7 +426,7 @@ input:focus-visible,
 }
 
 .basemap-switch {
-  gap: 26px;
+  gap: 1.625rem;
   padding: 0;
   border: 0;
   border-radius: var(--radius-panel);
@@ -439,11 +439,11 @@ input:focus-visible,
 .basemap-switch button {
   position: relative;
   min-width: 0;
-  height: 40px;
-  padding: 0 0 6px;
+  height: 2.5rem;
+  padding: 0 0 0.375rem;
   border-radius: var(--radius-panel);
   color: #929da2;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 550;
 }
 
@@ -471,8 +471,8 @@ input:focus-visible,
 }
 
 .maplibregl-ctrl-bottom-right {
-  right: 16px;
-  bottom: 16px;
+  right: 1rem;
+  bottom: 1rem;
 }
 
 .maplibregl-ctrl-group,
@@ -484,8 +484,8 @@ input:focus-visible,
 }
 
 .maplibregl-ctrl-group button {
-  width: 40px;
-  height: 40px;
+  width: 2.5rem;
+  height: 2.5rem;
 }
 
 .maplibregl-ctrl-attrib.maplibregl-compact {
@@ -493,7 +493,7 @@ input:focus-visible,
 }
 
 .maplibregl-ctrl-attrib.maplibregl-compact-show {
-  max-width: min(440px, calc(100vw - 32px));
+  max-width: min(27.5rem, calc(100vw - 2rem));
   background: #171b1e !important;
   color: #b9c2c5 !important;
   line-height: 1.45;
@@ -517,45 +517,45 @@ input:focus-visible,
 }
 
 .map-preview {
-  max-width: 260px;
-  padding: 12px 15px;
+  max-width: 16.25rem;
+  padding: 0.75rem 0.9375rem;
 }
 
 .map-preview strong {
   padding: 0;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 590;
 }
 
 .map-preview span {
-  padding: 3px 0 0;
+  padding: 0.1875rem 0 0;
   color: #a8b3b7;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .map-preview small {
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .scene-mode .map-top-left {
-  top: 158px;
+  top: 9.875rem;
   bottom: auto;
 }
 
 .scene-mode .search-panel {
   height: auto;
-  max-height: min(380px, calc(100vh - 180px));
+  max-height: min(23.75rem, calc(100vh - 11.25rem));
 }
 
 .scene-mode .scene-results {
-  max-height: 250px;
+  max-height: 15.625rem;
 }
 
 .context-panel {
-  top: 80px;
-  right: 28px;
-  bottom: 24px;
-  width: 372px;
+  top: 5rem;
+  right: 1.75rem;
+  bottom: 1.5rem;
+  width: 23.25rem;
   border: 0;
   border-radius: var(--radius-panel);
   background: #171a1d;
@@ -567,31 +567,31 @@ input:focus-visible,
 }
 
 .context-heading {
-  padding: 24px 22px 18px;
+  padding: 1.5rem 1.375rem 1.125rem;
 }
 
 .context-heading small {
   color: #9eaaaf;
-  font: 13px "Science Gothic", system-ui, sans-serif;
+  font: 0.8125rem "Science Gothic", system-ui, sans-serif;
   font-weight: 600;
   letter-spacing: 0.07em;
 }
 
 .context-heading h1 {
-  margin: 10px 0 8px;
-  font-size: 24px;
+  margin: 0.625rem 0 0.5rem;
+  font-size: 1.5rem;
   font-weight: 610;
   letter-spacing: -0.04em;
 }
 
 .context-heading p {
   color: #a4b0b5;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .context-heading button {
-  width: 34px;
-  height: 34px;
+  width: 2.125rem;
+  height: 2.125rem;
   border: 0;
   border-radius: var(--radius);
   background: #ffffff0d;
@@ -599,32 +599,32 @@ input:focus-visible,
 }
 
 .scene-preview {
-  height: 144px;
+  height: 9rem;
 }
 
 .scene-message {
-  margin: 16px 22px;
+  margin: 1rem 1.375rem;
   padding: 0;
   border: 0;
   background: none;
   color: #bcc7cb;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .context-section {
-  padding: 22px;
+  padding: 1.375rem;
   border-top-color: #ffffff12;
 }
 
 .context-section h2 {
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 610;
 }
 
 .layer-row {
-  gap: 11px;
-  padding: 10px 0;
-  font-size: 15px;
+  gap: 0.6875rem;
+  padding: 0.625rem 0;
+  font-size: 0.9375rem;
 }
 
 .layer-row input,
@@ -634,44 +634,44 @@ input:focus-visible,
 }
 
 .budget-saturation {
-  margin: 7px 0 14px;
+  margin: 0.4375rem 0 0.875rem;
   color: #aab5ba;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.4;
 }
 
 .layer-row small,
 .context-foot {
   color: #929da2;
-  font-size: 12.5px;
+  font-size: 0.7812rem;
 }
 
 /* Scene-panel controls whose base sizes live in app.css: one step up with the rest of the globe screen. */
 .opacity-control,
 .budget-field,
 .inline-error {
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .prob-legend {
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .budget-field input {
-  font-size: 20px;
+  font-size: 1.25rem;
 }
 
 .plan-summary,
 .focus-section p {
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .analysis-link {
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .focus-section strong {
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 .budget-field input {
@@ -693,20 +693,20 @@ input:focus-visible,
 }
 
 .reopen-panel {
-  top: 80px;
-  right: 28px;
+  top: 5rem;
+  right: 1.75rem;
   border: 1px solid #ffffff20;
   border-radius: var(--radius);
   background: #171a1d;
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .context-heading code {
-  font-size: 12.5px;
+  font-size: 0.7812rem;
 }
 
 .map-issue {
-  font-size: 14px;
+  font-size: 0.875rem;
   border: 0;
   border-radius: var(--radius-panel);
   background: #2b2520;
@@ -721,16 +721,16 @@ input:focus-visible,
 
 .analysis-head,
 .analysis-body {
-  max-width: 1260px;
+  max-width: 78.75rem;
 }
 
 .analysis-head {
-  padding: 98px 32px 30px;
-  gap: 25px;
+  padding: 6.125rem 2rem 1.875rem;
+  gap: 1.5625rem;
 }
 
 .analysis-head .world-locator {
-  flex: 0 0 220px;
+  flex: 0 0 13.75rem;
 }
 
 .analysis-head > button,
@@ -739,19 +739,19 @@ input:focus-visible,
   border-radius: var(--radius);
   background: #171b1e;
   color: #dce3e6;
-  padding: 10px 13px;
+  padding: 0.625rem 0.8125rem;
 }
 
 .analysis-head span {
   color: #93a0a5;
-  font: 11px "Science Gothic", system-ui, sans-serif;
+  font: 0.6875rem "Science Gothic", system-ui, sans-serif;
   font-weight: 600;
   letter-spacing: 0.08em;
 }
 
 .analysis-head h1 {
-  margin: 7px 0;
-  font-size: 24px;
+  margin: 0.4375rem 0;
+  font-size: 1.5rem;
   font-weight: 620;
 }
 
@@ -760,13 +760,13 @@ input:focus-visible,
 }
 
 .analysis-body {
-  padding: 0 32px 50px;
+  padding: 0 2rem 3.125rem;
 }
 
 .analysis-metrics {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
-  margin-bottom: 28px;
+  margin-bottom: 1.75rem;
   border: 0;
   border-bottom: 1px solid #ffffff16;
   border-radius: var(--radius-panel);
@@ -775,17 +775,17 @@ input:focus-visible,
 }
 
 .analysis-metrics div {
-  padding: 18px 18px 25px 0;
+  padding: 1.125rem 1.125rem 1.5625rem 0;
   background: none;
 }
 
 .analysis-metrics span {
   color: #9ba8ad;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .analysis-metrics strong {
-  font-size: 24px;
+  font-size: 1.5rem;
   font-weight: 620;
   font-variant-numeric: tabular-nums;
 }
@@ -796,12 +796,12 @@ input:focus-visible,
 }
 
 .analysis-columns {
-  grid-template-columns: minmax(0, 1.36fr) minmax(340px, 0.82fr);
-  gap: 22px;
+  grid-template-columns: minmax(0, 1.36fr) minmax(21.25rem, 0.82fr);
+  gap: 1.375rem;
 }
 
 .analysis-stack {
-  gap: 18px;
+  gap: 1.125rem;
 }
 
 .analysis-card {
@@ -817,7 +817,7 @@ input:focus-visible,
 }
 
 .card-title {
-  padding: 21px 22px 17px;
+  padding: 1.3125rem 1.375rem 1.0625rem;
   border: 0;
 }
 
@@ -829,7 +829,7 @@ input:focus-visible,
 }
 
 .card-title h2 {
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 610;
 }
 
@@ -839,8 +839,8 @@ input:focus-visible,
 
 .analysis-budget {
   display: grid;
-  gap: 10px;
-  padding: 0 22px 19px;
+  gap: 0.625rem;
+  padding: 0 1.375rem 1.1875rem;
   border-bottom: 1px solid #ffffff18;
 }
 
@@ -848,9 +848,9 @@ input:focus-visible,
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 0.75rem;
   color: #bac5c9;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .analysis-budget label span {
@@ -858,8 +858,8 @@ input:focus-visible,
 }
 
 .analysis-budget input[type="number"] {
-  width: 116px;
-  padding: 7px 9px;
+  width: 7.25rem;
+  padding: 0.4375rem 0.5625rem;
   border: 1px solid #ffffff2d;
   border-radius: var(--radius);
   background: #0d1012;
@@ -877,55 +877,55 @@ input:focus-visible,
 .analysis-budget p {
   margin: 0;
   color: #a4b0b5;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.4;
 }
 
 .analysis-plan-loading {
-  margin: 16px 22px;
+  margin: 1rem 1.375rem;
   color: #aeb9be;
 }
 
 .analysis-plan-totals {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 15px 18px;
-  padding: 20px 22px 13px;
+  gap: 0.9375rem 1.125rem;
+  padding: 1.25rem 1.375rem 0.8125rem;
 }
 
 .analysis-plan-totals div {
   display: grid;
-  gap: 4px;
+  gap: 0.25rem;
 }
 
 .analysis-plan-totals span {
   color: #a3afb4;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .analysis-plan-totals strong {
   color: #edf2f3;
-  font-size: 18px;
+  font-size: 1.125rem;
   font-variant-numeric: tabular-nums;
 }
 
 .analysis-compare-title {
-  margin: 12px 22px 4px;
+  margin: 0.75rem 1.375rem 0.25rem;
   color: #c4cdd1;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 590;
 }
 
 th {
   background: none;
   color: #98a5aa;
-  padding: 12px 18px;
+  padding: 0.75rem 1.125rem;
 }
 
 td {
   border-top-color: #ffffff11;
   color: #dce4e7;
-  padding: 14px 18px;
+  padding: 0.875rem 1.125rem;
 }
 
 tbody tr:hover,
@@ -956,33 +956,33 @@ tbody tr.selected,
   color: #e6ebed;
 }
 
-.analysis-screen .card-title h2 { font-size: 19px; }
-.analysis-screen .card-title > span { display: inline; font-size: 14px; color: #9ba8ad; }
+.analysis-screen .card-title h2 { font-size: 1.1875rem; }
+.analysis-screen .card-title > span { display: inline; font-size: 0.875rem; color: #9ba8ad; }
 .analysis-screen .card-title { align-items: center; }
-.analysis-screen th { font-size: 14px; }
-.analysis-screen td { font-size: 15px; }
-.analysis-screen td:first-child small { font-size: 13px; }
-.analysis-screen .card-foot { font-size: 14px; line-height: 1.5; }
+.analysis-screen th { font-size: 0.875rem; }
+.analysis-screen td { font-size: 0.9375rem; }
+.analysis-screen td:first-child small { font-size: 0.8125rem; }
+.analysis-screen .card-foot { font-size: 0.875rem; line-height: 1.5; }
 .analysis-screen .strategy strong,
-.analysis-screen .zone-list b { font-size: 15px; }
+.analysis-screen .zone-list b { font-size: 0.9375rem; }
 .analysis-screen .strategy small,
-.analysis-screen .zone-list small { font-size: 13px; }
-.analysis-screen .zone-list strong { font-size: 15px; }
-.analysis-screen .zone-list p { font-size: 14px; }
-.analysis-screen .analysis-budget p { font-size: 13px; }
-.analysis-screen .analysis-head h1 { font-size: 28px; }
+.analysis-screen .zone-list small { font-size: 0.8125rem; }
+.analysis-screen .zone-list strong { font-size: 0.9375rem; }
+.analysis-screen .zone-list p { font-size: 0.875rem; }
+.analysis-screen .analysis-budget p { font-size: 0.8125rem; }
+.analysis-screen .analysis-head h1 { font-size: 1.75rem; }
 .analysis-screen .analysis-head p,
-.analysis-screen .analysis-head > button { font-size: 14px; }
+.analysis-screen .analysis-head > button { font-size: 0.875rem; }
 .analysis-location-search input,
-.analysis-location-list strong { font-size: 14px; }
+.analysis-location-list strong { font-size: 0.875rem; }
 .analysis-location-list small,
-.analysis-location-group-toggle span { font-size: 12px; }
-.analysis-location-list em { font-size: 12px; }
+.analysis-location-group-toggle span { font-size: 0.75rem; }
+.analysis-location-list em { font-size: 0.75rem; }
 
 .asset-sort {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 0.4375rem;
   border: 0;
   padding: 0;
   background: transparent;
@@ -991,22 +991,22 @@ tbody tr.selected,
   text-align: left;
   cursor: pointer;
 }
-.asset-sort span { color: #c1ced3; font-size: 16px; }
+.asset-sort span { color: #c1ced3; font-size: 1rem; }
 .asset-sort:hover,
 .asset-sort:focus-visible { color: #f4f8fa; }
-.analysis-screen tbody tr.selected { background: #d8e9f217; box-shadow: inset 3px 0 #b8d0dc; }
+.analysis-screen tbody tr.selected { background: #d8e9f217; box-shadow: inset 0.1875rem 0 #b8d0dc; }
 .analysis-screen tbody tr:focus-visible { outline: 2px solid #d6e7ef; outline-offset: -2px; }
-.analysis-explain { margin: 0 0 8px; padding: 0 0 12px; border-bottom: 1px solid #ffffff16; color: #aebbc1; font-size: 14px; }
+.analysis-explain { margin: 0 0 0.5rem; padding: 0 0 0.75rem; border-bottom: 1px solid #ffffff16; color: #aebbc1; font-size: 0.875rem; }
 .analysis-explain summary { width: fit-content; cursor: pointer; color: #c4d4dc; }
-.analysis-explain p { max-width: 66ch; margin: 8px 0 0; line-height: 1.45; }
+.analysis-explain p { max-width: 66ch; margin: 0.5rem 0 0; line-height: 1.45; }
 .asset-detail,
-.zone-detail { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
-.asset-detail div { display: grid; gap: 4px; }
+.zone-detail { display: flex; align-items: center; justify-content: space-between; gap: 1.125rem; }
+.asset-detail div { display: grid; gap: 0.25rem; }
 .asset-detail strong { color: #eef4f6; }
 .asset-detail button,
 .zone-detail button {
   flex: none;
-  padding: 8px 11px;
+  padding: 0.5rem 0.6875rem;
   border: 1px solid #ffffff3d;
   border-radius: var(--radius);
   background: #1c252a;
@@ -1017,27 +1017,27 @@ tbody tr.selected,
 .asset-detail button:hover,
 .zone-detail button:hover { background: #2a3a43; }
 .analysis-screen .strategy > div { flex: 1; min-width: 0; }
-.analysis-screen .strategy-values { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 7px; }
-.analysis-screen .strategy-values span { display: flex; gap: 6px; color: #9cabb2; font-size: 13px; }
-.analysis-screen .strategy-values strong { color: #e3ebee; font-size: 13px; font-variant-numeric: tabular-nums; }
+.analysis-screen .strategy-values { display: flex; flex-wrap: wrap; gap: 0.25rem 1.125rem; margin-top: 0.4375rem; }
+.analysis-screen .strategy-values span { display: flex; gap: 0.375rem; color: #9cabb2; font-size: 0.8125rem; }
+.analysis-screen .strategy-values strong { color: #e3ebee; font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
 .analysis-screen .strategy.overbudget { opacity: .68; }
-.analysis-screen .strategy small { margin-top: 7px; }
+.analysis-screen .strategy small { margin-top: 0.4375rem; }
 .analysis-screen .zone-cost { display: grid; justify-items: end; flex: none; }
-.analysis-screen .zone-cost small { margin-top: 3px; }
-.analysis-screen .zone-list button { gap: 18px; }
+.analysis-screen .zone-cost small { margin-top: 0.1875rem; }
+.analysis-screen .zone-list button { gap: 1.125rem; }
 
 @media (min-width: 1800px) {
-  .analysis-shell { max-width: 1840px; grid-template-columns: 300px minmax(0, 1fr); gap: 34px; }
-  .analysis-screen .analysis-head h1 { font-size: 34px; }
-  .analysis-screen .analysis-metrics strong { font-size: 28px; }
-  .analysis-screen .card-title h2 { font-size: 21px; }
-  .analysis-screen td { font-size: 16px; }
+  .analysis-shell { max-width: 115rem; grid-template-columns: 18.75rem minmax(0, 1fr); gap: 2.125rem; }
+  .analysis-screen .analysis-head h1 { font-size: 2.125rem; }
+  .analysis-screen .analysis-metrics strong { font-size: 1.75rem; }
+  .analysis-screen .card-title h2 { font-size: 1.3125rem; }
+  .analysis-screen td { font-size: 1rem; }
 }
 
 .zone-tabs {
   width: max-content;
-  margin: 0 18px 12px;
-  padding: 3px;
+  margin: 0 1.125rem 0.75rem;
+  padding: 0.1875rem;
   border: 0;
   border-radius: var(--radius);
   background: #0f1214;
@@ -1049,7 +1049,7 @@ tbody tr.selected,
   border-radius: var(--radius);
   background: none;
   color: #aeb9be;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .zone-tabs button.active {
@@ -1058,18 +1058,18 @@ tbody tr.selected,
 }
 
 .sensitivity {
-  margin-top: 20px;
+  margin-top: 1.25rem;
 }
 
 .analysis-shell {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: 264px minmax(0, 1fr);
-  gap: 26px;
-  max-width: 1600px;
+  grid-template-columns: 16.5rem minmax(0, 1fr);
+  gap: 1.625rem;
+  max-width: 100rem;
   margin: 0 auto;
-  padding: 0 30px;
+  padding: 0 1.875rem;
 }
 
 .analysis-content {
@@ -1085,18 +1085,17 @@ tbody tr.selected,
 
 .analysis-shell .analysis-empty {
   max-width: none;
-  margin: 12px 0;
+  margin: 0.75rem 0;
 }
 
 .analysis-locations {
   position: sticky;
-  top: 80px;
+  top: 5rem;
   align-self: start;
   display: flex;
   flex-direction: column;
-  /* vh inside a zoomed element is multiplied by the zoom: divide it back out. */
-  height: calc(100vh / var(--ui-zoom) - 106px);
-  margin-top: 96px;
+  height: calc(100vh - 6.625rem);
+  margin-top: 6rem;
   overflow: hidden;
   border: 0;
   border-radius: var(--radius-panel);
@@ -1107,27 +1106,27 @@ tbody tr.selected,
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  padding: 18px 18px 11px;
+  padding: 1.125rem 1.125rem 0.6875rem;
 }
 
 .analysis-locations-head h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 620;
 }
 
 .analysis-locations-head span {
   color: #92a0a5;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
 
 .analysis-location-search {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 0 18px 6px;
-  padding: 8px 0;
+  gap: 0.5rem;
+  margin: 0 1.125rem 0.375rem;
+  padding: 0.5rem 0;
   border-bottom: 1px solid #ffffff35;
   color: #a5b1b6;
 }
@@ -1140,7 +1139,7 @@ tbody tr.selected,
   outline: 0;
   background: none;
   color: #e9eff1;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .analysis-location-search input::placeholder {
@@ -1154,13 +1153,13 @@ tbody tr.selected,
 .analysis-location-list {
   overflow-y: auto;
   scrollbar-width: thin;
-  padding: 3px 8px 12px;
+  padding: 0.1875rem 0.5rem 0.75rem;
 }
 
 .analysis-location-list > p {
-  margin: 14px 10px;
+  margin: 0.875rem 0.625rem;
   color: #a4b0b5;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .analysis-location-group-toggle {
@@ -1168,7 +1167,7 @@ tbody tr.selected,
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 12px 10px;
+  padding: 0.75rem 0.625rem;
   border: 0;
   border-bottom: 1px solid #ffffff14;
   background: none;
@@ -1184,9 +1183,9 @@ tbody tr.selected,
 .analysis-location-group-toggle span {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   color: #96a6ad;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1198,7 +1197,7 @@ tbody tr.selected,
   display: grid;
   justify-items: start;
   width: 100%;
-  padding: 10px 10px 10px 18px;
+  padding: 0.625rem 0.625rem 0.625rem 1.125rem;
   border: 0;
   border-bottom: 1px solid #ffffff12;
   border-radius: var(--radius);
@@ -1213,21 +1212,21 @@ tbody tr.selected,
 }
 
 .analysis-location-list strong {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 590;
 }
 
 .analysis-location-list small {
-  margin-top: 5px;
+  margin-top: 0.3125rem;
   color: #9aa8ad;
-  font-size: 11px;
+  font-size: 0.6875rem;
   overflow-wrap: anywhere;
 }
 
 .analysis-location-list em {
-  margin-top: 6px;
+  margin-top: 0.375rem;
   color: #a7c7d7;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-style: normal;
 }
 
@@ -1244,9 +1243,9 @@ tbody tr.selected,
 .analysis-job {
   display: grid;
   justify-items: start;
-  gap: 8px;
-  margin: 14px 0;
-  font-size: 14px;
+  gap: 0.5rem;
+  margin: 0.875rem 0;
+  font-size: 0.875rem;
 }
 
 .analysis-job p {
@@ -1256,16 +1255,16 @@ tbody tr.selected,
 /* Budget asked before the run (plan C of the bundle is built for it). */
 .analysis-budget-ask {
   display: grid;
-  gap: 6px;
+  gap: 0.375rem;
   width: 100%;
-  max-width: 420px;
+  max-width: 26.25rem;
   color: #bac5c9;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .analysis-budget-ask input {
   width: 100%;
-  padding: 8px 10px;
+  padding: 0.5rem 0.625rem;
   border: 1px solid #ffffff2d;
   border-radius: var(--radius);
   background: #0d1012;
@@ -1276,26 +1275,26 @@ tbody tr.selected,
 
 .analysis-budget-ask small {
   color: #9aa7ad;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.45;
 }
 
 .analysis-unavailable {
-  margin: 12px 0;
+  margin: 0.75rem 0;
   color: #aebbc1;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 
 .analysis-start,
 .analysis-refresh {
-  min-height: 40px;
-  padding: 9px 14px;
+  min-height: 2.5rem;
+  padding: 0.5625rem 0.875rem;
   border: 1px solid #b5cbd644;
   border-radius: var(--radius);
   background: #25343c;
   color: #e9f4f8;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
 }
 
@@ -1318,20 +1317,20 @@ tbody tr.selected,
 
 .analysis-ready-notice {
   position: fixed;
-  right: 24px;
-  bottom: 24px;
+  right: 1.5rem;
+  bottom: 1.5rem;
   z-index: 30;
   display: flex;
   align-items: center;
-  gap: 14px;
-  max-width: calc(100vw - 48px);
-  padding: 12px 14px;
+  gap: 0.875rem;
+  max-width: calc(100vw - 3rem);
+  padding: 0.75rem 0.875rem;
   border: 0;
   border-radius: var(--radius-panel);
   background: #11191df2;
   box-shadow: none;
   color: #edf3f5;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .analysis-ready-notice button {
@@ -1339,7 +1338,7 @@ tbody tr.selected,
   border: 0;
   background: none;
   color: #b9d8e7;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 650;
 }
 
@@ -1351,9 +1350,9 @@ tbody tr.selected,
 
 @media (max-width: 1100px) {
   .analysis-shell {
-    grid-template-columns: 220px minmax(0, 1fr);
-    gap: 18px;
-    padding: 0 20px;
+    grid-template-columns: 13.75rem minmax(0, 1fr);
+    gap: 1.125rem;
+    padding: 0 1.25rem;
   }
   .analysis-shell .analysis-head {
     flex-wrap: wrap;
@@ -1365,10 +1364,10 @@ tbody tr.selected,
   }
   .topbar-map .top-nav,
   .map-top-center {
-    left: calc(50% + (clamp(30px, 3.6vw, 58px) + 320px) / 2);
+    left: calc(50% + (clamp(1.875rem, 3.6vw, 3.625rem) + 20rem) / 2);
   }
   .context-panel {
-    width: 340px;
+    width: 21.25rem;
   }
   .analysis-columns {
     grid-template-columns: 1fr;
@@ -1378,42 +1377,50 @@ tbody tr.selected,
 @media (max-width: 700px) {
   .analysis-shell {
     display: block;
-    padding: 0 16px;
+    padding: 0 1rem;
   }
   .analysis-locations {
     position: relative;
     top: auto;
-    height: 248px;
-    margin-top: 112px;
+    height: 15.5rem;
+    margin-top: 7rem;
   }
   .analysis-shell .analysis-head {
-    padding: 24px 0 18px;
+    padding: 1.5rem 0 1.125rem;
   }
   .analysis-source-link {
     margin-left: 0;
   }
   .topbar {
-    height: 54px;
-    padding: 0 14px;
+    height: 3.375rem;
+    padding: 0 0.875rem;
   }
   .brand {
-    font-size: 15px;
+    font-size: 0.9375rem;
   }
   .brand-mark {
-    width: 20px;
-    height: 20px;
+    width: 1.25rem;
+    height: 1.25rem;
   }
   .topbar-map .top-nav {
-    top: 58px;
+    top: 3.625rem;
     left: 50%;
-    gap: 22px;
+    gap: 1rem;
   }
   .topbar-analysis .top-nav {
-    margin-left: auto;
-    gap: 12px;
+    position: absolute;
+    top: 3.625rem;
+    left: 50%;
+    margin-left: 0;
+    height: auto;
+    transform: translateX(-50%);
+    gap: 1rem;
   }
   .top-nav button {
-    font-size: 14px;
+    font-size: 0.875rem;
+  }
+  .top-nav .nav-count {
+    display: none;
   }
   .top-export {
     display: none;
@@ -1425,35 +1432,35 @@ tbody tr.selected,
   }
   .map-top-left,
   .scene-mode .map-top-left {
-    left: 12px;
-    right: 12px;
-    top: 108px;
+    left: 0.75rem;
+    right: 0.75rem;
+    top: 6.75rem;
     bottom: auto;
     width: auto;
   }
   .search-panel,
   .scene-mode .search-panel {
     height: auto;
-    max-height: min(345px, 43vh);
-    padding: 0 16px;
+    max-height: min(21.5625rem, 43vh);
+    padding: 0 1rem;
     border-radius: var(--radius-panel);
   }
   .scene-library-head {
-    padding: 16px 0 10px;
+    padding: 1rem 0 0.625rem;
   }
   .scene-library-head h1 {
-    font-size: 19px;
+    font-size: 1.1875rem;
   }
   .search-box {
-    margin: 0 0 6px;
+    margin: 0 0 0.375rem;
   }
   .scene-results {
-    max-height: 190px;
+    max-height: 11.875rem;
   }
   .map-top-center,
   .scene-mode .map-top-center {
     top: auto;
-    bottom: 21px;
+    bottom: 1.3125rem;
     left: 50%;
     right: auto;
     transform: translateX(-50%);
@@ -1462,39 +1469,39 @@ tbody tr.selected,
     transform: none;
   }
   .map-top-center {
-    gap: 22px;
+    gap: 1.375rem;
   }
   .basemap-switch {
-    gap: 18px;
+    gap: 1.125rem;
   }
   .basemap-switch button {
-    font-size: 14px;
+    font-size: 0.875rem;
   }
   .context-panel {
-    left: 12px;
-    right: 12px;
+    left: 0.75rem;
+    right: 0.75rem;
     top: auto;
-    bottom: 12px;
+    bottom: 0.75rem;
     width: auto;
     max-height: 45%;
     border-radius: var(--radius-panel);
   }
   .reopen-panel {
     top: auto;
-    right: 12px;
-    bottom: 12px;
+    right: 0.75rem;
+    bottom: 0.75rem;
   }
   .analysis-head {
-    padding: 74px 14px 20px;
+    padding: 4.625rem 0.875rem 1.25rem;
   }
   .analysis-body {
-    padding: 0 14px 30px;
+    padding: 0 0.875rem 1.875rem;
   }
   .analysis-metrics {
     grid-template-columns: 1fr 1fr;
   }
   .analysis-metrics strong {
-    font-size: 18px;
+    font-size: 1.125rem;
   }
 }
 
@@ -1508,14 +1515,14 @@ tbody tr.selected,
 
 .hint-note {
   color: #a1a1a8;
-  font-size: 12.5px;
+  font-size: 0.7812rem;
   line-height: 1.45;
-  margin: 8px 0 0;
+  margin: 0.5rem 0 0;
 }
 .export-note {
   color: #a1a1a8;
-  font-size: 12.5px;
-  margin-left: 6px;
+  font-size: 0.7812rem;
+  margin-left: 0.375rem;
 }
 .zone-excluded {
   color: #d6a86b;
@@ -1528,13 +1535,13 @@ tbody tr.selected,
 
 /* «Сообщения» toggle and card (/api/media/map) */
 .map-top-center {
-  gap: 34px;
+  gap: 2.125rem;
 }
 
 .media-switch button {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 0.3125rem;
 }
 
 .media-switch button.active::after {
@@ -1571,7 +1578,7 @@ tbody tr.selected,
 }
 
 @keyframes text-enter {
-  from { opacity: 0; transform: translateY(7px); }
+  from { opacity: 0; transform: translateY(0.4375rem); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -1616,8 +1623,8 @@ tbody tr.selected,
 
 .media-preview {
   display: grid;
-  gap: 4px;
-  max-width: 300px;
+  gap: 0.25rem;
+  max-width: 18.75rem;
 }
 
 .media-preview small {
@@ -1627,6 +1634,10 @@ tbody tr.selected,
 
 :root {
   --ui-zoom: 1;
+}
+
+html {
+  font-size: calc(16px * var(--ui-zoom));
 }
 
 @media (min-width: 1100px) {
@@ -1641,47 +1652,40 @@ tbody tr.selected,
   :root { --ui-zoom: 1.5; }
 }
 
-/* Interface scale: one step for the globe screen and the analysis page, so switching
-   Земля ↔ Анализ does not jump in size. Only top-level overlays are zoomed (never an element
-   inside another zoomed one); MapLibre's canvas and its popups stay unscaled so pointer
-   coordinates remain exact. Larger screens get a larger step. */
-.topbar,
-.map-top-left,
-.map-top-center,
-.reopen-panel,
-.context-panel,
+/* Interface scale: all sizes are in rem, and 1rem = 16px × --ui-zoom, so every screen and panel
+   scales by one step with the window. Only MapLibre's own controls (px in its stylesheet) are
+   zoomed; its canvas and popups stay unscaled so pointer coordinates remain exact. */
 .maplibregl-ctrl-bottom-right,
-.maplibregl-ctrl-bottom-left,
-.analysis-shell {
+.maplibregl-ctrl-bottom-left {
   zoom: var(--ui-zoom);
 }
 
 /* Logo: larger and heavier than the navigation. */
 .brand {
-  font-size: 26px;
+  font-size: 1.625rem;
   font-weight: 600;
   font-stretch: 200%;
   font-variation-settings: "wdth" 200;
   letter-spacing: 0.01em;
-  gap: 12px;
+  gap: 0.75rem;
 }
 
 .brand .brand-mark {
-  width: 26px;
-  height: 26px;
+  width: 1.625rem;
+  height: 1.625rem;
 }
 
 @media (max-width: 700px) {
-  .brand { font-size: 19px; }
-  .brand .brand-mark { width: 20px; height: 20px; }
+  .brand { font-size: 1.1875rem; }
+  .brand .brand-mark { width: 1.25rem; height: 1.25rem; }
 }
 
 /* Search fields: a visible filled field instead of a faint underline (person: «ничего не видно»). */
 .search-box,
 .analysis-location-search {
-  height: 46px;
-  padding: 0 12px;
-  gap: 10px;
+  height: 2.875rem;
+  padding: 0 0.75rem;
+  gap: 0.625rem;
   border: 0;
   border-radius: var(--radius);
   background: rgba(233, 237, 239, 0.07);
@@ -1698,7 +1702,7 @@ tbody tr.selected,
 .search-box input,
 .analysis-location-search input {
   font: inherit;
-  font-size: 15px;
+  font-size: 0.9375rem;
   color: #f2f5f6;
 }
 
@@ -1712,53 +1716,52 @@ tbody tr.selected,
    and headings keep their own width. Panel a bit wider, labels never wrap mid-phrase. */
 :root { font-stretch: 85%; font-variation-settings: "wdth" 85; }
 .brand { font-variation-settings: "wdth" 200; }
-.map-top-left { width: 360px; }
-.search-toggle { white-space: nowrap; font-size: 15px; }
+.map-top-left { width: 22.5rem; }
+.search-toggle { white-space: nowrap; font-size: 0.9375rem; }
 .search-toggle > span:first-child { white-space: nowrap; }
 .search-panel li, .search-panel button { white-space: nowrap; }
 
 .sensitivity-panel .sensitivity-intro,
 .sensitivity-panel .sensitivity-section,
-.sensitivity-panel .sensitivity-all { padding: 18px 22px; }
-.sensitivity-panel .sensitivity-intro { margin: 0; color: #afbbc0; font-size: 14px; line-height: 1.5; }
+.sensitivity-panel .sensitivity-all { padding: 1.125rem 1.375rem; }
+.sensitivity-panel .sensitivity-intro { margin: 0; color: #afbbc0; font-size: 0.875rem; line-height: 1.5; }
 .sensitivity-panel .sensitivity-section,
 .sensitivity-panel .sensitivity-all { border-top: 1px solid #ffffff18; }
-.sensitivity-panel .sensitivity-section h3 { margin: 0 0 6px; color: #edf3f5; font-size: 17px; font-weight: 620; }
+.sensitivity-panel .sensitivity-section h3 { margin: 0 0 0.375rem; color: #edf3f5; font-size: 1.0625rem; font-weight: 620; }
 .sensitivity-panel .sensitivity-section > p,
-.sensitivity-panel .sensitivity-all > p { max-width: 90ch; margin: 0 0 16px; color: #aab8be; font-size: 14px; line-height: 1.5; }
-.sensitivity-panel .table-scroll { max-height: 440px; overflow: auto; scrollbar-width: thin; }
-.sensitivity-panel table { min-width: 740px; }
+.sensitivity-panel .sensitivity-all > p { max-width: 90ch; margin: 0 0 1rem; color: #aab8be; font-size: 0.875rem; line-height: 1.5; }
+.sensitivity-panel .table-scroll { max-height: 27.5rem; overflow: auto; scrollbar-width: thin; }
+.sensitivity-panel table { min-width: 46.25rem; }
 .sensitivity-panel th { position: sticky; top: 0; z-index: 1; background: #15191c; border-bottom: 1px solid #ffffff24; }
 .sensitivity-panel td { border-top: 1px solid #ffffff13; }
 .sensitivity-panel th,
-.sensitivity-panel td { padding: 11px 14px; font-size: 14px; vertical-align: top; }
+.sensitivity-panel td { padding: 0.6875rem 0.875rem; font-size: 0.875rem; vertical-align: top; }
 .sensitivity-panel th:first-child,
 .sensitivity-panel td:first-child { padding-left: 0; }
 .sensitivity-panel .numeric { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .sensitivity-panel tbody tr:hover { background: #ffffff09; }
 .sensitivity-panel .sensitivity-baseline { background: #ffffff0d; color: #edf3f5; }
-.sensitivity-panel td small { display: block; margin-top: 3px; color: #91a0a7; font-size: 12px; white-space: normal; }
-.sensitivity-panel .sensitivity-all summary { width: fit-content; color: #d6e3e9; font-size: 14px; cursor: pointer; }
-.sensitivity-panel .sensitivity-all summary:focus-visible { outline: 2px solid #d6e7ef; outline-offset: 4px; }
-.sensitivity-panel .sensitivity-all > p { margin: 12px 0; }
-.sensitivity-panel .sensitivity-all .table-scroll { max-height: 460px; }
+.sensitivity-panel td small { display: block; margin-top: 0.1875rem; color: #91a0a7; font-size: 0.75rem; white-space: normal; }
+.sensitivity-panel .sensitivity-all summary { width: fit-content; color: #d6e3e9; font-size: 0.875rem; cursor: pointer; }
+.sensitivity-panel .sensitivity-all summary:focus-visible { outline: 2px solid #d6e7ef; outline-offset: 0.25rem; }
+.sensitivity-panel .sensitivity-all > p { margin: 0.75rem 0; }
+.sensitivity-panel .sensitivity-all .table-scroll { max-height: 28.75rem; }
 .sensitivity-panel .sensitivity-empty { color: #aab8be; }
 
 @media (max-width: 700px) {
   .sensitivity-panel .sensitivity-intro,
   .sensitivity-panel .sensitivity-section,
-  .sensitivity-panel .sensitivity-all { padding: 16px 14px; }
+  .sensitivity-panel .sensitivity-all { padding: 1rem 0.875rem; }
 }
 
 @media (min-width: 701px) {
 /* Scene list stays inside the window (#UI-fixes 26.09): the left column runs from its top to
-   24px above the bottom and the panel shrinks to it, so the list scrolls instead of running
-   under the browser edge. Computed in the column's own (zoomed) coordinates, so the nested
-   `zoom` above cannot push it past the viewport. The empty part of the column passes clicks
+   1.5rem above the bottom and the panel shrinks to it, so the list scrolls instead of running
+   under the browser edge. The empty part of the column passes clicks
    to the map. */
 .map-top-left,
 .scene-mode .map-top-left {
-  bottom: 24px;
+  bottom: 1.5rem;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -1774,43 +1777,43 @@ tbody tr.selected,
 .scene-mode .scene-results { max-height: none; }
 
 /* Scene panel: collapse to its heading, a clear way back to all observations, notes folded. */
-.context-heading { display: flex; justify-content: space-between; gap: 12px; }
-.context-heading-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+.context-heading { display: flex; justify-content: space-between; gap: 0.75rem; }
+.context-heading-actions { display: flex; gap: 0.375rem; flex: 0 0 auto; }
 .back-to-globe {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  margin: 0 22px 14px;
-  padding: 8px 12px;
+  gap: 0.4375rem;
+  margin: 0 1.375rem 0.875rem;
+  padding: 0.5rem 0.75rem;
   border: 0;
   border-radius: var(--radius);
   background: #ffffff0d;
   color: #dde3e5;
-  font-size: 13px;
+  font-size: 0.8125rem;
   cursor: pointer;
 }
 .back-to-globe:hover { background: #ffffff1a; }
-details.context-foot { padding: 0 22px 18px; }
-details.context-foot summary { cursor: pointer; margin-bottom: 6px; }
+details.context-foot { padding: 0 1.375rem 1.125rem; }
+details.context-foot summary { cursor: pointer; margin-bottom: 0.375rem; }
 .context-panel.collapsed { bottom: auto; height: auto; overflow: hidden; }
 }
-.analysis-head > button { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.analysis-head > button { display: inline-flex; align-items: center; gap: 0.4375rem; white-space: nowrap; }
 
 /* Layout grid (map screen). One column axis for the globe, the navigation and the
    basemap switch: the centre of the free area between the side panels. Panels and the
-   centred groups share the same --ui zoom step, so the rails are written in their local
+   centred groups are all in rem, so the rails are written in the same
    px and scale together; MapPanel takes the globe offset from the panel's real edge.
      | gutter | search panel 320 | ——— free area, axis at its centre ——— | context panel | 28 |
    The context panel (right rail) exists only in a scene. */
 :root {
-  --grid-gutter: clamp(30px, 3.6vw, 58px);
-  --grid-rail-left: calc(var(--grid-gutter) + 360px); /* .map-top-left is 360 px wide */
-  --grid-rail-right: calc(28px + 372px);
+  --grid-gutter: clamp(1.875rem, 3.6vw, 3.625rem);
+  --grid-rail-left: calc(var(--grid-gutter) + 22.5rem); /* .map-top-left is 360 px wide */
+  --grid-rail-right: calc(1.75rem + 23.25rem);
 }
 
 @media (max-width: 1100px) {
   :root {
-    --grid-rail-right: calc(28px + 340px);
+    --grid-rail-right: calc(1.75rem + 21.25rem);
   }
 }
 
@@ -1848,40 +1851,40 @@ details.context-foot summary { cursor: pointer; margin-bottom: 6px; }
 
 /* One tab style for the navigation above the globe and the switch below it: same type, height,
    spacing and underline. .basemap-switch lives inside .map-top-center, which already carries
-   the --ui zoom step, so it is no longer zoomed a second time (it was 1.2 × 1.2). */
+   the scale step once (it was zoomed twice, 1.2 × 1.2). */
 .topbar-map .top-nav,
 .map-top-center,
 .basemap-switch {
-  gap: 30px;
+  gap: 1.875rem;
 }
 
 .top-nav button,
 .top-nav button.active,
 .basemap-switch button,
 .basemap-switch button.active {
-  height: 34px;
+  height: 2.125rem;
   padding: 0;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 550;
-  line-height: 34px;
+  line-height: 2.125rem;
 }
 
 .top-nav button.active::after,
 .basemap-switch button.active::after {
-  bottom: -5px;
+  bottom: -0.3125rem;
 }
 
 @media (max-width: 700px) {
   .topbar-map .top-nav,
   .map-top-center,
   .basemap-switch {
-    gap: 22px;
+    gap: 1.375rem;
   }
   .top-nav button,
   .top-nav button.active,
   .basemap-switch button,
   .basemap-switch button.active {
-    font-size: 14px;
+    font-size: 0.875rem;
   }
 }
 
@@ -1890,72 +1893,72 @@ details.context-foot summary { cursor: pointer; margin-bottom: 6px; }
    column's zoom (they were 1.44× and 1.73×): one --ui step for the whole column, sizes below
    are in the column's px. */
 .search-panel {
-  padding: 0 24px;
+  padding: 0 1.5rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(13, 17, 19, 0.55);
-  backdrop-filter: blur(24px) saturate(160%) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(160%) !important;
+  backdrop-filter: blur(1.5rem) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(1.5rem) saturate(160%) !important;
 }
 
 .scene-library-head {
-  padding: 26px 0 18px;
+  padding: 1.625rem 0 1.125rem;
 }
 
 .scene-library-head h1 {
-  font-size: 24px;
+  font-size: 1.5rem;
   font-weight: 540;
   letter-spacing: -0.03em;
 }
 
 .search-box {
-  height: 52px;
-  margin: 0 0 14px;
+  height: 3.25rem;
+  margin: 0 0 0.875rem;
 }
 
 .search-box input {
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 .search-toggle {
-  min-height: 58px;
-  font-size: 17px;
+  min-height: 3.625rem;
+  font-size: 1.0625rem;
   font-weight: 480;
 }
 
 .scene-results {
-  margin: 0 -12px;
-  padding: 2px 12px 16px;
+  margin: 0 -0.75rem;
+  padding: 2px 0.75rem 1rem;
 }
 
 .scene-results > button {
-  width: calc(100% + 24px);
-  min-height: 80px;
-  margin: 0 -12px;
-  padding: 13px 12px;
+  width: calc(100% + 1.5rem);
+  min-height: 5rem;
+  margin: 0 -0.75rem;
+  padding: 0.8125rem 0.75rem;
 }
 
 .scene-results > button::after {
-  left: 12px;
-  right: 12px;
+  left: 0.75rem;
+  right: 0.75rem;
 }
 
 .scene-results strong {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 500;
 }
 
 .scene-results small {
-  margin-top: 6px;
-  font: 14px/1.4 "Science Gothic", system-ui, sans-serif;
+  margin-top: 0.375rem;
+  font: 0.875rem/1.4 "Science Gothic", system-ui, sans-serif;
   font-weight: 400;
 }
 
 .scene-results small code {
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .scene-results em {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 520;
 }
 
@@ -1963,51 +1966,200 @@ details.context-foot summary { cursor: pointer; margin-bottom: 6px; }
 .scene-results .search-hint {
   display: block;
   margin: 0;
-  padding: 14px 0 4px;
+  padding: 0.875rem 0 0.25rem;
   white-space: normal;
   overflow-wrap: break-word;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 
 @media (max-width: 700px) {
   .search-panel,
   .scene-mode .search-panel {
-    padding: 0 16px;
+    padding: 0 1rem;
   }
   .scene-library-head {
-    padding: 16px 0 10px;
+    padding: 1rem 0 0.625rem;
   }
   .scene-library-head h1 {
-    font-size: 19px;
+    font-size: 1.1875rem;
   }
   .search-box {
-    margin: 0 0 6px;
+    margin: 0 0 0.375rem;
   }
 }
 
 /* Map notice («Часть картографических данных недоступна…»): on the grid axis, above the
-   basemap switch instead of over it. It is not zoomed itself, so the zoomed rails and the
-   switch height (bottom 26 + ~40 px) are multiplied by --ui-zoom here. */
+   basemap switch instead of over it (switch: bottom 26 + ~40). */
 .map-issue {
-  left: calc(var(--grid-rail-left) * var(--ui-zoom));
+  left: var(--grid-rail-left);
   right: 0;
-  bottom: calc(66px * var(--ui-zoom) + 12px);
+  bottom: 4.875rem;
   width: fit-content;
-  max-width: 420px;
+  max-width: 26.25rem;
   margin: 0 auto;
   transform: none;
 }
 
 .scene-mode .map-issue {
-  right: calc(var(--grid-rail-right) * var(--ui-zoom));
+  right: var(--grid-rail-right);
 }
 
 @media (max-width: 700px) {
   .map-issue,
   .scene-mode .map-issue {
-    left: 12px;
-    right: 12px;
-    bottom: 64px;
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: 4rem;
   }
+}
+
+/* Analysis page: «К карте» and «Все наблюдения» lead off the whole screen, so they sit above
+   «Локации» (the strip under the top bar), not in the head of the selected scene. The column
+   (actions + locations) sticks as one. */
+.analysis-side {
+  position: sticky;
+  top: 4rem;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  min-width: 0;
+  height: calc(100vh - 5.5rem);
+  margin-top: 4rem;
+}
+
+.analysis-side .analysis-locations {
+  position: static;
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  margin-top: 0;
+}
+
+.analysis-rail {
+  display: flex;
+  flex: none;
+  gap: 0.5rem;
+}
+
+.analysis-rail button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4375rem;
+  height: 2rem;
+  padding: 0 0.6875rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: #171b1e;
+  color: #dce3e6;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  transition: background 160ms ease;
+}
+
+.analysis-rail button:hover {
+  background: #22292d;
+}
+
+@media (max-width: 700px) {
+  .analysis-side {
+    position: static;
+    height: auto;
+    margin-top: 6.25rem;
+  }
+  .analysis-side .analysis-locations {
+    flex: none;
+    height: 15.5rem;
+  }
+}
+
+/* Tiling (Hyprland-like): a scene card and a message card open together are laid side by side —
+   the scene card slides to the left column in place of «Наблюдения», the message card keeps the
+   right. The scene card is anchored by `left` so the move animates. Phones keep their bottom
+   sheets. */
+@media (min-width: 701px) {
+  .context-panel {
+    right: auto;
+    left: calc(100vw - 1.75rem - 23.25rem);
+    transition: left 340ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .map-screen.tiled .context-panel {
+    left: var(--grid-gutter);
+  }
+  .map-top-left {
+    transition: opacity 220ms ease, transform 340ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s;
+  }
+  .map-screen.tiled .map-top-left {
+    opacity: 0;
+    transform: translateX(-1.5rem);
+    visibility: hidden;
+    transition: opacity 220ms ease, transform 340ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s 340ms;
+  }
+  /* The bottom switch stays between the two cards (the message card: 25 + 1.5 rem). */
+  .map-screen.tiled .map-top-center {
+    left: calc(var(--grid-gutter) + 23.25rem);
+    right: 26.5rem;
+  }
+}
+
+@media (min-width: 701px) and (max-width: 1100px) {
+  .context-panel {
+    left: calc(100vw - 1.75rem - 21.25rem);
+  }
+  .map-screen.tiled .map-top-center {
+    left: calc(var(--grid-gutter) + 21.25rem);
+  }
+}
+
+/* Analysis page: no top shade over the column «К карте / Все наблюдения / Локации» (it does not
+   scroll); the shade stays over the scrolling content only, under the top bar. */
+.topbar-analysis::before {
+  display: none;
+}
+
+.analysis-content::before {
+  content: "";
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: block;
+  height: 8rem;
+  margin-bottom: -8rem;
+  background: linear-gradient(180deg, #050607e8 0%, #050607a8 48%, transparent 100%);
+  pointer-events: none;
+}
+
+@media (max-width: 700px) {
+  .analysis-content::before {
+    display: none;
+  }
+  .topbar-analysis::before {
+    display: block;
+  }
+}
+
+/* Budget fields: typed from the keyboard or set with the slider; no spinner arrows. */
+.budget-field input[type="number"],
+.analysis-budget input[type="number"],
+.analysis-budget-ask input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.budget-field input[type="number"]::-webkit-inner-spin-button,
+.budget-field input[type="number"]::-webkit-outer-spin-button,
+.analysis-budget input[type="number"]::-webkit-inner-spin-button,
+.analysis-budget input[type="number"]::-webkit-outer-spin-button,
+.analysis-budget-ask input[type="number"]::-webkit-inner-spin-button,
+.analysis-budget-ask input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.analysis-budget-ask input[type="range"] {
+  padding: 0;
+  border: 0;
+  background: none;
+  accent-color: #cbd4d8;
 }

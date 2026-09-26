@@ -1,18 +1,19 @@
 /* MessagePanel.tsx: full content of a «Сообщения» point, in the language of the scene panel. */
 .message-panel {
-  position: absolute;
-  top: 80px;
-  right: 28px;
-  bottom: 92px; /* clear of the bottom switches «Карта / Спутник / Сообщения» */
+  position: fixed;
+  /* below the top navigation (top 77 + 34 + underline) + a gap */
+  top: 8.25rem;
+  right: 1.5rem;
+  bottom: 5.75rem; /* clear of the bottom «Карта / Спутник» switch */
   z-index: 8;
-  width: 400px;
+  width: 25rem;
   overflow: auto;
   border: 0;
   border-radius: var(--radius-panel);
   background: #15181b;
   box-shadow: none;
   color: #e6ecee;
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.45;
   scrollbar-width: thin;
   scrollbar-color: #ffffff28 transparent;
@@ -21,13 +22,13 @@
 .mp-head {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  padding: 22px 22px 14px;
+  gap: 0.75rem;
+  padding: 1.375rem 1.375rem 0.875rem;
 }
 
 .mp-head h1 {
-  margin: 8px 0 0;
-  font-size: 22px;
+  margin: 0.5rem 0 0;
+  font-size: 1.375rem;
   font-weight: 620;
   line-height: 1.25;
   letter-spacing: -0.02em;
@@ -36,19 +37,19 @@
 .mp-kicker {
   display: block;
   color: #9eaaaf;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
 
 .mp-demo {
   display: inline-block;
-  margin: 0 0 10px;
-  padding: 4px 10px;
+  margin: 0 0 0.625rem;
+  padding: 0.25rem 0.625rem;
   border: 0;
   border-radius: var(--radius);
   color: #f0c27f;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   background: #e0ad6426;
@@ -58,8 +59,8 @@
   flex: none;
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 2.125rem;
+  height: 2.125rem;
   border: 0;
   border-radius: var(--radius);
   background: #ffffff0d;
@@ -70,23 +71,23 @@
 .mp-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 0 22px 14px;
+  gap: 0.5rem;
+  padding: 0 1.375rem 0.875rem;
 }
 
 .mp-actions button,
 .mp-actions a {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  min-height: 38px;
-  padding: 8px 13px;
+  gap: 0.4375rem;
+  min-height: 2.375rem;
+  padding: 0.5rem 0.8125rem;
   border: 1px solid #ffffff24;
   border-radius: var(--radius);
   background: #1d2226;
   color: #e9eef0;
   font: inherit;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
@@ -98,13 +99,13 @@
 }
 
 .mp-note {
-  margin: 0 22px 6px;
+  margin: 0 1.375rem 0.375rem;
   color: #e0ad64;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .mp-state {
-  margin: 14px 22px;
+  margin: 0.875rem 1.375rem;
   color: #b7c2c6;
 }
 
@@ -117,26 +118,26 @@
 }
 
 .mp-section {
-  padding: 18px 22px;
+  padding: 1.125rem 1.375rem;
   border-top: 1px solid #ffffff12;
 }
 
 .mp-section h2 {
-  margin: 0 0 12px;
-  font-size: 17px;
+  margin: 0 0 0.75rem;
+  font-size: 1.0625rem;
   font-weight: 620;
 }
 
 .mp-facts {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 6px 14px;
+  gap: 0.375rem 0.875rem;
   margin: 0;
 }
 
 .mp-facts dt {
   color: #929da2;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.6;
 }
 
@@ -146,14 +147,14 @@
 }
 
 .mp-missing {
-  margin: 14px 0 0;
-  padding-left: 18px;
+  margin: 0.875rem 0 0;
+  padding-left: 1.125rem;
   color: #aeb9bd;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .mp-source {
-  padding: 14px 0;
+  padding: 0.875rem 0;
   border-bottom: 1px solid #ffffff10;
 }
 
@@ -164,8 +165,8 @@
 .mp-title {
   display: inline-flex;
   align-items: baseline;
-  gap: 6px;
-  margin: 6px 0 0;
+  gap: 0.375rem;
+  margin: 0.375rem 0 0;
   color: #eef3f5;
   font-weight: 620;
   text-decoration: none;
@@ -176,8 +177,8 @@ a.mp-title:hover {
 }
 
 .message-panel blockquote {
-  margin: 10px 0 0;
-  padding: 10px 12px;
+  margin: 0.625rem 0 0;
+  padding: 0.625rem 0.75rem;
   border-left: 2px solid #ffffff30;
   background: #ffffff06;
   color: #d7dfe2;
@@ -186,30 +187,30 @@ a.mp-title:hover {
 }
 
 .mp-full {
-  margin-bottom: 14px !important;
-  font-size: 16px;
+  margin-bottom: 0.875rem !important;
+  font-size: 1rem;
 }
 
 .mp-understood {
-  margin-top: 12px;
-  padding: 12px;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
   border-radius: var(--radius-panel);
   background: #ffffff08;
 }
 
 .mp-understood b {
   display: block;
-  margin-bottom: 8px;
-  font-size: 13px;
+  margin-bottom: 0.5rem;
+  font-size: 0.8125rem;
   letter-spacing: 0.02em;
   color: #c9d3d7;
 }
 
 .mp-understood q {
   display: block;
-  margin-top: 8px;
+  margin-top: 0.5rem;
   color: #c3ccd0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-style: italic;
 }
 
@@ -217,18 +218,18 @@ a.mp-title:hover {
 .mp-attribution,
 .mp-muted {
   display: block;
-  margin-top: 8px;
+  margin-top: 0.5rem;
   color: #929da2;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .mp-report {
-  margin-top: 6px;
+  margin-top: 0.375rem;
 }
 
 .mp-list {
   display: grid;
-  gap: 12px;
+  gap: 0.75rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -242,14 +243,14 @@ a.mp-title:hover {
 .mp-list span,
 .mp-list small {
   color: #a7b2b6;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .mp-photos {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
+  gap: 0.5rem;
+  margin-top: 0.875rem;
 }
 
 .mp-photos button {
@@ -263,8 +264,8 @@ a.mp-title:hover {
 
 .mp-photos img {
   display: block;
-  width: 104px;
-  height: 78px;
+  width: 6.5rem;
+  height: 4.875rem;
   object-fit: cover;
 }
 
@@ -274,7 +275,7 @@ a.mp-title:hover {
   z-index: 50;
   display: grid;
   place-items: center;
-  padding: 32px;
+  padding: 2rem;
   background: #000d;
   cursor: zoom-out;
 }
@@ -288,12 +289,12 @@ a.mp-title:hover {
 
 .mp-lightbox button {
   position: absolute;
-  top: 18px;
-  right: 18px;
+  top: 1.125rem;
+  right: 1.125rem;
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 2.5rem;
+  height: 2.5rem;
   border: 0;
   border-radius: var(--radius);
   background: #ffffff1a;
@@ -302,12 +303,11 @@ a.mp-title:hover {
 
 @media (max-width: 700px) {
   .message-panel {
-    top: auto;
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
+    top: 6.625rem;
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: 0.75rem;
     width: auto;
-    max-height: 62%;
     border-radius: var(--radius-panel);
   }
 }

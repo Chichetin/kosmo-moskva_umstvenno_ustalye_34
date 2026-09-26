@@ -24,6 +24,7 @@ from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
+from floodvalue.contracts.kopeck import decision_risk_from_el, kopeck_sum, ok_rows
 from floodvalue.procurement import zones
 from floodvalue.procurement.pricing import basket_total, price_basket
 
@@ -90,26 +91,12 @@ def other_cost(n_zones: int, other_cfg: Mapping[str, Any]) -> Decimal:
             + Decimal(str(other_cfg["review_per_zone_rub"])) * n_zones).quantize(Decimal("0.01"))
 
 
-def _el_sum(values: Iterable[float]) -> float:
-    """EL are to the kopeck (asset_loss.csv, #127): exact decimal sum, no float tail in files."""
-    return float(sum((Decimal(repr(v)) for v in values), Decimal(0)))
-
-
 def decision_risk_rub(p: float, value_rub: float, vulnerability: float) -> float:
     """Ожидаемая цена ошибки решения R = V·q·min(p, 1−p), руб. (сценарий, D-049).
 
     EVPI бинарного решения при симметричной цене ошибки V·q, идеальном снимке и откалиброванной
     p: 0,5·V·q при p = 0,5; 0 при p ∈ {0; 1}; симметрична по p ↔ 1−p."""
     return float(value_rub) * float(vulnerability) * min(float(p), 1.0 - float(p))
-
-
-def decision_risk_from_el(el: float, p: float) -> float:
-    """R из полей asset_loss.csv: V·q = EL / p ⇒ R = EL при p ≤ 0,5, EL·(1−p)/p при p > 0,5
-    (при p = 0 EL = 0 и R = 0)."""
-    el, p = float(el), float(p)
-    if p <= 0.5:
-        return el
-    return el * (1.0 - p) / p
 
 
 def _num(v: Any) -> float | None:
@@ -122,9 +109,7 @@ def assessed(loss: Iterable[Mapping[str, Any]]) -> dict[str, dict[str, float]]:
     ``unstable`` — 1 при mask_unstable=true; ``el_range`` — el_high_rub − el_low_rub (D-039,
     пусто → 0) — только тай-брейк."""
     out = {}
-    for r in loss:
-        if r["status"] != "ok":
-            continue
+    for r in ok_rows(loss):
         el = float(r["expected_loss_rub"])
         lo, hi = _num(r.get("el_low_rub")), _num(r.get("el_high_rub"))
         out[r["asset_id"]] = {
@@ -228,7 +213,7 @@ def _run_c(items: Mapping[str, Mapping[str, Any]], cov: Mapping[str, list[str]],
     while (b := best_candidate("ratio")):
         take(b, "")
     return {"chosen": chosen, "reasons": reasons, "social": social, "total": total,
-            "covered_el": _el_sum(el[a]["el"] for a in covered),
+            "covered_el": kopeck_sum(el[a]["el"] for a in covered),
             "covered_risk": sum(el[a]["risk"] for a in covered)}
 
 
@@ -284,8 +269,8 @@ def comparison_row(strategy: str, ids: list[str], rows: list[Mapping[str, Any]],
     data = basket_total(rows)
     other = other_cost(len(ids), other_cfg)
     covered = sorted(a for a in {x for c in ids for x in cov.get(c, ())} if a in el)
-    covered_el = _el_sum(el[a]["el"] for a in covered)
-    denom = _el_sum(v["el"] for v in el.values())
+    covered_el = kopeck_sum(el[a]["el"] for a in covered)
+    denom = kopeck_sum(v["el"] for v in el.values())
     covered_r = sum(el[a]["risk"] for a in covered)
     denom_r = sum(v["risk"] for v in el.values())
     uncs = {a: v["unc"] for a, v in el.items()}

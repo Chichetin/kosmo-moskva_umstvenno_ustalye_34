@@ -14,6 +14,7 @@ import Backdrop from "./Backdrop";
 import MapPanel from "./MapPanel";
 import { WorldLocator } from "./WorldLocator";
 import MessagePanel, { type SelectedMessage } from "./MessagePanel";
+import MessagesList from "./MessagesList";
 import SensitivityPanel from "./SensitivityPanel";
 import RiskMatrix from "./RiskMatrix";
 import { finiteNumber, riskAsset } from "./riskAssets";
@@ -48,6 +49,12 @@ const date = (value: string | null | undefined) =>
         timeZone: "UTC",
       }).format(new Date(value))
     : "Дата неизвестна";
+// Budget scale before a run: plan C's saturation is not known yet; 50 000 ₽ is above full
+// coverage B of the known scenes (37–42 thousand).
+const PRE_RUN_BUDGET_MAX = 50_000;
+const ruPlural = new Intl.PluralRules("ru");
+const countLabel = (count: number, one: string, few: string, many: string) =>
+  `${count} ${ruPlural.select(count) === "one" ? one : ruPlural.select(count) === "few" ? few : many}`;
 const labels: Record<string, string> = {
   warehouse: "Склад",
   substation: "Подстанция",
@@ -131,7 +138,6 @@ type LayerFlags = {
   mask: boolean;
   uncertainty: boolean;
   assets: boolean;
-  zones: boolean;
 };
 type AnalysisJob = {
   job_id: string | null;
@@ -150,7 +156,6 @@ const defaults: LayerFlags = {
   mask: false,
   uncertainty: false,
   assets: true,
-  zones: true,
 };
 
 export default function App() {
@@ -187,18 +192,15 @@ export default function App() {
   const [searchOpen, setSearchOpen] = useState(() => window.innerWidth >= 700);
   const [panelOpen, setPanelOpen] = useState(true);
   const [newsOpen, setNewsOpen] = useState(false);
+  const [messagesOpen, setMessagesOpen] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [overviewRequest, setOverviewRequest] = useState(0);
   const [mapIssue, setMapIssue] = useState<string | null>(null);
   // «Сообщения» (/api/media/map): null — the layer is unavailable here (media not served,
   // or closed to this viewer); the toggle is then hidden rather than shown broken.
   const [messages, setMessages] = useState<MediaMap | null>(null);
-  const [showMessages, setShowMessages] = useState(true);
   const [message, setMessage] = useState<SelectedMessage | null>(null);
   const [messageFocus, setMessageFocus] = useState<{ lngLat: [number, number]; zoom: number; request: number } | null>(null);
-  useEffect(() => {
-    if (!showMessages) setMessage(null);
-  }, [showMessages]);
   useEffect(() => {
     let stopped = false;
     const load = () =>
@@ -420,9 +422,21 @@ export default function App() {
     navigate("earth");
   };
   const overview = () => {
+    setMessageFocus(null);
     navigate("earth");
     setSearchOpen(true);
     setOverviewRequest((value) => value + 1);
+  };
+  const selectMessageFromList = (selected: SelectedMessage) => {
+    setNewsOpen(false);
+    setMessagesOpen(false);
+    setMessage(selected);
+    setMessageFocus((previous) => ({
+      lngLat: selected.lngLat,
+      zoom: selected.kind === "report" ? 10 : 9,
+      request: (previous?.request ?? 0) + 1,
+    }));
+    if (!mapActive || scene) navigate("earth");
   };
   const toggle = (key: keyof LayerFlags) =>
     setLayers((value) => ({ ...value, [key]: !value[key] }));
@@ -458,9 +472,11 @@ export default function App() {
   const currentPlan = planFor && planFor.runId === activeSession?.run_id && planFor.budget === budget ? plan : null;
   const chosen = currentPlan?.comparison.find((row) => row.strategy === "C");
   const chosenZoneIds = new Set(currentPlan?.plans.C ?? []);
-  const sliderMax = Math.min(1_000_000_000, Math.ceil(
-    Math.max(activeSession?.plan_c_saturation_rub ?? 0, budget ?? 0, 5_000) * 1.1 / 1_000,
-  ) * 1_000);
+  // Slider scale: fixed for the scene (does not move while typing), ending at the point where
+  // plan C stops changing, rounded up to a thousand (15 940 → 16 000).
+  const sliderMax = Math.min(1_000_000_000, Math.ceil(Math.max(
+    activeSession?.plan_c_saturation_rub ?? 0, activeSession?.metadata.budget.budget_rub ?? 0,
+    1_000) / 1_000) * 1_000);
   // The operator knows the country, not a Sen1Floods11 chip id: search by country only,
   // in English (as in the catalog) or Russian.
   const matchingScenes = scenes.filter((item) => countryMatches(item.territory, query));
@@ -509,6 +525,16 @@ export default function App() {
               onChange={(event) =>
                 setAnalysisBudget(Math.min(1_000_000_000, Math.max(0, Number(event.target.value) || 0)))
               }
+            />
+            <input
+              type="range"
+              min="0"
+              max={PRE_RUN_BUDGET_MAX}
+              step="100"
+              value={Math.min(analysisBudget, PRE_RUN_BUDGET_MAX)}
+              disabled={analysisStarting === target.chip_id}
+              onChange={(event) => setAnalysisBudget(Number(event.target.value))}
+              aria-label="Бюджет на дополнительную съёмку"
             />
             <small>
               Карта воды и ущерб считаются по уже полученному снимку S1 — за него не платим.
@@ -613,11 +639,19 @@ export default function App() {
           </button>
           <button
             className={newsOpen ? "active" : ""}
-            onClick={() => setNewsOpen(!newsOpen)}
+            onClick={() => { setMessagesOpen(false); setNewsOpen(!newsOpen); }}
             aria-expanded={newsOpen}
             title="Все новости и сводки, из которых берётся слой «Сообщения»"
           >
             Новости
+          </button>
+          <button
+            className={messagesOpen ? "active" : ""}
+            onClick={() => { setNewsOpen(false); setMessagesOpen(!messagesOpen); }}
+            aria-expanded={messagesOpen}
+            title={`Сообщения на карте: ${messageCount}`}
+          >
+            Сообщения{messageCount > 0 && <span className="nav-count"> · {messageCount}</span>}
           </button>
         </nav>
         <span className="top-spacer" />
@@ -662,9 +696,10 @@ export default function App() {
           }}
         />
       )}
+      {messagesOpen && <MessagesList messages={messages} onClose={() => setMessagesOpen(false)} onSelect={selectMessageFromList} />}
       <main className="workspace">
         <div
-          className={`map-screen ${mapVisible ? "" : "map-hidden"} ${scene ? "scene-mode" : ""} ${baseMap === "optical" ? "optical-mode" : ""}`}
+          className={`map-screen ${mapVisible ? "" : "map-hidden"} ${scene ? "scene-mode" : ""} ${baseMap === "optical" ? "optical-mode" : ""} ${scene && panelOpen && message ? "tiled" : ""}`}
           aria-hidden={!mapVisible}
           inert={!mapVisible}
         >
@@ -676,7 +711,7 @@ export default function App() {
             baseMap={baseMap}
             visibleLayers={layers}
             messages={messages}
-            showMessages={showMessages}
+            showMessages={true}
             overlayOpacity={opacity}
             selectedAsset={assetId}
             selectedZone={zoneId}
@@ -700,7 +735,7 @@ export default function App() {
             focus={messageFocus}
             newsOpen={newsOpen}
           />
-          {message && (
+          {message && mapVisible && (
             <MessagePanel
               message={message}
               onClose={() => setMessage(null)}
@@ -805,18 +840,6 @@ export default function App() {
                 Спутник
               </button>
             </div>
-            {messages && (
-              <div className="basemap-switch media-switch">
-                <button
-                  className={showMessages ? "active" : ""}
-                  onClick={() => setShowMessages(!showMessages)}
-                  aria-pressed={showMessages}
-                  title={`События из СМИ и обращения очевидцев: ${messages.events.features.length} событий, ${messages.reports.features.length} обращений ждут модерации. Повод проверить территорию — не входит в p, ущерб и план.`}
-                >
-                  Сообщения · {messageCount}
-                </button>
-              </div>
-            )}
           </div>
           {scene && panelOpen && (
             <aside className={`context-panel${panelCollapsed ? " collapsed" : ""}`}>
@@ -965,19 +988,6 @@ export default function App() {
                         Объекты<small>{assets.length} точек</small>
                       </span>
                     </label>
-                    <label className="layer-row">
-                      <input
-                        type="checkbox"
-                        checked={layers.zones}
-                        onChange={() => toggle("zones")}
-                      />
-                      <span>
-                        Зоны съёмки
-                        <small>
-                          {zones.length} кандидатов · план C выделен синим
-                        </small>
-                      </span>
-                    </label>
                   </>
                 )}
               </section>
@@ -985,6 +995,7 @@ export default function App() {
                 <>
                   <section className="context-section">
                     <h2>План дополнительной съёмки</h2>
+                    <p className="zone-map-note">Зелёным — зоны плана C. Контуры расчётные, не форма снимка.</p>
                     <label className="budget-field">
                       Бюджет данных, ₽
                       <input
@@ -1020,7 +1031,7 @@ export default function App() {
                       </p>
                     )}
                     <div className="plan-summary">
-                      <span>План C · {currentPlan?.plans.C.length ?? "—"} зон</span>
+                      <span>План C · {currentPlan ? countLabel(currentPlan.plans.C.length, "зона", "зоны", "зон") : "—"}</span>
                       <strong>{formatRub(chosen?.data_cost_rub)}</strong>
                     </div>
                     <div className="plan-summary">
@@ -1117,6 +1128,16 @@ export default function App() {
         </div>
           <div className={`analysis-screen ${mapVisible ? "analysis-hidden" : ""}`} aria-hidden={mapVisible} inert={mapVisible}>
             <div className="analysis-shell">
+              <div className="analysis-side">
+              {/* Screen-wide actions of the analysis page: above the locations, not in a scene's head. */}
+              <nav className="analysis-rail" aria-label="Переход с экрана анализа">
+                <button onClick={() => (scene ? navigate("scene", scene.chip_id) : overview())}>
+                  <ArrowLeft size={15} /> К карте
+                </button>
+                <button onClick={overview}>
+                  <Globe2 size={15} /> Все наблюдения
+                </button>
+              </nav>
               <aside className="analysis-locations" aria-label="Локации для анализа">
                 <div className="analysis-locations-head">
                   <h2>Локации</h2>
@@ -1166,18 +1187,9 @@ export default function App() {
                   )}
                 </div>
               </aside>
+              </div>
               <div className="analysis-content">
             <div className="analysis-head">
-              <button
-                onClick={() =>
-                  scene ? navigate("scene", scene.chip_id) : overview()
-                }
-              >
-                <ArrowLeft size={17} /> К карте
-              </button>
-              <button onClick={overview}>
-                <Globe2 size={17} /> Все наблюдения
-              </button>
               <div>
                 <span>{scene ? "АНАЛИЗ СЦЕНЫ" : "АНАЛИЗ НАБЛЮДЕНИЙ"}</span>
                 <h1>
@@ -1466,8 +1478,8 @@ export default function App() {
                     </section>
                     <section className="analysis-card">
                       <div className="card-title">
-                        <h2>Дополнительная съёмка</h2>
-                        <span>{zones.length} кандидатных зон</span>
+                        <h2>Зоны заказа</h2>
+                        <span>{countLabel(zones.length, "зона", "зоны", "зон")}</span>
                       </div>
                       <div className="zone-tabs">
                         <button
@@ -1483,7 +1495,7 @@ export default function App() {
                           Все зоны
                         </button>
                       </div>
-                      <div className="zone-list" aria-label={zoneView === "plan" ? "Зоны плана C" : "Все зоны съёмки"}>
+                      <div className="zone-list" aria-label={zoneView === "plan" ? "Зоны плана C" : "Все зоны заказа"}>
                         {zones
                           .filter(
                             (item) =>
@@ -1544,7 +1556,6 @@ export default function App() {
                             ] ??
                             "Причина выбора недоступна"}</span>
                           <button onClick={() => {
-                            setLayers((current) => ({ ...current, zones: true }));
                             setPanelOpen(true);
                             setSourceViewerOpen(true);
                           }}>Показать на карте</button>
