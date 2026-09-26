@@ -333,12 +333,16 @@ export default function App() {
     if (!target) {
       throw new Error("Расчёт завершён, но результат ещё не появился в каталоге. Обновите его повторно.");
     }
-    if (parseRoute().chipId === finished.chip_id) {
-      // Results appear in the side panel; «Подробный анализ» is the operator's own step.
+    const here = parseRoute();
+    if (here.chipId === finished.chip_id) {
+      // On the map the results appear in the side panel («Подробный анализ» is the operator's own
+      // step); on the analysis page they fill the page in place — no jump to the map.
       setReadyAnalysisNotice(null);
-      setPanelOpen(true);
-      setPanelCollapsed(false);
-      navigate("scene", finished.chip_id);
+      if (here.view !== "analysis") {
+        setPanelOpen(true);
+        setPanelCollapsed(false);
+        navigate("scene", finished.chip_id);
+      }
     } else {
       setReadyAnalysisNotice({ chipId: finished.chip_id, territory: target.territory.replaceAll("-", " ") });
     }
@@ -1131,7 +1135,12 @@ export default function App() {
             </div>
           )}
         </div>
-          <div className={`analysis-screen ${mapVisible ? "analysis-hidden" : ""}`} aria-hidden={mapVisible} inert={mapVisible}>
+          <div
+            className={`analysis-screen ${mapVisible ? "analysis-hidden" : ""} ${newsOpen || messagesOpen ? "with-side-window" : ""}`}
+            style={{ "--tile-right": newsOpen ? "30.25rem" : "26.5rem" } as CSSProperties}
+            aria-hidden={mapVisible}
+            inert={mapVisible}
+          >
             <div className="analysis-shell">
               <div className="analysis-side">
               {/* Screen-wide actions of the analysis page: above the locations, not in a scene's head. */}
@@ -1586,7 +1595,7 @@ export default function App() {
           <button onClick={() => {
             setPanelOpen(true);
             setPanelCollapsed(false);
-            navigate("scene", readyAnalysisNotice.chipId);
+            navigate(parseRoute().view === "analysis" ? "analysis" : "scene", readyAnalysisNotice.chipId);
             setReadyAnalysisNotice(null);
           }}>Открыть</button>
           <button
