@@ -76,7 +76,9 @@ def test_pages_follow_operator_visual_system():
     css = (STATIC / "report.css").read_text(encoding="utf-8")
     assert "--radius: 2px" in css and "--radius-panel: 0" in css
     assert "Science Gothic" in css and "prefers-color-scheme" not in css
-    assert "gradient(" not in css and "box-shadow: 0 1" not in css
+    assert "gradient(" not in css
+    shadows = re.findall(r"box-shadow:\s*([^;}]+)", css)
+    assert all(s.strip().startswith(("none", "0 0 0")) for s in shadows), shadows  # rings only
     radii = re.findall(r"border-radius:\s*([^;!}]+)", css)
     assert radii and all(r.strip().startswith("var(--radius") or r.strip() == "50%" for r in radii), radii
     for name in ("report.html", "status.html"):
