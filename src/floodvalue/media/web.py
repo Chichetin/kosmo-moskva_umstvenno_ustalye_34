@@ -4,7 +4,7 @@ unguessable token, and analyst endpoints under /api/media/* guarded by authorisa
 Analyst access: FLOODVALUE_MEDIA_ANALYST_TOKEN set → Bearer token or a session cookie from
 /media/login; not set → loopback clients only ("local until configured"). Public intake is
 open only to loopback unless FLOODVALUE_MEDIA_PUBLIC_REPORTS=1 is set deliberately.
-GET /api/media/events is the GeoJSON joint for the globe's future «Сообщения» layer.
+GET /api/media/events is the analyst's GeoJSON with filters.
 GET /api/media/map is the operator map's read-only layer: events plus pending eyewitness reports
 without personal data. FLOODVALUE_MEDIA_OPERATOR_MAP_PUBLIC=1 opens it without login (the operator
 UI is public for now); then points of reports and events are coarsened to

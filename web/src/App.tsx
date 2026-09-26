@@ -5,11 +5,12 @@ import {
   BarChart3,
   ChevronDown,
   Layers3,
+  MessageSquareWarning,
   Search,
   X,
 } from "lucide-react";
 import MapPanel from "./MapPanel";
-import type { Feature, Plan, SceneSummary, Session } from "./types";
+import type { Feature, MediaMap, Plan, SceneSummary, Session } from "./types";
 
 const money = (value: unknown) =>
   value == null || value === ""
@@ -147,6 +148,28 @@ export default function App() {
   const [panelOpen, setPanelOpen] = useState(true);
   const [overviewRequest, setOverviewRequest] = useState(0);
   const [mapIssue, setMapIssue] = useState<string | null>(null);
+  // «Сообщения» (/api/media/map): null — the layer is unavailable here (media not served,
+  // or closed to this viewer); the toggle is then hidden rather than shown broken.
+  const [messages, setMessages] = useState<MediaMap | null>(null);
+  const [showMessages, setShowMessages] = useState(true);
+  useEffect(() => {
+    let stopped = false;
+    const load = () =>
+      fetch("/api/media/map", { credentials: "same-origin" })
+        .then((response) => (response.ok ? (response.json() as Promise<MediaMap>) : null))
+        .catch(() => null)
+        .then((data) => {
+          if (!stopped) setMessages(data);
+        });
+    load();
+    const timer = window.setInterval(load, 60_000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+  const messageCount =
+    (messages?.events.features.length ?? 0) + (messages?.reports.features.length ?? 0);
   const [zoneView, setZoneView] = useState<"plan" | "all">("plan");
   const scene = scenes.find((item) => item.chip_id === route.chipId) ?? null;
   const activeSession = scene?.run_id === session?.run_id ? session : null;
@@ -353,6 +376,8 @@ export default function App() {
             plan={plan}
             baseMap={baseMap}
             visibleLayers={layers}
+            messages={messages}
+            showMessages={showMessages}
             overlayOpacity={opacity}
             selectedAsset={assetId}
             selectedZone={zoneId}
@@ -472,6 +497,20 @@ export default function App() {
                 Спутник
               </button>
             </div>
+            {messages && (
+              <div className="basemap-switch media-switch">
+                <button
+                  className={showMessages ? "active" : ""}
+                  onClick={() => setShowMessages(!showMessages)}
+                  aria-pressed={showMessages}
+                  title={`События из СМИ и обращения очевидцев: ${messages.events.features.length} событий, ${messages.reports.features.length} обращений ждут модерации. Повод проверить территорию — не входит в p, ущерб и план.`}
+                >
+                  <MessageSquareWarning size={15} />
+                  Сообщения
+                  <span className="media-count">{messageCount}</span>
+                </button>
+              </div>
+            )}
           </div>
           {scene && panelOpen && (
             <aside className="context-panel">
