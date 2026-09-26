@@ -2020,21 +2020,41 @@ details.context-foot summary { cursor: pointer; margin-bottom: 6px; }
   }
 }
 
-/* Analysis page: «К карте» and «Все наблюдения» lead off the whole screen, so they sit in the top
-   bar right after the navigation, not in the head of the selected scene. */
-.top-analysis-actions {
+/* Analysis page: «К карте» and «Все наблюдения» lead off the whole screen, so they sit above
+   «Локации» (the strip under the top bar), not in the head of the selected scene. The column
+   (actions + locations) sticks as one; vh inside the zoomed shell is divided by the zoom. */
+.analysis-side {
+  position: sticky;
+  top: 64px;
+  align-self: start;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-left: 28px;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  height: calc(100vh / var(--ui-zoom) - 88px);
+  margin-top: 64px;
 }
 
-.top-analysis-actions button {
+.analysis-side .analysis-locations {
+  position: static;
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  margin-top: 0;
+}
+
+.analysis-rail {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.analysis-rail button {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   height: 32px;
-  padding: 0 12px;
+  padding: 0 11px;
   border: 0;
   border-radius: var(--radius);
   background: #171b1e;
@@ -2044,12 +2064,83 @@ details.context-foot summary { cursor: pointer; margin-bottom: 6px; }
   transition: background 160ms ease;
 }
 
-.top-analysis-actions button:hover {
+.analysis-rail button:hover {
   background: #22292d;
 }
 
 @media (max-width: 700px) {
-  .top-analysis-actions {
-    display: none; /* «Земля» in the navigation leads back to the map on a phone */
+  .analysis-side {
+    position: static;
+    height: auto;
+    margin-top: 100px;
+  }
+  .analysis-side .analysis-locations {
+    flex: none;
+    height: 248px;
+  }
+}
+
+/* Tiling (Hyprland-like): a scene card and a message card open together are laid side by side —
+   the scene card slides to the left column in place of «Наблюдения», the message card keeps the
+   right. The scene card is anchored by `left` so the move animates; vw inside the zoomed card is
+   multiplied by the zoom, so it is divided out. Phones keep their bottom sheets. */
+@media (min-width: 701px) {
+  .context-panel {
+    right: auto;
+    left: calc(100vw / var(--ui-zoom) - 28px - 372px);
+    transition: left 340ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .map-screen.tiled .context-panel {
+    left: var(--grid-gutter);
+  }
+  .map-top-left {
+    transition: opacity 220ms ease, transform 340ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s;
+  }
+  .map-screen.tiled .map-top-left {
+    opacity: 0;
+    transform: translateX(-24px);
+    visibility: hidden;
+    transition: opacity 220ms ease, transform 340ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s 340ms;
+  }
+  /* The bottom switch stays between the two cards (the message card is fixed, 400 + 24 px, unzoomed). */
+  .map-screen.tiled .map-top-center {
+    left: calc(var(--grid-gutter) + 372px);
+    right: calc(424px / var(--ui-zoom));
+  }
+}
+
+@media (min-width: 701px) and (max-width: 1100px) {
+  .context-panel {
+    left: calc(100vw / var(--ui-zoom) - 28px - 340px);
+  }
+  .map-screen.tiled .map-top-center {
+    left: calc(var(--grid-gutter) + 340px);
+  }
+}
+
+/* Analysis page: no top shade over the column «К карте / Все наблюдения / Локации» (it does not
+   scroll); the shade stays over the scrolling content only, under the top bar. */
+.topbar-analysis::before {
+  display: none;
+}
+
+.analysis-content::before {
+  content: "";
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: block;
+  height: 128px;
+  margin-bottom: -128px;
+  background: linear-gradient(180deg, #050607e8 0%, #050607a8 48%, transparent 100%);
+  pointer-events: none;
+}
+
+@media (max-width: 700px) {
+  .analysis-content::before {
+    display: none;
+  }
+  .topbar-analysis::before {
+    display: block;
   }
 }
