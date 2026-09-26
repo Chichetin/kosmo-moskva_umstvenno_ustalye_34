@@ -1107,6 +1107,15 @@ export default function App() {
         </div>
           <div className={`analysis-screen ${mapVisible ? "analysis-hidden" : ""}`} aria-hidden={mapVisible} inert={mapVisible}>
             <div className="analysis-shell">
+              {/* Screen-wide navigation: its own column, not part of the selected scene. */}
+              <nav className="analysis-rail" aria-label="Переход с экрана анализа">
+                <button onClick={() => (scene ? navigate("scene", scene.chip_id) : overview())}>
+                  <ArrowLeft size={17} /> К карте
+                </button>
+                <button onClick={overview}>
+                  <Globe2 size={17} /> Все наблюдения
+                </button>
+              </nav>
               <aside className="analysis-locations" aria-label="Локации для анализа">
                 <div className="analysis-locations-head">
                   <h2>Локации</h2>
@@ -1158,16 +1167,6 @@ export default function App() {
               </aside>
               <div className="analysis-content">
             <div className="analysis-head">
-              <button
-                onClick={() =>
-                  scene ? navigate("scene", scene.chip_id) : overview()
-                }
-              >
-                <ArrowLeft size={17} /> К карте
-              </button>
-              <button onClick={overview}>
-                <Globe2 size={17} /> Все наблюдения
-              </button>
               <div>
                 <span>{scene ? "АНАЛИЗ СЦЕНЫ" : "АНАЛИЗ НАБЛЮДЕНИЙ"}</span>
                 <h1>
