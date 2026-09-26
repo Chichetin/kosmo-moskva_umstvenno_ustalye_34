@@ -71,6 +71,8 @@ all:
 	  uv run --frozen python -m floodvalue.baseline.predict --chip $(ALL_CHIP) $(if $(OUT),--out $(OUT)); fi
 	@# #115: маска baseline того же S1 рядом с растрами основного метода (доп. файл §2)
 	uv run --frozen python -m floodvalue.baseline.predict --chip $(ALL_CHIP) --mask-only $(if $(OUT),--out $(OUT))
+	@# #149: вода до события по архиву S1 (доп. файлы); без сети — предупреждение, код 0
+	$(PY) prewater --chip $(ALL_CHIP) $(if $(OUT),--out $(OUT))
 	$(PY) assets $(ALL_ARGS)
 	$(PY) procure $(ALL_ARGS)
 	$(PY) export $(ALL_ARGS)

@@ -17,6 +17,7 @@ STAGES = {
     "calibrate": ("floodvalue.calibration.run", "калибровка и порог на validation"),
     "predict": ("floodvalue.model.predict", "p-растр и маска: --chip <id> или --s1 <любой S1 GeoTIFF>"),
     "assets": ("floodvalue.assets.run", "10 объектов, p, EL, неопределённость, приоритеты"),
+    "prewater": ("floodvalue.prewater.run", "вода до события по архиву S1 → слой «новая вода» (доп. файлы, #149)"),
     "procure": ("floodvalue.procurement.run", "зоны, цена ПП 840, A/B/C: --budget <руб>"),
     "export": ("floodvalue.export.run", "собрать 12 обязательных файлов"),
     "validate": ("floodvalue.export.validate", "проверить 12 файлов по контрактам"),
