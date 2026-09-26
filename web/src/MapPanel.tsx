@@ -783,7 +783,14 @@ export default function MapPanel(props: Props) {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !props.focus) return;
-    map.easeTo({ center: props.focus.lngLat, zoom: props.focus.zoom, duration: reducedMotion() ? 0 : 900 });
+    // From the «Новости» panel: keep the place between the scene list and the panel.
+    const news = window.innerWidth > 700 ? document.querySelector(".news-panel")?.getBoundingClientRect() : null;
+    map.easeTo({
+      center: props.focus.lngLat,
+      zoom: props.focus.zoom,
+      duration: reducedMotion() ? 0 : 900,
+      ...(news ? { padding: { ...overviewPadding(), right: Math.max(0, Math.round(window.innerWidth - news.left)) } } : {}),
+    });
   }, [props.focus?.request]);
   useEffect(() => {
     const map = mapRef.current;
