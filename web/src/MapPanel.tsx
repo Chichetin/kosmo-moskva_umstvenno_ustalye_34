@@ -583,7 +583,7 @@ export default function MapPanel(props: Props) {
         type: "circle",
         source: "media-events",
         filter: ["==", ["geometry-type"], "Point"],
-        paint: { "circle-radius": 13, "circle-color": NEWS_COLOR, "circle-opacity": 0.28, "circle-blur": 0.9 },
+        paint: { "circle-radius": 15, "circle-color": NEWS_COLOR, "circle-opacity": 0.4, "circle-blur": 0.8 },
       });
       map.addLayer({
         id: "media-event",
@@ -591,11 +591,12 @@ export default function MapPanel(props: Props) {
         source: "media-events",
         filter: ["==", ["geometry-type"], "Point"],
         paint: {
-          "circle-radius": 6,
+          "circle-radius": 7,
           "circle-color": NEWS_COLOR,
-          "circle-opacity": ["case", ["==", ["get", "review_state"], "reviewed"], 1, 0.85],
-          "circle-stroke-color": "#06240f",
-          "circle-stroke-width": 1.5,
+          "circle-opacity": ["case", ["==", ["get", "review_state"], "reviewed"], 1, 0.9],
+          // light outline: readable over dark forest on the «Спутник» basemap too
+          "circle-stroke-color": "#f2fff6",
+          "circle-stroke-width": 1.8,
         },
       });
       map.addLayer({
