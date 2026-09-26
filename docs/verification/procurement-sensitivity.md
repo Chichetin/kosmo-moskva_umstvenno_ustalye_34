@@ -3,7 +3,7 @@
 Чип **Sri-Lanka_713926** (validation; test-чипы не читались), основной метод `unet`, порог 0,37,
 базовый бюджет 5 000 руб., ставка Б = 788,64 руб./км² (`base_rate_status=scenario`), срок
 решения по D-043: `decision_at` = дата S1 чипа (2017-05-30) + сценарное время из
-`configs/run.yaml` = 2017-05-30T23:59:59+00:00, окно 12 ч (база — срок 2017-05-31T11:59:59+00:00). Код — commit `14293ad` (ветка PR #109 после merge `origin/main` и правок скептика D-047).
+`configs/run.yaml` = 2017-05-30T23:59:59+00:00, окно 12 ч (база — срок 2017-05-31T11:59:59+00:00). Код — commit `14293ad` (дальнейшие коммиты PR меняют только документы и округление `with_base_rate` до ROUND_HALF_UP — при множителях ×0,5…×2,0 ставка точная, числа те же) (ветка PR #109 после merge `origin/main` и правок скептика D-047).
 Решение — D-047.
 
 ## Воспроизведение
@@ -58,7 +58,7 @@ make all CHIP=Sri-Lanka_713926 BUDGET=5000 OUT=outputs-land109/run
 | `deadline_+24h` | B | `{"deadline_hours_after_decision": 24, "decision_deadline": "2017-05-31T23:59:59+00:00"}` | W-CHIP | 42465.93 | 43965.93 | 16842207.70 | `counterfactual_over_budget` |
 | `deadline_+48h` | C | `{"deadline_hours_after_decision": 48, "decision_deadline": "2017-06-01T23:59:59+00:00"}` | Z-A02, Z-A10 | 4905.96 | 6905.96 | 12610565.84 | `within_budget` |
 | `deadline_+48h` | B | `{"deadline_hours_after_decision": 48, "decision_deadline": "2017-06-01T23:59:59+00:00"}` | W-CHIP | 42465.93 | 43965.93 | 16842207.70 | `counterfactual_over_budget` |
-| `social_constraint_on` | C | `{"social_constraint": true}` | G3-11 | 4883.82 | 6383.82 | 293703.75 | `within_budget` |
+| `social_constraint_on` | C | `{"social_asset_ids": ["A06", "A07"], "social_constraint": true}` | G3-11 | 4883.82 | 6383.82 | 293703.75 | `within_budget` |
 
 ## Что из этого следует (только по числам таблицы)
 

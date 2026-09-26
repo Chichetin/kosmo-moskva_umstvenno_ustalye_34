@@ -463,3 +463,10 @@ def test_empty_plan_uncertainty_is_initial_not_scenario():
     assert "scenario" not in empty.split("бюджета 0.00")[1].split("(без новых")[0]
     full = _of(rows, "budget_5000.00", "C")[0]["interpretation"]
     assert "остаточная неопределённость scenario" in full
+
+
+def test_with_base_rate_rounds_half_up():
+    """reviewer #109: сценарная ставка округляется ROUND_HALF_UP, не банковски (1,25 × 0,5 = 0,625)."""
+    cfg = {"base_rate": {"rub_per_km2": "1.25"}}
+    assert strategies.with_base_rate(cfg, Decimal("0.5"))["base_rate"]["rub_per_km2"] == "0.63"
+    assert cfg["base_rate"]["rub_per_km2"] == "1.25"

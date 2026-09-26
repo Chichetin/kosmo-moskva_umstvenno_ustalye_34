@@ -19,7 +19,7 @@ import copy
 import json
 from collections.abc import Iterable, Mapping
 from datetime import date, datetime, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from floodvalue.procurement import zones
@@ -250,7 +250,7 @@ def compute_plan(catalog: Mapping[str, Any], cov: Mapping[str, list[str]], eligi
 def with_base_rate(cfg: Mapping[str, Any], factor: Decimal) -> dict[str, Any]:
     new = copy.deepcopy(dict(cfg))
     rate = Decimal(str(cfg["base_rate"]["rub_per_km2"])) * factor
-    new["base_rate"]["rub_per_km2"] = str(rate.quantize(Decimal("0.01")))
+    new["base_rate"]["rub_per_km2"] = str(rate.quantize(Decimal("0.01"), ROUND_HALF_UP))
     return new
 
 
