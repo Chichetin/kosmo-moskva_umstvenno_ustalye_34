@@ -357,6 +357,24 @@ export default function MapPanel(props: Props) {
       map.setProjection({ type: "globe" });
       if (map.getLayer("background"))
         map.setPaintProperty("background", "background-color", "#2b3336");
+      // The vector style alone leaves the globe blank at overview zoom.
+      map.addSource("earth-relief-data", {
+        type: "raster",
+        tiles: [...mapProviders.map.reliefTiles],
+        tileSize: 256,
+        maxzoom: 6,
+        attribution: "OpenFreeMap · Natural Earth",
+      });
+      map.addLayer({
+        id: "earth-relief",
+        type: "raster",
+        source: "earth-relief-data",
+        paint: {
+          "raster-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.9, 7, 0],
+          "raster-saturation": -0.55,
+          "raster-brightness-max": 0.68,
+        },
+      }, map.getLayer("water") ? "water" : undefined);
       if (map.getLayer("water"))
         map.setPaintProperty("water", "fill-color", "#151d21");
       for (const id of [

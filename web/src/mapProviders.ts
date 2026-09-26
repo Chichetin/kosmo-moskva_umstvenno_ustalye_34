@@ -3,6 +3,7 @@ export const mapProviders = {
   map: {
     style: "https://tiles.openfreemap.org/styles/dark",
     label: "OpenFreeMap · OpenStreetMap",
+    reliefTiles: ["https://tiles.openfreemap.org/natural_earth/ne2sr/{z}/{x}/{y}.png"],
   },
   optical: {
     tiles: [
