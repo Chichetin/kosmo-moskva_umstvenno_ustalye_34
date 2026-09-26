@@ -73,15 +73,18 @@ def seed_everything(seed: int) -> None:
 
 def masked_loss(logits: torch.Tensor, target: torch.Tensor, mask: torch.Tensor,
                 dice_weight: float) -> torch.Tensor:
-    """BCE + soft Dice over pixels where mask is True (label -1 and NaN S1 excluded)."""
+    """BCE + soft Dice over pixels where mask is True (label -1 and NaN S1 excluded).
+
+    `mask` may also be a per-pixel weight in [0, 1]: every sum is then weighted once (linear
+    in the weight). For a boolean mask this is exactly the D-019 loss."""
     logits, target, m = logits.float(), target.float(), mask.float()
     n = m.sum().clamp_min(1.0)
     bce = (F.binary_cross_entropy_with_logits(logits, target, reduction="none") * m).sum() / n
     if dice_weight == 0:
         return bce
-    p = torch.sigmoid(logits) * m
-    t = target * m
-    dice = 1 - (2 * (p * t).sum() + 1) / (p.sum() + t.sum() + 1)
+    s = torch.sigmoid(logits)
+    inter = (s * target * m).sum()
+    dice = 1 - (2 * inter + 1) / ((s * m).sum() + (target * m).sum() + 1)
     return bce + dice_weight * dice
 
 
