@@ -21,8 +21,8 @@ def main(d: Path) -> None:
     with open(d / "loeo-chips.csv", encoding="utf-8", newline="") as f:
         chips = list(csv.DictReader(f))
 
-    print("| Событие | AP e19 | AP e60 | AP baseline | IoU e19 при p ≥ 0,5 | oracle-IoU e19 (порог) |")
-    print("|---|---|---|---|---|---|")
+    print("| Событие | AP e19 | AP e60 | AP baseline | IoU e19 при p ≥ 0,5 | oracle-IoU e19 (порог) | oracle-IoU baseline |")
+    print("|---|---|---|---|---|---|---|")
     for fold in summary["folds"]:
         ev, r = fold["event"], fold["ranking"]
         rows = [c for c in chips if c["event"] == ev]
@@ -30,7 +30,7 @@ def main(d: Path) -> None:
         iou = tp / (tp + fp + fn) if tp + fp + fn else float("nan")
         print(f"| {ev} | {fmt(r['unet_e19']['ap'])} | {fmt(r['unet_e60']['ap'])} | "
               f"{fmt(r['baseline']['ap'])} | {fmt(iou)} | {fmt(r['unet_e19']['oracle_iou'])} "
-              f"({fmt(r['unet_e19']['oracle_score_gt'])}) |")
+              f"({fmt(r['unet_e19']['oracle_score_gt'])}) | {fmt(r['baseline']['oracle_iou'])} |")
 
     print()
     print("| Событие | чипов | ошибок e19 (FP+FN) | чипов на ≥ 50 % ошибок | два худших чипа (доля ошибок) |")
