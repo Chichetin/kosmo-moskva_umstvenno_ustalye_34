@@ -91,12 +91,16 @@ const REVIEW_STATE: Record<string, string> = {
   under_review: "на проверке", reviewed: "проверено",
 };
 const ORIGIN: Record<string, string> = { news: "СМИ", bulletin: "сводка", citizen: "очевидец" };
-const when = (value: unknown) =>
-  typeof value === "string" && value
-    ? new Intl.DateTimeFormat("ru-RU", {
-        day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC",
-      }).format(new Date(value)) + " UTC"
-    : "время неизвестно";
+// Time as precise as the source says: a day-level or coarsened time never looks like "00:00".
+const when = (value: unknown, precision: unknown, coarse: boolean) => {
+  if (typeof value !== "string" || !value) return "время неизвестно";
+  const byDay = precision === "day" || precision === "several_days" || precision === "unknown";
+  const text = new Intl.DateTimeFormat("ru-RU", byDay
+    ? { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }
+    : { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" },
+  ).format(new Date(value));
+  return byDay ? text : `${coarse ? "≈ " : ""}${text} UTC`;
+};
 // Text nodes only: titles come from news and eyewitnesses and are never parsed as HTML.
 const messageCard = (props: Record<string, unknown>, kind: "event" | "report") => {
   const node = document.createElement("div");
@@ -110,15 +114,18 @@ const messageCard = (props: Record<string, unknown>, kind: "event" | "report") =
   if (kind === "report") {
     line(`${demo}Обращение очевидца`, "strong");
     line(String(props.category_label ?? "без категории"));
-    line(`${when(props.observed_at ?? props.submitted_at)} · ждёт модерации`);
-    if (props.location_precision === "coarsened") line("место показано с точностью ≈ 1 км", "small");
+    const coarse = props.location_precision === "coarsened";
+    line(`${when(props.observed_at ?? props.submitted_at, props.observed_at ? props.observed_precision : "hour", coarse)} · ждёт модерации`);
+    if (coarse) line("место показано с точностью ≈ 1 км, время — до часа", "small");
   } else {
     line(`${demo}${String(props.title ?? "Сообщение")}`, "strong");
     const origins = String(props.source_kinds ?? "")
       .split(",").filter(Boolean).map((k) => ORIGIN[k] ?? k).join(", ");
     line(`${REPORT_TYPE[String(props.report_type)] ?? "тип неизвестен"} · ${origins || "источник неизвестен"}`);
     if (props.place_label) line(String(props.place_label));
-    line(`${when(props.event_time_start ?? props.first_detected_at)} · ${REVIEW_STATE[String(props.review_state)] ?? ""}`);
+    const coarse = props.geo_precision === "coarsened";
+    line(`${when(props.event_time_start ?? props.first_detected_at, props.event_time_start ? props.time_precision : "hour", coarse)} · ${REVIEW_STATE[String(props.review_state)] ?? ""}`);
+    if (coarse) line("место показано с точностью ≈ 1 км, время — до часа; подробности — у аналитика", "small");
   }
   line("Сообщение не проверено по снимкам и не входит в p, ущерб и план.", "small");
   return node;
@@ -590,9 +597,15 @@ export default function MapPanel(props: Props) {
         );
       }
     }, 8000);
+    const onMessage = (point: maplibregl.PointLike) =>
+      map.queryRenderedFeatures(point, {
+        layers: ["media-event", "media-report", "media-area"].filter((id) => map.getLayer(id)),
+      }).length > 0;
     const selectMarker = (event: {
+      point: maplibregl.Point;
       features?: Array<{ properties?: Record<string, unknown> }>;
     }) => {
+      if (onMessage(event.point)) return;
       const id = event.features?.[0]?.properties?.chip_id;
       const scene = current.current.scenes.find((item) => item.chip_id === id);
       if (scene) current.current.onSelectScene(scene);
@@ -601,6 +614,7 @@ export default function MapPanel(props: Props) {
     map.on("click", "analyzed", selectMarker);
     map.on("click", "cluster", (event) => {
       if (
+        onMessage(event.point) ||
         map.queryRenderedFeatures(event.point, { layers: ["analyzed"] }).length
       )
         return;
@@ -668,16 +682,18 @@ export default function MapPanel(props: Props) {
     map.on("click", "media-event", showMessage("event"));
     map.on("click", "media-area", showMessage("event"));
     map.on("click", "media-report", showMessage("report"));
-    for (const id of ["media-event", "media-report"]) {
+    for (const id of ["media-event", "media-report", "media-area"]) {
       map.on("mouseenter", id, () => (map.getCanvas().style.cursor = "pointer"));
       map.on("mouseleave", id, () => (map.getCanvas().style.cursor = ""));
     }
     map.on("click", "assets", (event) => {
+      if (onMessage(event.point)) return;
       const id = event.features?.[0]?.properties?.asset_id;
       if (typeof id === "string") current.current.onSelectAsset(id);
     });
     map.on("click", "candidate-hit", (event) => {
-      if (map.queryRenderedFeatures(event.point, { layers: ["assets"] }).length)
+      if (onMessage(event.point) ||
+          map.queryRenderedFeatures(event.point, { layers: ["assets"] }).length)
         return;
       const id = event.features?.[0]?.properties?.candidate_id;
       if (typeof id === "string") current.current.onSelectZone(id);
