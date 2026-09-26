@@ -858,7 +858,7 @@ input:focus-visible,
   padding: 1.125rem;
   background: #171719;
 }
-.analysis-metrics span {
+.analysis-metrics > div > span {
   display: block;
   color: #a1a1a8;
   font-size: 0.75rem;
