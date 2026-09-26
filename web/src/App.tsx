@@ -55,21 +55,22 @@ const date = (value: string | null | undefined) =>
 const ruPlural = new Intl.PluralRules("ru");
 const countLabel = (count: number, one: string, few: string, many: string) =>
   `${count} ${ruPlural.select(count) === "one" ? one : ruPlural.select(count) === "few" ? few : many}`;
+// asset_class → Russian name exactly as in the case table «Типы и характеристики 10 объектов»
 const labels: Record<string, string> = {
   warehouse: "Склад",
-  substation: "Подстанция",
-  road_unit: "Дорожный узел",
-  facility: "Объект инфраструктуры",
+  substation: "Электроподстанция",
+  road_unit: "Участок дороги",
+  facility: "Производственный/служебный объект",
   pumping_station: "Насосная станция",
   hospital: "Медицинский объект",
-  school: "Образовательный объект",
+  school: "Школа",
   bridge: "Мост",
   water_treatment: "Очистные сооружения",
   telecom: "Узел связи",
   telecom_node: "Узел связи",
   water_intake: "Водозабор",
   workshop: "Мастерская",
-  clinic: "Медпункт",
+  clinic: "Клиника",
 };
 // Russian names of the Sen1Floods11 event territories: the operator searches by country.
 const TERRITORY_RU: Record<string, string> = {

@@ -299,13 +299,13 @@ export default function MapPanel(props: Props) {
     (map.getSource("scene-extent") as GeoJSONSource | undefined)?.setData(
       features(outline),
     );
-    // each point is signed «A05 · Клиника»: the operator sees which object it is on the map
+    // each point is signed «A05: Клиника»: the operator sees which object it is on the map
     (map.getSource("assets-data") as GeoJSONSource | undefined)?.setData(
       features((session?.assets.features ?? []).map((asset) => ({
         ...asset,
         properties: {
           ...asset.properties,
-          label: `${String(asset.properties.asset_id)} · ${assetLabel ? assetLabel(asset) : String(asset.properties.asset_class)}`,
+          label: `${String(asset.properties.asset_id)}: ${assetLabel ? assetLabel(asset) : String(asset.properties.asset_class)}`,
         },
       }))),
     );
