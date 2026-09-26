@@ -2,6 +2,7 @@
 invalid input, status only by token, closed attachments, operator actions need authorisation,
 moderation puts the event on the layer."""
 
+import sys
 from dataclasses import replace
 
 import pytest
@@ -197,7 +198,8 @@ def test_fonts_are_served_only_as_woff2_from_their_dir(app, tmp_path, monkeypatc
         (fonts / "Link.woff2").symlink_to(tmp_path / "secret.woff2")  # resolves outside the dir
         bad_names.append("Link.woff2")
     except OSError:  # Windows without developer mode (WinError 1314): no symlink to escape with
-        pass
+        if sys.platform != "win32":
+            raise
     for bad in bad_names:
         assert call(app, "GET", f"/media/static/fonts/{bad}").status == 404
     assert "font-src 'self'" in call(app, "GET", "/report").headers["content-security-policy"]
