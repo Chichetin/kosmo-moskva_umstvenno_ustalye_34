@@ -1406,14 +1406,22 @@ tbody tr.selected,
   .topbar-map .top-nav {
     top: 58px;
     left: 50%;
-    gap: 22px;
+    gap: 16px;
   }
   .topbar-analysis .top-nav {
-    margin-left: auto;
-    gap: 12px;
+    position: absolute;
+    top: 58px;
+    left: 50%;
+    margin-left: 0;
+    height: auto;
+    transform: translateX(-50%);
+    gap: 16px;
   }
   .top-nav button {
     font-size: 14px;
+  }
+  .top-nav .nav-count {
+    display: none;
   }
   .top-export {
     display: none;
@@ -2012,65 +2020,36 @@ details.context-foot summary { cursor: pointer; margin-bottom: 6px; }
   }
 }
 
-/* Analysis page: «К карте» and «Все наблюдения» lead off the whole screen, so they sit in their
-   own column left of «Локации», not in the head of the selected scene. */
-.analysis-shell {
-  grid-template-columns: 148px 264px minmax(0, 1fr);
-  max-width: 1780px;
-}
-
-@media (min-width: 1800px) {
-  .analysis-shell {
-    grid-template-columns: 156px 300px minmax(0, 1fr);
-    max-width: 2020px;
-  }
-}
-
-@media (max-width: 1100px) {
-  .analysis-shell {
-    grid-template-columns: 132px 220px minmax(0, 1fr);
-  }
-}
-
-.analysis-rail {
-  position: sticky;
-  top: 80px;
-  align-self: start;
-  display: grid;
-  gap: 10px;
-  margin-top: 96px;
-}
-
-.analysis-rail button {
+/* Analysis page: «К карте» and «Все наблюдения» lead off the whole screen, so they sit in the top
+   bar right after the navigation, not in the head of the selected scene. */
+.top-analysis-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 10px 13px;
+  gap: 10px;
+  margin-left: 28px;
+}
+
+.top-analysis-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 12px;
   border: 0;
   border-radius: var(--radius);
   background: #171b1e;
   color: #dce3e6;
-  font-size: 14px;
+  font-size: 13px;
   white-space: nowrap;
   transition: background 160ms ease;
 }
 
-.analysis-rail button:hover {
-  background: #20262b;
+.top-analysis-actions button:hover {
+  background: #22292d;
 }
 
 @media (max-width: 700px) {
-  .analysis-rail {
-    position: static;
-    display: flex;
-    flex-wrap: wrap;
-    margin-top: 74px;
-  }
-  .analysis-rail button {
-    width: auto;
-  }
-  .analysis-rail + .analysis-locations {
-    margin-top: 16px;
+  .top-analysis-actions {
+    display: none; /* «Земля» in the navigation leads back to the map on a phone */
   }
 }
