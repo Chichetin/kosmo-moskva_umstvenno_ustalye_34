@@ -1653,12 +1653,8 @@ html {
 }
 
 /* Interface scale: all sizes are in rem, and 1rem = 16px × --ui-zoom, so every screen and panel
-   scales by one step with the window. Only MapLibre's own controls (px in its stylesheet) are
-   zoomed; its canvas and popups stay unscaled so pointer coordinates remain exact. */
-.maplibregl-ctrl-bottom-right,
-.maplibregl-ctrl-bottom-left {
-  zoom: var(--ui-zoom);
-}
+   scales by one step with the window. Nothing is zoomed: the map controls are sized in rem by the
+   rules above (zooming them too would scale them twice). */
 
 /* Logo: larger and heavier than the navigation. */
 .brand {
@@ -2258,4 +2254,13 @@ th .hint { margin-left: 4px; }
 
 .top-nav .nav-messages.active::after {
   background: #f0b85a;
+}
+
+/* Tiling on the analysis page: «Новости» / «Сообщения» take the right column, the page shifts
+   left instead of lying under the window. */
+@media (min-width: 701px) {
+  .analysis-screen.with-side-window .analysis-shell {
+    margin-right: var(--tile-right, 26.5rem);
+    transition: margin-right 340ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
 }
