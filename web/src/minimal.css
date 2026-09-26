@@ -1640,21 +1640,21 @@ tbody tr.selected,
 
 @media (min-width: 1100px) {
   .topbar, .map-top-left, .map-top-center, .search-panel, .search-toggle, .reopen-panel,
-  .context-panel, .basemap-switch, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
+  .context-panel, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
     zoom: 1.2;
   }
 }
 
 @media (min-width: 1800px) {
   .topbar, .map-top-left, .map-top-center, .search-panel, .search-toggle, .reopen-panel,
-  .context-panel, .basemap-switch, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
+  .context-panel, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
     zoom: 1.35;
   }
 }
 
 @media (min-width: 2300px) {
   .topbar, .map-top-left, .map-top-center, .search-panel, .search-toggle, .reopen-panel,
-  .context-panel, .basemap-switch, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
+  .context-panel, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
     zoom: 1.5;
   }
 }
@@ -1846,5 +1846,44 @@ details.context-foot summary { cursor: pointer; margin-bottom: 6px; }
   .scene-mode .map-top-center {
     left: 0;
     right: 0;
+  }
+}
+
+/* One tab style for the navigation above the globe and the switch below it: same type, height,
+   spacing and underline. .basemap-switch lives inside .map-top-center, which already carries
+   the --ui zoom step, so it is no longer zoomed a second time (it was 1.2 × 1.2). */
+.topbar-map .top-nav,
+.map-top-center,
+.basemap-switch {
+  gap: 30px;
+}
+
+.top-nav button,
+.top-nav button.active,
+.basemap-switch button,
+.basemap-switch button.active {
+  height: 34px;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 550;
+  line-height: 34px;
+}
+
+.top-nav button.active::after,
+.basemap-switch button.active::after {
+  bottom: -5px;
+}
+
+@media (max-width: 700px) {
+  .topbar-map .top-nav,
+  .map-top-center,
+  .basemap-switch {
+    gap: 22px;
+  }
+  .top-nav button,
+  .top-nav button.active,
+  .basemap-switch button,
+  .basemap-switch button.active {
+    font-size: 14px;
   }
 }
