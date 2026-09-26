@@ -15,6 +15,7 @@ import MapPanel from "./MapPanel";
 import { WorldLocator } from "./WorldLocator";
 import MessagePanel, { type SelectedMessage } from "./MessagePanel";
 import SensitivityPanel from "./SensitivityPanel";
+import NewsPanel from "./NewsPanel";
 import {
   formatExactProbability,
   formatNumber as money,
@@ -195,6 +196,7 @@ export default function App() {
   const [readyAnalysisNotice, setReadyAnalysisNotice] = useState<{ chipId: string; territory: string } | null>(null);
   const [searchOpen, setSearchOpen] = useState(() => window.innerWidth >= 700);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [newsOpen, setNewsOpen] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [overviewRequest, setOverviewRequest] = useState(0);
   const [mapIssue, setMapIssue] = useState<string | null>(null);
@@ -576,6 +578,14 @@ export default function App() {
           >
             Анализ
           </button>
+          <button
+            className={newsOpen ? "active" : ""}
+            onClick={() => setNewsOpen(!newsOpen)}
+            aria-expanded={newsOpen}
+            title="Все новости и сводки, из которых берётся слой «Сообщения»"
+          >
+            Новости
+          </button>
         </nav>
         <span className="top-spacer" />
         {activeSession && (
@@ -597,6 +607,7 @@ export default function App() {
         {exportError}
         <button onClick={() => setExportError(null)} aria-label="Скрыть ошибку выгрузки"><X size={14} /></button>
       </div>}
+      {newsOpen && <NewsPanel onClose={() => setNewsOpen(false)} />}
       <main className="workspace">
         <div
           className={`map-screen ${mapVisible ? "" : "map-hidden"} ${scene ? "scene-mode" : ""} ${baseMap === "optical" ? "optical-mode" : ""}`}
