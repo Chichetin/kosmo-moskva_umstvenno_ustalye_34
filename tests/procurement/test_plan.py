@@ -112,6 +112,23 @@ def test_cli_procure_writes_contract_files(tmp_path):
 
 
 
+def test_coverage_denominator_is_exact_kopeck_sum(tmp_path):
+    # #127: EL are to the kopeck (Sri-Lanka_713926 values); their float sum is 16842208.290000003
+    els = ["2425393.18", "7825102.4", "113413.68", "28478.6", "335218.13", "146091.74",
+           "147612.03", "1013717.05", "21718.04", "4785463.44"]
+    _write_run_dir(tmp_path)
+    with open(tmp_path / "asset_loss.csv", "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["asset_id", "chip_id", "p_flood", "expected_loss_rub", "uncertainty",
+                    "rank", "status"])
+        for i, el in enumerate(els, start=1):
+            w.writerow([f"A{i:02d}", "X_1", 0.5, el, 0.5, i, "ok"])
+    assert sum(map(float, els)) != 16842208.29  # the float noise this test is about
+    assert main(["procure", "--budget", "5000", "--out", str(tmp_path)]) == 0
+    meta = json.loads((tmp_path / "procurement_metadata.json").read_text(encoding="utf-8"))
+    assert meta["coverage_share_denominator_rub"] == 16842208.29
+
+
 def test_cli_missing_assets(tmp_path):
     assert main(["procure", "--budget", "5000", "--out", str(tmp_path)]) == 1
 

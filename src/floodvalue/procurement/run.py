@@ -282,7 +282,9 @@ def write_outputs(run_dir: Path, budget_rub: float) -> dict[str, Any]:
                                   decision_at=ctx["decision_at"],
                                   deadline_hours=SENS_DEADLINE_HOURS)
     _write_csv(run_dir / "procurement_sensitivity.csv", SENS_FIELDS, sens)
-    denom = sum(float(r["expected_loss_rub"]) for r in ctx["loss"] if r["status"] == "ok")
+    # exact sum of the kopeck EL of asset_loss.csv (#127), same as coverage_share in the CSV
+    denom = float(sum((Decimal(r["expected_loss_rub"]) for r in ctx["loss"] if r["status"] == "ok"),
+                      Decimal(0)))
     kinds: dict[str, int] = {}
     for f in ctx["catalog"]["features"]:
         k = f["properties"]["zone_kind"]
