@@ -5,6 +5,7 @@ import type { FeatureCollection, Geometry, Point, Polygon } from "geojson";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { mapProviders } from "./mapProviders";
+import { POLAR_ICE } from "./polarIce";
 import type { Feature, MediaMap, Plan, SceneSummary, Session } from "./types";
 import type { SelectedMessage } from "./MessagePanel";
 import { ORIGIN, REPORT_TYPE, REVIEW_STATE, when } from "./mediaLabels";
@@ -378,15 +379,20 @@ export default function MapPanel(props: Props) {
         map.setPaintProperty("background", "background-color", "#1c2124");
       if (map.getLayer("water"))
         map.setPaintProperty("water", "fill-color", "#0a0f12");
-      // The dark style paints ice near-black; on the map ice reads as ice: glaciers and ice shelves white.
-      for (const [id, color] of [
-        ["landcover_glacier", "#eef3f5"],
-        ["landcover_ice_shelf", "#e2eaee"],
-      ] as const) {
-        if (!map.getLayer(id)) continue;
-        map.setPaintProperty(id, "fill-color", color);
-        map.setPaintProperty(id, "fill-opacity", 0.95);
+      // Only polar ice is white (Arctic and Antarctic); mountain glaciers blend into land — the
+      // satellite view shows them anyway. Tile glaciers mix both, so polar ice comes from its own layer.
+      if (map.getLayer("landcover_glacier")) map.setPaintProperty("landcover_glacier", "fill-opacity", 0);
+      if (map.getLayer("landcover_ice_shelf")) {
+        map.setPaintProperty("landcover_ice_shelf", "fill-color", "#e2eaee");
+        map.setPaintProperty("landcover_ice_shelf", "fill-opacity", 0.95);
       }
+      const styleLayers = map.getStyle().layers;
+      const glacierAt = styleLayers.findIndex((l) => l.id === "landcover_glacier");
+      map.addSource("polar-ice", { type: "geojson", data: POLAR_ICE });
+      map.addLayer(
+        { id: "polar-ice", type: "fill", source: "polar-ice", paint: { "fill-color": "#eef3f5", "fill-opacity": 0.95 } },
+        glacierAt >= 0 ? styleLayers[glacierAt + 1]?.id : undefined, // under labels and the satellite layer
+      );
       for (const id of [
         "place_country_major",
         "place_country_minor",
