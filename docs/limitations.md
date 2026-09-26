@@ -169,7 +169,8 @@ split, где лежит чип (#107): `make all CHIP=Sri-Lanka_713926 BUDGET=5
 (26.09) → `proxy_check.status=planned`, `result.estimated=true`, `independent=false`, MAE
 274 285,66 руб. на 10 точках (источник `docs/verification/eval-validation-summary.json`).
 Статус `planned`, потому что validation настроечная; `done` возможен только у test-чипа
-после `eval-test` замороженной конфигурации (`test-eval-summary.json`). Даже тогда результат на **test** останется сверкой с
+после `eval-test` замороженной конфигурации (`test-eval-summary.json`).
+Даже тогда результат на **test** останется сверкой с
 ручной разметкой воды по независимой выборке, а не с обследованными потерями
 инфраструктуры — этот разрыв нельзя закрыть без реального реестра объектов и полевой
 проверки (см. план в §12).
