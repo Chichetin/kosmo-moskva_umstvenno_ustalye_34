@@ -4,6 +4,8 @@ import {
   ArrowLeft,
   BarChart3,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Layers3,
   MessageSquareWarning,
   Search,
@@ -134,6 +136,7 @@ export default function App() {
   const [sessionLoading, setSessionLoading] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
   const cache = useRef<Record<string, Session>>({});
+  const searchInput = useRef<HTMLInputElement>(null);
   const budgets = useRef<Record<string, number>>({});
   const [plan, setPlan] = useState<Plan | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
@@ -181,7 +184,8 @@ export default function App() {
     return () => removeEventListener("hashchange", onHash);
   }, []);
   useEffect(() => {
-    if (route.chipId) setSearchOpen(false);
+    setSearchOpen(!route.chipId && window.innerWidth >= 700);
+    if (route.chipId) setPanelOpen(true);
   }, [route.chipId]);
   useEffect(() => {
     const controller = new AbortController();
@@ -305,6 +309,38 @@ export default function App() {
   }
   const filtered = (query ? matchingScenes : [...firstByTerritory, ...remainingScenes])
     .slice(0, query ? 30 : 10);
+  const sceneSequence = query && matchingScenes.some((item) => item.chip_id === scene?.chip_id)
+    ? matchingScenes
+    : scenes;
+  const sceneIndex = sceneSequence.findIndex((item) => item.chip_id === scene?.chip_id);
+  const moveScene = (direction: -1 | 1) => {
+    const next = sceneSequence[sceneIndex + direction];
+    if (next) selectScene(next);
+  };
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const element = event.target as HTMLElement | null;
+      const typing = !!element?.closest("input, textarea, [contenteditable='true']");
+      if (event.key === "/" && mapActive && !typing) {
+        event.preventDefault();
+        setSearchOpen(true);
+        searchInput.current?.focus();
+      } else if (event.key === "Escape") {
+        if (scene) {
+          event.preventDefault();
+          overview();
+        } else if (searchOpen) {
+          setSearchOpen(false);
+        }
+      } else if (scene && mapActive && !typing &&
+                 (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+        event.preventDefault();
+        moveScene(event.key === "ArrowLeft" ? -1 : 1);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
   const activeAsset = assets.find(
     (item) => item.properties.asset_id === assetId,
   );
@@ -335,11 +371,20 @@ export default function App() {
           <button
             className={mapActive ? "active" : ""}
             onClick={() =>
-              scene ? navigate("scene", scene.chip_id) : overview()
+              scene && !mapActive ? navigate("scene", scene.chip_id) : overview()
             }
           >
             Земля
           </button>
+          {scene && (
+            <span className="scene-breadcrumb">
+              <span aria-hidden="true">›</span>
+              <span>{scene.territory.replaceAll("-", " ")}</span>
+              <button onClick={overview} aria-label="Закрыть сцену и вернуться к обзору">
+                <X size={13} />
+              </button>
+            </span>
+          )}
           <button
             className={!mapActive ? "active" : ""}
             disabled={!activeSession}
@@ -395,6 +440,7 @@ export default function App() {
               setPanelOpen(true);
             }}
             onIssue={setMapIssue}
+            onReturnOverview={overview}
           />
           <div className="map-top-left">
             <div className="search-panel">
@@ -404,6 +450,7 @@ export default function App() {
               <label className="search-box">
                 <Search size={17} />
                 <input
+                  ref={searchInput}
                   value={query}
                   onFocus={() => setSearchOpen(true)}
                   onChange={(event) => {
@@ -524,11 +571,23 @@ export default function App() {
                   </p>
                 </div>
                 <button
-                  onClick={() => setPanelOpen(false)}
-                  aria-label="Свернуть панель"
+                  onClick={overview}
+                  aria-label="Закрыть сцену и вернуться к обзору"
                 >
                   <X size={17} />
                 </button>
+              </div>
+              <div className="scene-navigation">
+                <button onClick={overview}><ArrowLeft size={15} /> Все наблюдения</button>
+                <div>
+                  <button onClick={() => moveScene(-1)} disabled={sceneIndex <= 0} aria-label="Предыдущая сцена">
+                    <ChevronLeft size={17} />
+                  </button>
+                  <button onClick={() => moveScene(1)} disabled={sceneIndex < 0 || sceneIndex >= sceneSequence.length - 1} aria-label="Следующая сцена">
+                    <ChevronRight size={17} />
+                  </button>
+                </div>
+                <button onClick={() => setPanelOpen(false)}>Свернуть</button>
               </div>
               {scene.preview_url && (
                 <img

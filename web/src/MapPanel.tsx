@@ -34,6 +34,7 @@ type Props = {
   onSelectAsset: (id: string) => void;
   onSelectZone: (id: string) => void;
   onIssue: (message: string | null) => void;
+  onReturnOverview: () => void;
 };
 const empty: FeatureCollection = { type: "FeatureCollection", features: [] };
 const features = (items: Feature[]): FeatureCollection => ({
@@ -144,6 +145,21 @@ export default function MapPanel(props: Props) {
   const lastScene = useRef<string | null>(null);
   const [ready, setReady] = useState(0);
   const [unavailable, setUnavailable] = useState<string | null>(null);
+  const [showOverviewHint, setShowOverviewHint] = useState(false);
+
+  useEffect(() => {
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !popup.current?.isOpen()) return;
+      popup.current.remove();
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
+    window.addEventListener("keydown", onEscape, true);
+    return () => window.removeEventListener("keydown", onEscape, true);
+  }, []);
+  useEffect(() => {
+    if (!props.scene) setShowOverviewHint(false);
+  }, [props.scene?.chip_id]);
 
   const updateVisibility = () => {
     const map = mapRef.current;
@@ -325,6 +341,9 @@ export default function MapPanel(props: Props) {
       return;
     }
     mapRef.current = map;
+    map.on("zoomend", () => {
+      setShowOverviewHint(!!current.current.scene && map.getZoom() < 4);
+    });
     map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-left");
     const attribution = host.current.querySelector<HTMLDetailsElement>(
       ".maplibregl-ctrl-attrib",
@@ -842,6 +861,11 @@ export default function MapPanel(props: Props) {
           Карта недоступна: {unavailable}. Выберите сцену в списке и откройте
           анализ.
         </div>
+      )}
+      {props.active && props.scene && showOverviewHint && (
+        <button className="overview-hint" onClick={props.onReturnOverview}>
+          Вернуться к обзору
+        </button>
       )}
     </div>
   );
