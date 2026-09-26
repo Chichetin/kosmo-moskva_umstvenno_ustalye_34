@@ -84,14 +84,14 @@ void main() {
   vec2 px = gl_FragCoord.xy;
   vec2 uv = px / uRes;
   float t = uTime;
-  vec3 col = mix(mix(vec3(0.020, 0.024, 0.027), vec3(0.055, 0.098, 0.176), uOcean),
-                 mix(vec3(0.043, 0.051, 0.063), vec3(0.067, 0.118, 0.208), uOcean), uv.y);
+  vec3 col = mix(mix(vec3(0.012, 0.016, 0.020), vec3(0.055, 0.098, 0.176), uOcean),
+                 mix(vec3(0.027, 0.035, 0.043), vec3(0.067, 0.118, 0.208), uOcean), uv.y);
   vec2 b = vec2(0.12, 0.08) + vec2(0.07 * sin(t * 0.108), 0.05 * sin(t * 0.083 + 1.0)) + uShift * 0.5;
-  col = mix(col, mix(vec3(0.090, 0.106, 0.122), vec3(0.063, 0.125, 0.227), uOcean), pool(px, b, vec2(0.39, 0.30) * (1.0 + 0.05 * sin(t * 0.07))));
+  col = mix(col, mix(vec3(0.051, 0.063, 0.071), vec3(0.063, 0.125, 0.227), uOcean), pool(px, b, vec2(0.39, 0.30) * (1.0 + 0.05 * sin(t * 0.07))));
   vec2 a = vec2(0.68, 0.62) + vec2(0.06 * sin(t * 0.085), 0.04 * sin(t * 0.071 + 2.0)) + uShift;
-  col = mix(col, mix(vec3(0.149, 0.169, 0.188), vec3(0.086, 0.149, 0.251), uOcean), pool(px, a, vec2(0.52, 0.39) * (1.0 + 0.04 * sin(t * 0.06 + 1.0))));
+  col = mix(col, mix(vec3(0.082, 0.094, 0.106), vec3(0.086, 0.149, 0.251), uOcean), pool(px, a, vec2(0.52, 0.39) * (1.0 + 0.04 * sin(t * 0.06 + 1.0))));
   vec2 c = vec2(0.26, 0.82) + vec2(0.10 * sin(t * 0.071 + 3.0), 0.06 * sin(t * 0.058)) + uShift * 1.6;
-  col = mix(col, mix(vec3(0.118, 0.137, 0.153), vec3(0.078, 0.137, 0.239), uOcean), 0.72 * pool(px, c, vec2(0.30, 0.22)));
+  col = mix(col, mix(vec3(0.067, 0.078, 0.086), vec3(0.078, 0.137, 0.239), uOcean), 0.72 * pool(px, c, vec2(0.30, 0.22)));
 
   vec2 p = (px / uRes.y + uShift * 1.6) * 4.6;
   p += 0.55 * vec2(sin(p.y * 1.9 + t * 0.21), cos(p.x * 1.7 - t * 0.19));
