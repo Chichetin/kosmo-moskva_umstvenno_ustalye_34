@@ -20,6 +20,9 @@ dependencies = [
   "folium>=0.17",
   "streamlit-folium>=0.22",
   "requests>=2.32",
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.30,<1",
+  "pillow>=10,<13",
 ]
 
 [dependency-groups]
