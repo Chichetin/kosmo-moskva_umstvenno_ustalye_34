@@ -98,6 +98,13 @@ def test_zones_without_loss_or_raster_are_skipped_with_note():
     assert "не строились" in cat["build"]["uncertainty_clusters"]
 
 
+def test_exterior_rings_counterclockwise_rfc7946():
+    """RFC 7946 §3.1.6: внешнее кольцо — против часовой стрелки у зон всех видов (#248)."""
+    cw = {f["properties"]["candidate_id"] for f in full_catalog()["features"]
+          if not shape(f["geometry"]).exterior.is_ccw}
+    assert cw == set()
+
+
 def test_variants_share_geometry_and_area():
     """Варианты сенсора/разрешения/типа съёмки одной геометрии: тот же контур и площадь."""
     cat = by_id(full_catalog())

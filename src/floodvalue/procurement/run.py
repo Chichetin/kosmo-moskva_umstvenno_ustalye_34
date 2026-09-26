@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -426,8 +427,10 @@ def run(args) -> int:
     chip_id = args.chip or rc["chip_id"]
     out = Path(args.out) if args.out else output_dir() / chip_id
     budget = args.budget if args.budget is not None else float(rc["budget_rub"])
-    if budget < 0:
-        print("procure: бюджет не может быть отрицательным")
+    # whole kopecks only: a rounded budget would differ from run_metadata.budget.budget_rub
+    if (not math.isfinite(budget) or budget < 0
+            or Decimal(str(budget)) != Decimal(str(budget)).quantize(Decimal("0.01"))):
+        print("procure: бюджет — конечное неотрицательное число рублей с копейками")
         return 1
     for name in ("assets.csv", "asset_loss.csv"):
         if not (out / name).exists():
