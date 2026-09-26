@@ -188,9 +188,9 @@ def ensemble_method(tmp_path, monkeypatch):
     models = tmp_path / "models"
     (models / "fake").mkdir(parents=True)
     (models / "fake" / "config.json").write_text(json.dumps(
-        {"threshold": 0.5, "threshold_status": "raw", "weights_sha256": "w1"}))
+        {"threshold": 0.5, "threshold_status": "raw", "weights_sha256": "w1"}), encoding="utf-8")
     (models / "fake" / "calibration.json").write_text(json.dumps(
-        {"calibrator": PLATT, "threshold": 0.37, "input_model_sha256": "w1"}))
+        {"calibrator": PLATT, "threshold": 0.37, "input_model_sha256": "w1"}), encoding="utf-8")
     monkeypatch.setattr(P, "MODELS_DIR", models)
     monkeypatch.setenv("FLOODVALUE_METHOD", "fake")
     rng = np.random.default_rng(1)
@@ -218,14 +218,14 @@ def _predict(tmp_path):
         rng_, r_grid = a.read(), (a.transform, a.crs, a.shape)
         assert a.descriptions == ("p_low", "p_high")
     assert grid == u_grid == r_grid
-    return p, u, u_nd, rng_, json.loads((out / "prediction.json").read_text())
+    return p, u, u_nd, rng_, json.loads((out / "prediction.json").read_text(encoding="utf-8"))
 
 
 def test_predict_writes_chosen_measure_and_range(ensemble_method, tmp_path):
     model_dir, s1 = ensemble_method
     (model_dir / "uncertainty.json").write_text(json.dumps(
         {"measure": "member_std", "status": "checked", "input_model_sha256": "w1",
-         "validation": {"ALL": {"auroc": 0.9}}}))
+         "validation": {"ALL": {"auroc": 0.9}}}), encoding="utf-8")
     p, u, u_nd, (lo, hi), meta = _predict(tmp_path)
     ok = np.isfinite(s1).all(0)
     want = U.measures(_fake_members(s1), PLATT, 0.37)["member_std"]
@@ -255,7 +255,7 @@ def test_predict_without_choice_writes_unverified_entropy_of_delivered_p(ensembl
 def test_predict_refuses_uncertainty_choice_of_other_weights(ensemble_method, tmp_path):
     model_dir, _ = ensemble_method
     (model_dir / "uncertainty.json").write_text(json.dumps(
-        {"measure": "entropy_p", "status": "x", "input_model_sha256": "other"}))
+        {"measure": "entropy_p", "status": "x", "input_model_sha256": "other"}), encoding="utf-8")
     with pytest.raises(RuntimeError, match="input_model_sha256"):
         P.run(types.SimpleNamespace(chip="X_1", out=str(tmp_path / "out")))
 
@@ -266,7 +266,8 @@ def test_single_model_method_gets_entropy_fallback_even_if_ensemble_measure_chos
     mod = sys.modules["fake_ens_mod"]
     monkeypatch.delattr(mod, "predict_members")
     (model_dir / "uncertainty.json").write_text(json.dumps(
-        {"measure": "mutual_info", "status": "checked", "input_model_sha256": "w1"}))
+        {"measure": "mutual_info", "status": "checked", "input_model_sha256": "w1"}),
+            encoding="utf-8")
     p, u, _, (lo, hi), meta = _predict(tmp_path)
     ok = np.isfinite(s1).all(0)
     assert meta["uncertainty"]["measure"] == "entropy_p"
