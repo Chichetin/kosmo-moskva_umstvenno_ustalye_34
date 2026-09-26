@@ -2,8 +2,13 @@
 
 Confusion counts and IoU come from `floodvalue.model.metrics` (docs/contracts.md §7); this
 module adds what the comparison report needs on top: the identical-pixel check, the paired
-chip bootstrap of ΔIoU, reliability/ECE/Brier, uncertainty-vs-error AUROC, the damage proxy
-check, the per-chip pixel QC (#64) and the test gate (configuration hash, test-log row).
+chip bootstrap of ΔIoU, reliability/ECE/MCE/Brier/log-loss with a chip bootstrap of ECE and
+log-loss, uncertainty-vs-error AUROC, the damage proxy check, the per-chip pixel QC (#64) and the
+test gate (configuration hash, test-log row).
+
+ECE bins and the log-loss are those of the calibration report (`calibration.run.N_BINS`,
+`calibration.calibrator.log_loss`, #150), so ECE/log-loss of eval-test and `calibration.json`
+are the same quantity on the same pixels.
 """
 
 from __future__ import annotations
@@ -16,10 +21,10 @@ from pathlib import Path
 import numpy as np
 from scipy.stats import rankdata
 
+from floodvalue.calibration import calibrator as CAL
+from floodvalue.calibration.run import N_BINS
 from floodvalue.data import io
 from floodvalue.model import metrics as M
-
-N_BINS = 10
 
 
 class ValidMaskMismatch(ValueError):
@@ -80,7 +85,8 @@ def paired_bootstrap_delta_iou(main: list[dict[str, int]], base: list[dict[str, 
 # --- reliability --------------------------------------------------------------------------
 
 def reliability_counts(p: np.ndarray, y: np.ndarray, n_bins: int = N_BINS) -> dict:
-    """Accumulable per-bin sums over pixels: equal-width bins on [0, 1], p = 1 in the last bin.
+    """Accumulable per-bin sums over pixels: equal-width bins on [0, 1], p = 1 in the last bin,
+    plus the sums of squared error and of log-loss (the calibration's `log_loss`, same EPS).
     `p` in [0, 1] (valid pixels only), `y` 0/1."""
     p = np.asarray(p, dtype=np.float64).ravel()
     y = np.asarray(y, dtype=np.float64).ravel()
@@ -90,7 +96,8 @@ def reliability_counts(p: np.ndarray, y: np.ndarray, n_bins: int = N_BINS) -> di
     return {"n": np.bincount(idx, minlength=n_bins).astype(np.int64),
             "sum_p": np.bincount(idx, weights=p, minlength=n_bins),
             "sum_y": np.bincount(idx, weights=y, minlength=n_bins),
-            "sum_sq": float(((p - y) ** 2).sum())}
+            "sum_sq": float(((p - y) ** 2).sum()),
+            "sum_nll": CAL.log_loss(p, y > 0.5) * p.size if p.size else 0.0}
 
 
 def add_reliability(a: dict | None, b: dict) -> dict:
@@ -122,6 +129,62 @@ def ece(counts: dict) -> float:
 def brier(counts: dict) -> float:
     total = int(counts["n"].sum())
     return counts["sum_sq"] / total if total else float("nan")
+
+
+def log_loss(counts: dict) -> float:
+    """Mean negative log-likelihood (nats), p clipped to [EPS, 1 − EPS] as in calibration."""
+    total = int(counts["n"].sum())
+    return counts["sum_nll"] / total if total else float("nan")
+
+
+def mce(counts: dict) -> float:
+    """Maximum calibration error: max over non-empty bins of |mean_p_b − observed_b|."""
+    n = counts["n"]
+    ok = n > 0
+    if not ok.any():
+        return float("nan")
+    return float((np.abs(counts["sum_p"][ok] - counts["sum_y"][ok]) / n[ok]).max())
+
+
+def mean_p(counts: dict) -> float:
+    total = int(counts["n"].sum())
+    return float(counts["sum_p"].sum() / total) if total else float("nan")
+
+
+def water_share(counts: dict) -> float:
+    total = int(counts["n"].sum())
+    return float(counts["sum_y"].sum() / total) if total else float("nan")
+
+
+def prob_summary(counts: dict) -> dict:
+    """ECE, MCE, Brier, log-loss, mean p and water share of pooled reliability counts."""
+    return {"ece": ece(counts), "mce": mce(counts), "brier": brier(counts),
+            "log_loss": log_loss(counts), "mean_p": mean_p(counts),
+            "water_share": water_share(counts), "n_pixels": int(counts["n"].sum())}
+
+
+def bootstrap_calibration(chips: list[dict], n: int = 2000, seed: int = 20260925) -> dict:
+    """Chip bootstrap of ECE and log-loss: chips resampled with replacement, their reliability
+    counts pooled; 95 % percentile CI. Resamples without pixels are dropped (n_used)."""
+    nan = float("nan")
+    empty = {"ece_ci95": [nan, nan], "log_loss_ci95": [nan, nan], "n": n, "n_used": 0,
+             "seed": seed, "n_chips": len(chips)}
+    if not chips:
+        return empty
+    cnt = np.array([c["n"] for c in chips], dtype=np.float64)          # (C, B)
+    sp = np.array([c["sum_p"] for c in chips], dtype=np.float64)
+    sy = np.array([c["sum_y"] for c in chips], dtype=np.float64)
+    nll = np.array([c["sum_nll"] for c in chips], dtype=np.float64)    # (C,)
+    idx = np.random.default_rng(seed).integers(0, len(chips), size=(n, len(chips)))
+    total = cnt[idx].sum(axis=(1, 2))
+    ok = total > 0
+    if not ok.any():
+        return empty
+    ece_b = np.abs(sp[idx].sum(axis=1) - sy[idx].sum(axis=1)).sum(axis=1)[ok] / total[ok]
+    ll_b = nll[idx].sum(axis=1)[ok] / total[ok]
+    return {"ece_ci95": [float(x) for x in np.percentile(ece_b, [2.5, 97.5])],
+            "log_loss_ci95": [float(x) for x in np.percentile(ll_b, [2.5, 97.5])],
+            "n": n, "n_used": int(ok.sum()), "seed": seed, "n_chips": len(chips)}
 
 
 # --- uncertainty --------------------------------------------------------------------------

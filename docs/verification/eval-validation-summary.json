@@ -1,6 +1,6 @@
 {
  "part": "validation",
- "commit": "aec217123a981102c83545afb34555c639670833",
+ "commit": "8bac6094cb36979a1ecf75bf0164439922ce088f",
  "config_sha256": "e8fa3dae8067cb421e9a4d014c1ccceb90bde83999d40731b229e199ba8931c8",
  "main_method": "unet",
  "threshold": 0.37,
@@ -45,40 +45,191 @@
  },
  "calibration": {
   "Nigeria": {
-   "ece": 0.02290260047952611,
-   "brier": 0.045707558194318126
+   "ece": 0.02290260075830824,
+   "mce": 0.26402858442223154,
+   "brier": 0.04570755806944546,
+   "log_loss": 0.16200668706796045,
+   "mean_p": 0.21978071980763364,
+   "water_share": 0.23562560844149932,
+   "n_pixels": 4020518,
+   "bootstrap": {
+    "ece_ci95": [
+     0.014240457104643108,
+     0.056998807248292226
+    ],
+    "log_loss_ci95": [
+     0.08776334970442741,
+     0.25809053910561874
+    ],
+    "n": 2000,
+    "n_used": 2000,
+    "seed": 20260925,
+    "n_chips": 18
+   },
+   "raw": {
+    "ece": 0.048436112507003734,
+    "mce": 0.400161934814453,
+    "brier": 0.05610816218559897,
+    "log_loss": 0.19203320104437532,
+    "mean_p": 0.1871894959344956,
+    "water_share": 0.23562560844149932,
+    "n_pixels": 4020518
+   }
   },
   "Sri-Lanka": {
-   "ece": 0.010652133593771589,
-   "brier": 0.03850214568585723
+   "ece": 0.011915513518960702,
+   "mce": 0.12961677379044748,
+   "brier": 0.038502145530370804,
+   "log_loss": 0.13978998080872826,
+   "mean_p": 0.1243682736137201,
+   "water_share": 0.11797452661332469,
+   "n_pixels": 9963261,
+   "bootstrap": {
+    "ece_ci95": [
+     0.007545225949023411,
+     0.027721446741065123
+    ],
+    "log_loss_ci95": [
+     0.10417105928151714,
+     0.18084957590804876
+    ],
+    "n": 2000,
+    "n_used": 2000,
+    "seed": 20260925,
+    "n_chips": 42
+   },
+   "raw": {
+    "ece": 0.03718848477768105,
+    "mce": 0.31808471510429165,
+    "brier": 0.04430046113429712,
+    "log_loss": 0.160120080464462,
+    "mean_p": 0.09259641155501573,
+    "water_share": 0.11797452661332469,
+    "n_pixels": 9963261
+   }
   },
   "ALL": {
-   "ece": 0.007479134468769489,
-   "brier": 0.04057379532274668
+   "ece": 0.009981552164289753,
+   "mce": 0.08285986670618294,
+   "brier": 0.0405737951760621,
+   "log_loss": 0.1461775722756669,
+   "mean_p": 0.15180059053939954,
+   "water_share": 0.15180073998595087,
+   "n_pixels": 13983779,
+   "bootstrap": {
+    "ece_ci95": [
+     0.007782055509899876,
+     0.021139767746558055
+    ],
+    "log_loss_ci95": [
+     0.11202924379488027,
+     0.18311150871485854
+    ],
+    "n": 2000,
+    "n_used": 2000,
+    "seed": 20260925,
+    "n_chips": 60
+   },
+   "raw": {
+    "ece": 0.03981488984083625,
+    "mce": 0.29293984964439473,
+    "brier": 0.04769532847418986,
+    "log_loss": 0.16929551692750336,
+    "mean_p": 0.11979315132208568,
+    "water_share": 0.15180073998595087,
+    "n_pixels": 13983779
+   }
   }
  },
+ "calibration_bins": 15,
  "uncertainty": {
   "Nigeria": {
    "n_error": 228297,
    "n_correct": 3792221,
-   "mean_u_error": 0.5635308280381968,
-   "mean_u_correct": 0.16083795670688067,
-   "auroc": 0.8931112369174784
+   "mean_u_error": 0.5635308277708856,
+   "mean_u_correct": 0.16083795194394057,
+   "auroc": 0.8931112399622279
   },
   "ALL": {
    "n_error": 796723,
    "n_correct": 13187056,
-   "mean_u_error": 0.672205201060092,
-   "mean_u_correct": 0.18301759345601276,
-   "auroc": 0.9024556047598825
+   "mean_u_error": 0.6722052009516963,
+   "mean_u_correct": 0.18301758769261592,
+   "auroc": 0.9024556069201785
   },
   "Sri-Lanka": {
    "n_error": 568426,
    "n_correct": 9394835,
-   "mean_u_error": 0.7158521020424178,
-   "mean_u_correct": 0.1919703940376548,
-   "auroc": 0.906523473565863
+   "mean_u_error": 0.7158521019978474,
+   "mean_u_correct": 0.191970387870424,
+   "auroc": 0.9065234757877552
   }
+ },
+ "uncertainty_measure": "entropy_p",
+ "climate": {
+  "source": "Ratté-Fortin et al., SSRN 6282373, табл. 2",
+  "classes": {
+   "Bolivia": "Am",
+   "Ghana": "Aw",
+   "India": "Am",
+   "Mekong": "Am",
+   "Nigeria": "Aw",
+   "Pakistan": "BWh",
+   "Paraguay": "Cfa",
+   "Somalia": "BSh",
+   "Spain": "Csa",
+   "Sri-Lanka": "Am",
+   "USA": "Dfa"
+  },
+  "groups": [
+   {
+    "group": "Кёппен Am",
+    "events": [
+     "Sri-Lanka"
+    ],
+    "seen_in_train": true,
+    "n_chips": 42,
+    "iou_main": 0.6205023507215066,
+    "iou_baseline": 0.5854744010351061,
+    "fp_main": 322427,
+    "fn_main": 245999
+   },
+   {
+    "group": "Кёппен Aw",
+    "events": [
+     "Nigeria"
+    ],
+    "seen_in_train": true,
+    "n_chips": 18,
+    "iou_main": 0.7779117005007996,
+    "iou_baseline": 0.5721536136203942,
+    "fp_main": 80619,
+    "fn_main": 147678
+   },
+   {
+    "group": "климат не виден в train",
+    "events": [],
+    "seen_in_train": false,
+    "n_chips": 0,
+    "iou_main": NaN,
+    "iou_baseline": NaN,
+    "fp_main": 0,
+    "fn_main": 0
+   },
+   {
+    "group": "климат виден в train",
+    "events": [
+     "Nigeria",
+     "Sri-Lanka"
+    ],
+    "seen_in_train": true,
+    "n_chips": 60,
+    "iou_main": 0.6845653287639452,
+    "iou_baseline": 0.5799622978403675,
+    "fp_main": 403046,
+    "fn_main": 393677
+   }
+  ]
  },
  "jrc_iou": {
   "main": {
@@ -103,9 +254,9 @@
     "n_points": 10,
     "n_excluded_label_invalid": 0,
     "n_excluded_no_data": 0,
-    "mae_rub": 274285.6565499999,
-    "sum_abs_error_rub": 2742856.565499999,
-    "sum_el_rub": 16842207.701500002,
+    "mae_rub": 274285.6158999999,
+    "sum_abs_error_rub": 2742856.158999999,
+    "sum_el_rub": 16842208.293,
     "sum_el_ref_rub": 18000000.0
    },
    "all_chips_of_part": {
@@ -113,9 +264,9 @@
     "n_points": 536,
     "n_excluded_label_invalid": 64,
     "n_excluded_no_data": 0,
-    "mae_rub": 284926.43783766794,
-    "sum_abs_error_rub": 152720570.68099,
-    "sum_el_rub": 311392794.77479,
+    "mae_rub": 284926.43585166044,
+    "sum_abs_error_rub": 152720569.61649,
+    "sum_el_rub": 311392796.60309,
     "sum_el_ref_rub": 311300000.0
    },
    "note": "прокси по ручной метке воды, не фактические потери",

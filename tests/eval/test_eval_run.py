@@ -152,6 +152,43 @@ def test_non_test_part_keeps_candidate_method(data_root, tmp_path, monkeypatch):
     assert seen["part"] == "validation"
 
 
+def test_koppen_table_is_the_preregistered_one():
+    """#150: every event of the split has its class (Ratté-Fortin, table 2), fixed before test."""
+    assert set(E.KOPPEN) == {e for events in E.EVENT_PARTS.values() for e in events}
+    assert E.KOPPEN == {"Ghana": "Aw", "India": "Am", "Pakistan": "BWh", "Paraguay": "Cfa",
+                        "Somalia": "BSh", "USA": "Dfa", "Sri-Lanka": "Am", "Nigeria": "Aw",
+                        "Spain": "Csa", "Mekong": "Am", "Bolivia": "Am"}
+
+
+def test_climate_groups_split_seen_and_unseen_classes():
+    def chip(cid, event, tp):
+        return {"chip_id": cid, "event": event, "main": {"tp": tp, "fp": 1, "fn": 1, "tn": 5},
+                "baseline": {"tp": 1, "fp": 1, "fn": 1, "tn": 5}}
+
+    res = {"per_chip": [chip("Spain_1", "Spain", 2), chip("Mekong_1", "Mekong", 8),
+                        chip("Bolivia_1", "Bolivia", 8), chip("Atlantis_1", "Atlantis", 1)]}
+    g = {r["group"]: r for r in E.climate_groups(res)}
+    assert g["Кёппен Csa"]["seen_in_train"] is False and g["Кёппен Csa"]["iou_main"] == 0.5
+    assert g["Кёппен Am"]["events"] == ["Bolivia", "Mekong"] and g["Кёппен Am"]["seen_in_train"]
+    assert g["Кёппен Am"]["iou_main"] == pytest.approx(16 / 20)
+    assert g["климат не виден в train"]["events"] == ["Atlantis", "Spain"]
+    assert g["климат виден в train"]["n_chips"] == 2
+    assert g["Кёппен не задан"]["seen_in_train"] is False
+
+
+def test_raw_p_must_reproduce_the_delivered_p(data_root, tmp_path):
+    s1, _ = E.io.load_s1("Sri-Lanka_1")
+    p, _, meta = E.predict_main("Sri-Lanka_1", tmp_path / "o")
+    raw = E.raw_main(s1, p, meta)
+    assert raw.shape == p.shape and np.array_equal(np.isnan(raw), np.isnan(p))
+    if meta.get("calibration"):
+        assert not np.allclose(raw, p, equal_nan=True)                 # calibrator moved p
+    broken = p.copy()
+    broken[10, 10] = min(1.0, float(broken[10, 10]) + 0.01)
+    with pytest.raises(RuntimeError, match="calibrator"):
+        E.raw_main(s1, broken, meta)
+
+
 def test_labels_of_test_events_stay_sealed_without_flag(data_root):
     with pytest.raises(SealedTestError):
         E.io.load_label("Spain_9")
@@ -203,7 +240,31 @@ def test_validation_run_writes_report_on_identical_pixels(data_root, tmp_path, m
     assert "Пиксельный QC чипов части" in md and "eval-validation-qc.csv" in md
     calibrated = (E.MODELS_DIR / "unet" / "calibration.json").exists()   # #20, D-029
     assert ("Калибровка: применена в predict" in md) == calibrated
-    assert ("сырая p" in md) == (not calibrated)
+    assert ("оценивается сырая p" in md) == (not calibrated)
+    # #150: 15 bins as calibration, log-loss with chip CI, raw -> calibrated, current text
+    assert s["calibration_bins"] == 15
+    with open(out / "eval-validation-reliability.csv", newline="", encoding="utf-8") as f:
+        assert sum(r["scope"] == "ALL" for r in csv.DictReader(f)) == 15
+    for scope in ("Nigeria", "Sri-Lanka", "ALL"):
+        c = s["calibration"][scope]
+        for k in ("ece", "mce", "brier", "log_loss", "mean_p", "water_share"):
+            assert np.isfinite(c[k]) and np.isfinite(c["raw"][k])
+        assert c["raw"]["n_pixels"] == c["n_pixels"]                  # the same pixels
+        assert c["raw"]["water_share"] == c["water_share"]
+        lo, hi = c["bootstrap"]["log_loss_ci95"]
+        assert lo <= hi and c["bootstrap"]["seed"] == E.BOOTSTRAP_SEED
+    if calibrated:
+        assert s["calibration"]["ALL"]["raw"]["mean_p"] != s["calibration"]["ALL"]["mean_p"]
+    assert "Сырая p → калиброванная p" in md and "log-loss" in md
+    assert "временный, до #21" not in md and "не проверенная неопределённость" not in md
+    assert "uncertainty.json" in md and s["uncertainty_measure"] == "entropy_p"
+    assert "Кёппен" in md and "Ratté-Fortin" in md
+    groups = {g["group"]: g for g in s["climate"]["groups"]}
+    assert groups["климат виден в train"]["n_chips"] == 3
+    assert groups["климат не виден в train"]["n_chips"] == 0
+    with open(out / "eval-validation-chips.csv", newline="", encoding="utf-8") as f:
+        assert {r["chip_id"]: r["koppen"] for r in csv.DictReader(f)} == {
+            "Sri-Lanka_1": "Am", "Sri-Lanka_2": "Am", "Nigeria_3": "Aw"}
     with open(out / "eval-validation-proxy.csv", newline="", encoding="utf-8") as f:
         proxy = list(csv.DictReader(f))
     for r in proxy:                                         # EL_ref = y·V·q on scored points
@@ -263,6 +324,11 @@ def test_confirmed_test_run_reads_test_and_logs_one_row(data_root, tmp_path, mon
     assert "test-eval.md" in rows[0] and "начат" not in rows[0]
     s = json.loads((out / "test-eval-summary.json").read_text(encoding="utf-8"))
     assert s["proxy_check"]["status"] == "done" and s["proxy_check"]["result"]["independent"]
+    groups = {g["group"]: g for g in s["climate"]["groups"]}
+    assert groups["Кёппен Csa"]["seen_in_train"] is False                 # Spain, #150
+    assert groups["климат не виден в train"]["events"] == ["Spain"]
+    md = (out / "test-eval.md").read_text(encoding="utf-8")
+    assert "впервые и независимо" in md
 
 
 def test_failed_test_run_is_logged_as_interrupted(data_root, tmp_path, monkeypatch, test_log):
