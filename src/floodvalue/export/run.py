@@ -4,7 +4,8 @@ Reads the files the earlier stages wrote into the working directory
 (`$FLOODVALUE_OUTPUT_DIR/<chip>/`, or `--out` itself when the stages were run with the same
 `--out`) and assembles `$FLOODVALUE_OUTPUT_DIR/<run_id>/` (contracts §1, D-027):
 
-- copies the rasters, assets, zones, plan and A/B/C files without recomputation;
+- copies the rasters, assets, zones, plan and A/B/C files without recomputation, plus the
+  optional baseline_mask.tif written next to them by `baseline.predict --mask-only` (#115);
 - sensitivity.csv = procurement_sensitivity.csv ∪ assets_sensitivity.csv;
 - metrics.csv (§7) from docs/verification: baseline and main on the same valid-pixel mask;
 - source_manifest.json (§9) from $FLOODVALUE_DATA_DIR/interim/source_manifest_s1.json;
@@ -84,6 +85,25 @@ def git_commit() -> tuple[str, str, bool]:
     except (OSError, subprocess.CalledProcessError):
         return "unknown", "nogit", True
     return full, short, dirty
+
+
+def models_unchanged_since(commit: str | None, repo: Path = REPO_ROOT) -> bool:
+    """True only if models/ at `commit` equals models/ in the working tree of `repo`: no committed,
+    uncommitted or untracked change. Unknown commit, missing git or any git error -> False."""
+    if not commit or commit.startswith("-"):  # never pass an option to git as a revision
+        return False
+
+    def git(*a: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", "-C", str(repo), *a], capture_output=True, text=True)
+    try:
+        if git("cat-file", "-e", f"{commit}^{{commit}}").returncode != 0:
+            return False
+        if git("diff", "--quiet", commit, "--", "models/").returncode != 0:
+            return False  # 1 = differs, >1 = error: both stale
+        untracked = git("ls-files", "--others", "--exclude-standard", "--", "models/")
+    except OSError:
+        return False
+    return untracked.returncode == 0 and not untracked.stdout.strip()
 
 
 def package_versions() -> dict:
@@ -189,6 +209,11 @@ def export(chip_id: str, work: Path, dest: Path | None = None,
             elif (dest / name).exists():
                 (dest / name).unlink()  # stale file of an earlier export into the same dir
 
+    if not (work / "baseline_mask.tif").is_file():
+        warnings.append("нет baseline_mask.tif (доп. растр §2): маски baseline в комплекте нет — "
+                        "uv run --frozen python -m floodvalue.baseline.predict --chip "
+                        f"{chip_id} --mask-only (make all делает это сам)")
+
     # sensitivity.csv -------------------------------------------------------------------------
     proc_sens = _read_csv(work / "procurement_sensitivity.csv")
     assets_sens_path = work / "assets_sensitivity.csv"
@@ -248,8 +273,9 @@ def export(chip_id: str, work: Path, dest: Path | None = None,
     summary_rel = assemble.eval_summary_file(part)
     summary_path = VERIFICATION_DIR / summary_rel.rsplit("/", 1)[-1]
     summary = _read_json(summary_path) if part != "none" and summary_path.is_file() else None
+    models_match = summary is not None and models_unchanged_since(summary.get("commit"))
     proxy = assemble.proxy_check(summary, summary_rel if part != "none" else "", chip_id, part,
-                                 prediction)
+                                 prediction, models_match=models_match)
     budget_arg = assemble.budget_label(budget)
     reproduce = [
         f"git checkout {commit}",

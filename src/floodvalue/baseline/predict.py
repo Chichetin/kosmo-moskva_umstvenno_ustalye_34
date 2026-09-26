@@ -1,12 +1,15 @@
 """Baseline as the temporary main method (D-009): S1 chip -> p-raster and masks.
 
     uv run --frozen python -m floodvalue.baseline.predict --chip Sri-Lanka_713926
+    uv run --frozen python -m floodvalue.baseline.predict --chip Sri-Lanka_713926 --mask-only
 
 Writes to --out (default $FLOODVALUE_OUTPUT_DIR/<chip>/, as model.predict), on the S1 grid:
   flood_probability.tif  Float32, p in [0, 1], nodata -9999
   flood_mask.tif         UInt8 1/0, nodata 255, 1 <=> p >= threshold
   baseline_mask.tif      UInt8 1/0, nodata 255, the threshold rule itself
   prediction.json           method, thresholds, config sha256
+`--mask-only` writes baseline_mask.tif alone, next to the main method's files (`make all`,
+#115: export copies it into the result set as the optional raster of contracts §2).
 Reads only S1 (S1-only mode); labels are never opened.
 """
 
@@ -52,13 +55,16 @@ def to_rasters(s1_db: np.ndarray, config: dict) -> dict[str, np.ndarray]:
             "flood_mask": mask, "baseline_mask": base}
 
 
-def predict_chip(chip_id: str, out_dir: Path, config_path: Path = CONFIG_PATH) -> Path:
+def predict_chip(chip_id: str, out_dir: Path, config_path: Path = CONFIG_PATH,
+                 mask_only: bool = False) -> Path:
     import rasterio
 
     config = load_config(config_path)
     s1, profile = io.load_s1(chip_id)  # float32 dB, NaN = no data; never re-logged
     grid = {k: profile[k] for k in ("crs", "transform", "width", "height")}
     arrays = to_rasters(s1, config)
+    if mask_only:
+        arrays = {"baseline_mask": arrays["baseline_mask"]}
     out_dir.mkdir(parents=True, exist_ok=True)
     for name, arr in arrays.items():
         is_p = arr.dtype == np.float32
@@ -66,6 +72,8 @@ def predict_chip(chip_id: str, out_dir: Path, config_path: Path = CONFIG_PATH) -
                    "nodata": P_NODATA if is_p else MASK_NODATA, "compress": "deflate", **grid}
         with rasterio.open(out_dir / f"{name}.tif", "w", **profile) as dst:
             dst.write(arr, 1)
+    if mask_only:
+        return out_dir
     meta = {"chip_id": chip_id, "method": "baseline_sigmoid (temporary main method, D-009)",
             "threshold": config["threshold"],
             "threshold_status": config.get("threshold_status", ""),
@@ -82,8 +90,11 @@ def run(args) -> int:
         print("predict: нужен --chip <chip_id> (make predict CHIP=...)")
         return 2
     out = Path(args.out) if getattr(args, "out", None) else output_dir() / args.chip
-    predict_chip(args.chip, out)
-    print(f"{args.chip}: flood_probability.tif, flood_mask.tif, baseline_mask.tif -> {out}")
+    mask_only = bool(getattr(args, "mask_only", False))
+    predict_chip(args.chip, out, mask_only=mask_only)
+    names = "baseline_mask.tif" if mask_only else \
+        "flood_probability.tif, flood_mask.tif, baseline_mask.tif"
+    print(f"{args.chip}: {names} -> {out}")
     return 0
 
 
@@ -91,4 +102,6 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(prog="floodvalue.baseline.predict")
     ap.add_argument("--chip", required=True)
     ap.add_argument("--out")
+    ap.add_argument("--mask-only", action="store_true",
+                    help="only baseline_mask.tif (next to the main method's rasters)")
     raise SystemExit(run(ap.parse_args()))

@@ -35,6 +35,7 @@ def test_assets_stage_output_passes_validator(tmp_path, monkeypatch):
 
     out = tmp_path / "run"
     shutil.copytree(GOOD, out)
+    (out / "baseline_mask.tif").unlink()  # the fixture's baseline mask is on the replaced grid
     with rasterio.open(out / F.FLOOD_PROBABILITY, "w", count=1, dtype="float32", nodata=-9999.0,
                        **prof) as dst:
         dst.write(p, 1)

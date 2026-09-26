@@ -101,3 +101,33 @@ def test_predict_chip_reads_s1_through_shared_loader(tmp_path, monkeypatch):
 
 if __name__ == "__main__":
     pytest.main([__file__])
+
+
+def test_mask_only_writes_baseline_mask_and_keeps_main_rasters(tmp_path, monkeypatch):
+    """#115: `--mask-only` adds baseline_mask.tif next to the main method's files, touching nothing else."""
+    raw = tmp_path / "data" / "raw" / "HandLabeled" / "S1Hand"
+    raw.mkdir(parents=True)
+    tr = from_origin(81.6, 7.7, 8.983152841195215e-05, 8.983152841195215e-05)
+    s1 = np.random.default_rng(2).normal(-20, 5, (2, 6, 7)).astype(np.float32)
+    s1[0, 1, 1] = np.nan
+    with rasterio.open(raw / "X_2_S1Hand.tif", "w", driver="GTiff", count=2, dtype="float32",
+                       width=7, height=6, crs="EPSG:4326", transform=tr, nodata=np.nan) as d:
+        d.write(s1)
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps(CFG), encoding="utf-8")
+    monkeypatch.setenv("FLOODVALUE_DATA_DIR", str(tmp_path / "data"))
+    out = tmp_path / "out"
+    out.mkdir()
+    for name in ("flood_probability.tif", "flood_mask.tif", "prediction.json"):
+        (out / name).write_bytes(b"main method")
+    predict.predict_chip("X_2", out, cfg, mask_only=True)
+    for name in ("flood_probability.tif", "flood_mask.tif", "prediction.json"):
+        assert (out / name).read_bytes() == b"main method"
+    with rasterio.open(out / "baseline_mask.tif") as r:
+        assert r.transform == tr and (r.width, r.height) == (7, 6)
+        assert r.dtypes[0] == "uint8" and r.nodata == 255
+        m = r.read(1)
+    assert m[1, 1] == 255
+    ok = np.isfinite(s1).all(axis=0)
+    assert np.array_equal(m[ok] == 1, s1[1][ok] <= CFG["threshold_db"])
+    assert (m[ok] != 255).all()
