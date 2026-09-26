@@ -1629,21 +1629,21 @@ tbody tr.selected,
 }
 
 @media (min-width: 1100px) {
-  .map-top-left, .map-top-center, .search-panel, .search-toggle, .reopen-panel,
+  .topbar, .map-top-left, .map-top-center, .search-panel, .search-toggle, .reopen-panel,
   .context-panel, .basemap-switch, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
     zoom: 1.2;
   }
 }
 
 @media (min-width: 1800px) {
-  .map-top-left, .map-top-center, .search-panel, .search-toggle, .reopen-panel,
+  .topbar, .map-top-left, .map-top-center, .search-panel, .search-toggle, .reopen-panel,
   .context-panel, .basemap-switch, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
     zoom: 1.35;
   }
 }
 
 @media (min-width: 2300px) {
-  .map-top-left, .map-top-center, .search-panel, .search-toggle, .reopen-panel,
+  .topbar, .map-top-left, .map-top-center, .search-panel, .search-toggle, .reopen-panel,
   .context-panel, .basemap-switch, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
     zoom: 1.5;
   }
@@ -1699,3 +1699,12 @@ tbody tr.selected,
   color: #aab5ba;
   opacity: 1;
 }
+
+/* Science Gothic is wide: body text at a narrower width so lists and dates fit; the logo
+   and headings keep their own width. Panel a bit wider, labels never wrap mid-phrase. */
+:root { font-stretch: 85%; font-variation-settings: "wdth" 85; }
+.brand { font-variation-settings: "wdth" 200; }
+.map-top-left { width: 360px; }
+.search-toggle { white-space: nowrap; font-size: 15px; }
+.search-toggle > span:first-child { white-space: nowrap; }
+.search-panel li, .search-panel button { white-space: nowrap; }
