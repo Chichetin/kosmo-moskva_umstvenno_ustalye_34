@@ -75,7 +75,7 @@
   function row(p, sourceNames) {
     const ex = parse(p.extraction ?? p.extraction_json) || {};
     const geo = parse(p.geocode) || parse(p.place_hint ?? p.place_hint_json) || {};
-    const places = ex.place_mentions || (geo.name ? [geo.name] : []);
+    const places = ex.place_mentions || [geo.label || geo.name].filter(Boolean);
     const status = p.extraction_status || "pending";
     const dropped = status === "irrelevant" || status === "invalid";
     const time = ex.event_time || {};
@@ -83,6 +83,7 @@
 
     const src = stage(1, "Источник",
       h("div", { class: "st-strong", text: p.source_name || sourceNames[p.source_id] || p.source_id }),
+      p.attribution ? h("div", { class: "muted small", text: p.attribution }) : null,
       line("получено", fmt(p.fetched_at)),
       p.is_demo ? h("span", { class: "tag demo", text: "ДЕМО" }) : null);
 
@@ -110,11 +111,13 @@
 
     const gname = geo.label || geo.place_label || geo.name || geo.display_name;
     const gprec = geo.precision || geo.geo_precision || p.geo_precision;
+    const [glon, glat] = geo.geometry?.coordinates || [geo.lon, geo.lat];
     const geoSt = dropped ? stage(5, "Геокодирование", h("p", { class: "muted small m0", text: "—" })) :
       stage(5, "Геокодирование",
         gname ? h("div", { class: "st-strong", text: gname }) : h("div", { class: "muted", text: "место не определено" }),
         line("точность", T.precision[gprec] || "—"),
-        Number.isFinite(geo.lat) && Number.isFinite(geo.lon) ? line("координаты", `${geo.lat.toFixed(3)}, ${geo.lon.toFixed(3)}`) : null);
+        Number.isFinite(glat) && Number.isFinite(glon) ? line("координаты", `${glat.toFixed(3)}, ${glon.toFixed(3)}`) : null,
+        geo.note ? line("примечание", geo.note) : null);
 
     const evSt = stage(6, "Событие",
       eventId !== null ? h("div", {},
