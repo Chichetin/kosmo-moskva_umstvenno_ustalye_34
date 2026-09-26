@@ -17,6 +17,7 @@ Ivana-banana, M1hairu (проверено в PR #30). Блокер GitVerse «LF
 
 | Веха | Итог | Commit |
 |---|---|---|
+| 26.09 итог модели | Модель выбрана: `models/unet` (D-019, 5 seed) + Platt, порог 0,37 (D-029) — 13 альтернатив в LOEO заметного выигрыша не дали (черновой PR #139, не в `main`; по одному seed выигрыш < +0,03 не исключён). Сквозной конвейер без интерфейса: `make all` → 12/12, `pytest` → 737 passed на e7f4389; интерфейса в `main` нет. Объяснение для команды, почему у C 8,7 % покрытого EL и это не поломка (D-049), — `docs/team-brief.md` | e7f4389 |
 | 25.09 GitVerse LFS | Снят блокер «LFS PUT → 403»: причина не права токена — git-lfs шлёт тело chunked (так велит `upload.header` GitVerse), GitVerse отвечает 403. Веса (5 × U-Net) залиты в LFS GitVerse 25.09 ~23:50 PUT с Content-Length; sync использует `scripts/gitverse_lfs_push.py` (GIT.md «GitVerse»). Код GitVerse = `6fe66f0`; сверка чистого клона (`bash scripts/sync-gitverse.sh --verify`) — после восстановления сети | 6fe66f0 |
 | 25.09 GitVerse | `hackrus.experts/kosmo-moskva_umstvenno_ustalye_34`: `scripts/sync-gitverse.sh` (#31), LFS-проба 2 МБ прошла; ветка по умолчанию `lfs-probe` = main (сменить может только admin) | 0ff5f08 |
 | 25.09 каркас | каркас, план v2, 35 issues (#2–#36); collaborators добавлены, git-lfs стоит, кейс № 3 | 20ad6e3 |
@@ -36,7 +37,7 @@ Ivana-banana, M1hairu (проверено в PR #30). Блокер GitVerse «LF
 | #42 | procurement: цена ПП 840 и площадь контура · Closes #6 | `pytest tests/procurement` 46 passed: 1703.46 / 946.37 / 567.82 руб.; 0,9996 км² отклонён; 90 дн. → Т=1, 91 → 0,6; мутаций 20, выжило 0 |
 | #43 | assets: портфель 10 объектов, p из растра, EL, rank · Closes #7 | `pytest tests/assets` 17 passed (весь `pytest` 19); мутаций 12, убито 12 |
 | #44 | data: make data — QC 446 чипов, sha256, S1-часть source_manifest · Closes #3 | 446 чипов, скачано 0 (уже на диске); QC формата 446/446, без валидных пикселей 6; `pytest` 32 passed (tests/data 30); мутаций 11 (1 эквивалентная) |
-| #45 | docs: D-022 — стоп-код 26.09 23:30 | перенос стоп-кода с 27.09 01:00 на 26.09 23:30; заморозка функций 26.09 20:30 (было 22:00); прогон из чистого клона 26.09 22:30 |
+| #45 | docs: D-022 — стоп-код 26.09 23:30 (**отменён D-033**: стоп-код 27.09 01:00) | перенос стоп-кода с 27.09 01:00 на 26.09 23:30; заморозка функций 26.09 20:30 (было 22:00); прогон из чистого клона 26.09 22:30 |
 | #46 | docs: промпт для новых участников + правка sync-gitverse | `docs/onboarding-prompt.md`; починка проверки LFS-указателя (pipefail); `bash -n scripts/sync-gitverse.sh`, `pytest` — без счётчика в теле PR |
 | #47 | docs: вопросы к трекерам 25.09 (Q-09…Q-20) · Closes #13 | 12 новых вопросов Q-09…Q-20 в `docs/questions-for-organizers.md`; `make check`: `pytest` 77 passed, 4 skipped, hooks 40/40 (validate — ещё не реализован на момент PR, не относится к нему) |
 | #48 | contracts: контракты v1 — схемы 12 файлов, run_metadata, run.yaml, валидатор · Closes #2 | `make validate OUT=tests/fixtures/good` → 12/12; `pytest tests/contracts` 75 passed; весь `pytest` 152 passed, 4 skipped; мутаций валидатора 11, все убиты после 2 новых тестов |

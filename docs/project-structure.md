@@ -16,7 +16,8 @@
 | `assets` | `src/floodvalue/assets/` | `assets.*`, `asset_loss.csv`, чувствительность p/V/q | p-растр, `configs/assets.yaml` |
 | `procurement` | `src/floodvalue/procurement/`, `configs/pricing.yaml` | зоны, цена, A/B/C, `procurement_plan.csv`, `strategy_*`, чувствительность бюджета/ставки | `asset_loss.csv`, p, неопределённость |
 | `export` | `src/floodvalue/export/` | сборка 12 файлов, `run_metadata.json`, `validate` | всё выше |
-| `app` | `src/floodvalue/app/` (Python-ядро + Streamlit, D-034); `web/` (React) — только при go/no-go | интерфейс оператора | файлы в `outputs/`, `procurement` как функция пересчёта бюджета |
+| `app` | `src/floodvalue/app/` (FastAPI + собранный React), `web/` (React/MapLibre, D-050) | интерфейс оператора | файлы в `outputs/`, `procurement` как функция пересчёта бюджета |
+| `media` | `src/floodvalue/media/` (со своим `sources.yaml` и `static/`), `tests/media/` | реестр сообщений СМИ, сводок и очевидцев; `GET /api/media/events` (GeoJSON) для будущего слоя на глобусе (D-051) | `splits/split_v1.json` и `$FLOODVALUE_DATA_DIR/interim/source_manifest_s1.json` как файлы; комплекты `outputs/*/run_metadata.json` — только чтение `chip_id` |
 | `contracts` | `src/floodvalue/contracts/`, `docs/contracts.md` | схемы 12 файлов, форматы растров, интерфейс метода | все |
 | `infra` | `Makefile`, `pyproject.toml`, `uv.lock`, `pyrightconfig.json`, `.claude/`, `.githooks/`, `scripts/` | окружение, хуки, синхронизация GitVerse | — |
 | `docs` | `README.md`, `docs/`, `HANDOFF.md` | README, ограничения | — |
@@ -49,6 +50,6 @@ models/      веса и калибраторы (LFS)
 notebooks/   Colab-обёртка обучения
 tests/       по модулям + tests/fixtures (маленькие синтетические растры)
 docs/        data, contracts, decisions, tz-compliance, verification/, research/, plans/
-web/         опционально: React (D-013 → D-034, go/no-go 26.09 12:00), сборка → src/floodvalue/app/static/
+web/         React + TypeScript + MapLibre (D-050), сборка → src/floodvalue/app/static/
 scripts/     sync-gitverse.sh и прочее
 ```

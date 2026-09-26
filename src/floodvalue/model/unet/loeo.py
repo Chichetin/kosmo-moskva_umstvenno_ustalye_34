@@ -62,6 +62,50 @@ P_EDGES = np.round(np.arange(0.0, 1.0 + 1e-9, 0.01), 2)
 Reader = Callable[[str], tuple[np.ndarray, np.ndarray]]
 
 
+# D-016: weak data (S1Weak + S2IndexLabelWeak) of dev, validation, test events and Colombia are
+# never used; only these train events may contribute weakly-labeled chips.
+WEAK_EVENTS = ("Ghana", "India", "Pakistan", "Paraguay", "Somalia")
+WEAK_LABEL = "S2IndexLabelWeak"
+
+
+def weak_chip_ids(events: set[str]) -> list[str]:
+    """Weakly-labeled chips (label from the Sentinel-2 index, an independent sensor) of the
+    given fold-training events, restricted to WEAK_EVENTS; sorted chip ids."""
+    root = io.raw_dir() / "WeaklyLabeled" / WEAK_LABEL
+    ids = sorted(p.name[: -len(f"_{WEAK_LABEL}.tif")] for p in root.glob(f"*_{WEAK_LABEL}.tif"))
+    return [c for c in ids if D.event_of(c) in events and D.event_of(c) in WEAK_EVENTS]
+
+
+def read_weak_chip(chip_id: str) -> tuple[np.ndarray, np.ndarray]:
+    """S1Weak (2, H, W) float32 dB with NaN and the weak label mapped to the LabelHand codes
+    (1 water, 0 not water, -1 no label)."""
+    import rasterio
+
+    root = io.raw_dir() / "WeaklyLabeled"
+    with rasterio.open(root / "S1Weak" / f"{chip_id}_S1Weak.tif") as f:
+        s1 = f.read().astype(np.float32)
+    if s1.shape[0] != 2:
+        raise ValueError(f"{chip_id}: S1Weak must have 2 bands (VV, VH), got {s1.shape[0]}")
+    with rasterio.open(root / WEAK_LABEL / f"{chip_id}_{WEAK_LABEL}.tif") as f:
+        raw = f.read(1)
+    lab = np.full(raw.shape, -1, np.int16)
+    lab[raw == 0] = 0
+    lab[raw == 1] = 1
+    return s1, lab
+
+
+def sample_batch(gen: torch.Generator, batch: int, hand: torch.Tensor, weak: torch.Tensor,
+                 hand_frac: float | None) -> torch.Tensor:
+    """Row indices of one batch. hand_frac None: uniform over all rows (D-019 / plain weak
+    mixing). Else round(batch * hand_frac) rows from `hand`, the rest from `weak`."""
+    if hand_frac is None:
+        return torch.randint(0, len(hand) + len(weak), (batch,), generator=gen)
+    n_h = int(round(batch * hand_frac))
+    parts = [hand[torch.randint(0, len(hand), (n_h,), generator=gen)],
+             weak[torch.randint(0, len(weak), (batch - n_h,), generator=gen)]]
+    return torch.cat(parts)
+
+
 def pool_chip_ids() -> list[str]:
     """Chips of train+dev (the LOEO pool); never validation or test."""
     ids: list[str] = []
@@ -83,6 +127,39 @@ def folds(chip_ids: list[str]) -> list[dict]:
 
 def read_chip(chip_id: str) -> tuple[np.ndarray, np.ndarray]:
     return D.read_s1(chip_id), D.read_label(chip_id)
+
+
+def predict_probs_tta(model, x: torch.Tensor, device: str) -> np.ndarray:
+    """Mean p over the 8 dihedral transforms (rot90 x flip), each mapped back to the input grid.
+    Test-time augmentation only; the model and its weights are the same."""
+    acc = None
+    for k in range(4):
+        for flip in (False, True):
+            xt = torch.rot90(x, k, dims=(-2, -1))
+            if flip:
+                xt = torch.flip(xt, dims=(-1,))
+            p = torch.from_numpy(predict_probs(model, xt, device))
+            if flip:
+                p = torch.flip(p, dims=(-1,))
+            p = torch.rot90(p, -k, dims=(-2, -1)).numpy()
+            acc = p if acc is None else acc + p
+    return acc / 8.0
+
+
+def chip_median_norm(read: Reader) -> Reader:
+    """Reader whose S1 has each band shifted by its own chip median over finite pixels (dB):
+    removes the absolute backscatter level of the scene, keeps contrast. make_features then
+    derives VV−VH from the shifted bands. Labels and the raw reader's arrays are untouched.
+    If adopted for the shipped model, predict must apply the same shift before the features."""
+    def wrapped(chip_id: str):
+        s1, lab = read(chip_id)
+        s1 = s1.copy()
+        for b in range(s1.shape[0]):
+            finite = np.isfinite(s1[b])
+            if finite.any():
+                s1[b] -= np.median(s1[b][finite])
+        return s1, lab
+    return wrapped
 
 
 def fold_stats(ids: list[str], read: Reader, channels: list[str]) -> tuple[list, list]:
@@ -169,6 +246,38 @@ def shipped_baseline_rule(path: Path | None = None) -> dict:
     return {"threshold_db": float(cfg["threshold_db"]), "fitted_on": cfg.get("fitted_on")}
 
 
+class SmpNet(torch.nn.Module):
+    """segmentation_models_pytorch model with the (N, H, W) logits contract of our UNet."""
+
+    def __init__(self, net: torch.nn.Module):
+        super().__init__()
+        self.net = net
+
+    def forward(self, x):
+        return self.net(x)[:, 0]
+
+
+SMP_ARCHS = ("smp_unet", "smp_unetpp", "smp_deeplabv3p")
+
+
+def build_net(cfg: dict, config: dict) -> torch.nn.Module:
+    """cfg["arch"]: "unet" (D-019, default) or "<smp_arch>:<encoder>", e.g. "smp_unet:resnet34".
+    smp models are an experiment only: the library lives in the GPU venv, not in uv.lock, so a
+    winning architecture would still need a dependency PR before it can ship (CPU inference)."""
+    arch = cfg.get("arch") or "unet"
+    if arch == "unet":
+        return build_model(config)
+    kind, _, encoder = arch.partition(":")
+    if kind not in SMP_ARCHS or not encoder:
+        raise ValueError(f"unknown arch {arch!r}; expected unet or one of {SMP_ARCHS} with :<encoder>")
+    import segmentation_models_pytorch as smp
+
+    cls = {"smp_unet": smp.Unet, "smp_unetpp": smp.UnetPlusPlus,
+           "smp_deeplabv3p": smp.DeepLabV3Plus}[kind]
+    return SmpNet(cls(encoder, encoder_weights="imagenet" if cfg.get("pretrained") else None,
+                      in_channels=len(config["features"]["channels"]) + 1, classes=1))
+
+
 def train_fold(x, y, m, cfg: dict, eval_epochs=EVAL_EPOCHS, device: str = "cpu", log=print):
     """One U-Net on the fold's training tensors (D-019 loop). Returns {epoch: state_dict} at
     the fixed `eval_epochs` (no selection) and steps per epoch."""
@@ -176,27 +285,48 @@ def train_fold(x, y, m, cfg: dict, eval_epochs=EVAL_EPOCHS, device: str = "cpu",
     channels = cfg["channels"]
     config = {"arch": {"base": cfg["base"], "dropout": cfg["dropout"]},
               "features": {"channels": channels}}
-    model = build_model(config).to(device)
+    model = build_net(cfg, config).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"])
-    steps = max(1, (2 * len(x)) // cfg["batch"])
+    steps = max(1, (2 * len(x) * cfg.get("steps_mult", 1)) // cfg["batch"])
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=cfg["lr"], pct_start=0.1,
                                                 total_steps=cfg["epochs"] * steps)
     gen = torch.Generator().manual_seed(cfg["seed"])
     jstd = jitter_std(channels, cfg["std"]).to(device)
-    x, y, m = x.to(device), y.to(device), m.to(device)
+    weak_w = cfg.get("weak_weight")
+    hand_frac = cfg.get("hand_frac") if weak_w is not None else None
+    if weak_w is None:  # D-019 path: everything on the device, boolean mask
+        x, y, m = x.to(device), y.to(device), m.to(device)
+        rows_hand, rows_weak = torch.arange(len(x)), torch.arange(0)
+    else:  # mask codes: 2 hand label, 1 weak label (rows are hand chips first, then weak)
+        top = m.flatten(1).amax(1)
+        rows_hand, rows_weak = (top == 2).nonzero().flatten(), (top == 1).nonzero().flatten()
+        if len(rows_hand) == 0:
+            raise ValueError("no hand-labeled chip with valid pixels in this fold")
     amp = device.startswith("cuda")
     states = {}
     for epoch in range(1, cfg["epochs"] + 1):
         model.train()
         te, losses = time.time(), []
         for _ in range(steps):
-            idx = torch.randint(0, len(x), (cfg["batch"],), generator=gen).to(device)
-            xb, yb, mb = augment(x[idx], y[idx], m[idx], cfg["crop"], cfg["db_jitter"], jstd,
+            if hand_frac is None:
+                idx = torch.randint(0, len(x), (cfg["batch"],), generator=gen)
+            else:
+                idx = sample_batch(gen, cfg["batch"], rows_hand, rows_weak, hand_frac)
+            if weak_w is None:
+                idx = idx.to(device)
+                xs, ys, ms = x[idx], y[idx], m[idx]
+            else:  # data stay in host memory; only the batch goes to the device
+                xs, ys, ms = (t[idx].to(device) for t in (x, y, m))
+            xb, yb, mb = augment(xs, ys, ms, cfg["crop"], cfg["db_jitter"], jstd,
                                  len(channels), gen)
             with torch.autocast(device_type=device.split(":")[0], dtype=torch.bfloat16,
                                 enabled=amp):
                 logits = model(xb)
-            loss = masked_loss(logits, yb, mb.bool(), cfg["dice_weight"])
+            if weak_w is None:
+                weight = mb.bool()
+            else:  # mask codes: 2 hand label, 1 weak label, 0 excluded
+                weight = torch.where(mb == 2, 1.0, torch.where(mb == 1, float(weak_w), 0.0))
+            loss = masked_loss(logits, yb, weight, cfg["dice_weight"])
             opt.zero_grad(set_to_none=True)
             loss.backward()
             opt.step()
@@ -209,6 +339,43 @@ def train_fold(x, y, m, cfg: dict, eval_epochs=EVAL_EPOCHS, device: str = "cpu",
     missing = set(eval_epochs) - set(states)
     if missing:
         raise ValueError(f"eval epochs {sorted(missing)} exceed --epochs {cfg['epochs']}")
+    ft = cfg.get("finetune_epochs") or 0
+    if ft:
+        # Stage 2: fine-tune on the hand-labeled rows only (mask code 2 when weak data are mixed
+        # in, else every row), fresh OneCycle at lr * finetune_lr_mult. Scored as "ft" — fixed
+        # in advance, no selection.
+        hand = rows_hand
+        opt = torch.optim.AdamW(model.parameters(), lr=cfg["lr"] * cfg["finetune_lr_mult"],
+                                weight_decay=cfg["weight_decay"])
+        steps_ft = max(1, (2 * len(hand)) // cfg["batch"])
+        if ft * steps_ft < 10:
+            log(f"  WARNING: fine-tune has only {ft * steps_ft} steps — OneCycle barely trains")
+        sched = torch.optim.lr_scheduler.OneCycleLR(
+            opt, max_lr=cfg["lr"] * cfg["finetune_lr_mult"], pct_start=0.1,
+            total_steps=ft * steps_ft)
+        for epoch in range(1, ft + 1):
+            model.train()
+            te, losses = time.time(), []
+            for _ in range(steps_ft):
+                idx = hand[torch.randint(0, len(hand), (cfg["batch"],), generator=gen)]
+                if weak_w is None:
+                    idx = idx.to(device)
+                    xs, ys, ms = x[idx], y[idx], m[idx]
+                else:
+                    xs, ys, ms = (t[idx].to(device) for t in (x, y, m))
+                xb, yb, mb = augment(xs, ys, ms, cfg["crop"], cfg["db_jitter"], jstd,
+                                     len(channels), gen)
+                with torch.autocast(device_type=device.split(":")[0], dtype=torch.bfloat16,
+                                    enabled=amp):
+                    logits = model(xb)
+                loss = masked_loss(logits, yb, mb.bool(), cfg["dice_weight"])
+                opt.zero_grad(set_to_none=True)
+                loss.backward()
+                opt.step()
+                sched.step()
+                losses.append(loss.item())
+            log(f"  finetune {epoch:3d}/{ft} loss {np.mean(losses):.4f} {time.time() - te:.1f}s")
+        states["ft"] = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
     return model, states, steps
 
 
@@ -220,19 +387,36 @@ def run_fold(fold: dict, cfg: dict, read: Reader = read_chip, baseline_t: float 
         raise ValueError("fold train and held-out chips overlap")
     channels = cfg["channels"]
     t0 = time.time()
-    mean, std = fold_stats(fold["train"], read, channels)
+    # Network input may use per-chip median normalization; the baseline always sees raw dB.
+    feat = chip_median_norm(read) if cfg.get("chip_norm") else read
+    mean, std = fold_stats(fold["train"], feat, channels)
     t_fold, t_fold_iou = fit_vh_threshold([read(c) for c in fold["train"]])
-    x, y, m = build_tensors(fold["train"], read, channels, mean, std)
-    log(f"fold {fold['event']}: train {len(fold['train'])} chips, held-out "
+    x, y, m = build_tensors(fold["train"], feat, channels, mean, std)
+    n_weak = 0
+    if cfg.get("weak_weight") is not None:
+        wids = weak_chip_ids({D.event_of(c) for c in fold["train"]})
+        weak_events = {D.event_of(c) for c in wids}
+        held_events = {D.event_of(c) for c in fold["held_out"]}  # independent of fold["event"]
+        if weak_events & held_events or not weak_events <= set(WEAK_EVENTS):
+            raise ValueError(f"weak events {sorted(weak_events)} overlap held-out "
+                             f"{sorted(held_events)} or leave {WEAK_EVENTS}")
+        weak_read = chip_median_norm(read_weak_chip) if cfg.get("chip_norm") else read_weak_chip
+        xw, yw, mw = build_tensors(wids, weak_read, channels, mean, std)
+        x, y, m = torch.cat([x, xw]), torch.cat([y, yw]), torch.cat([m * 2, mw])
+        n_weak = len(wids)
+        del xw, yw, mw
+    log(f"fold {fold['event']}: train {len(fold['train'])} chips + weak {n_weak}, held-out "
         f"{len(fold['held_out'])}; mean {np.round(mean, 2)} std {np.round(std, 2)}; "
         f"VH t {t_fold} dB; loaded {time.time() - t0:.0f}s")
     model, states, steps = train_fold(x, y, m, cfg | {"std": std}, eval_epochs, device, log)
     del x, y, m
-    xh, yh, mh = build_tensors(fold["held_out"], read, channels, mean, std)
+    xh, yh, mh = build_tensors(fold["held_out"], feat, channels, mean, std)
     probs = {}
     for epoch, state in states.items():
         model.load_state_dict(state)
         probs[f"unet_e{epoch}"] = predict_probs(model, xh, device)
+        if cfg.get("tta"):
+            probs[f"unet_e{epoch}_tta"] = predict_probs_tta(model, xh, device)
     b_edges = -EDGES[::-1]  # baseline score = -VH (more water-like = higher)
     edges = {k: P_EDGES for k in probs} | {"baseline": b_edges}
     hist = {k: [np.zeros(len(e) + 1, np.int64) for _ in range(2)] for k, e in edges.items()}
@@ -328,6 +512,28 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--eval-epochs", default=",".join(map(str, EVAL_EPOCHS)))
     p.add_argument("--crop", type=int, default=DEFAULTS["crop"])
     p.add_argument("--seed", type=int, default=DEFAULTS["seed"])
+    for key in ("base", "batch"):
+        p.add_argument(f"--{key}", type=int, default=DEFAULTS[key])
+    for key in ("dropout", "lr", "weight_decay", "dice_weight", "db_jitter"):
+        p.add_argument(f"--{key.replace('_', '-')}", type=float, default=DEFAULTS[key])
+    p.add_argument("--steps-mult", type=int, default=1,
+                   help="multiply optimizer steps per epoch (D-019: 2 x chips / batch)")
+    p.add_argument("--weak-weight", type=float, default=None,
+                   help=f"add weakly-labeled chips ({WEAK_LABEL}) of the fold's training events "
+                        f"among {', '.join(WEAK_EVENTS)} with this loss weight (hand = 1)")
+    p.add_argument("--arch", default="unet",
+                   help="unet (D-019) or <smp_unet|smp_unetpp|smp_deeplabv3p>:<encoder> (experiment)")
+    p.add_argument("--pretrained", action="store_true",
+                   help="smp archs: ImageNet encoder weights (downloaded by the library)")
+    p.add_argument("--chip-norm", action="store_true",
+                   help="network input: subtract each chip's own median dB per band (baseline stays raw)")
+    p.add_argument("--hand-frac", type=float, default=None,
+                   help="with --weak-weight: fraction of each batch drawn from hand-labeled chips")
+    p.add_argument("--finetune-epochs", type=int, default=0,
+                   help="stage 2: fine-tune on hand-labeled chips only for N epochs (scored as unet_eft)")
+    p.add_argument("--finetune-lr-mult", type=float, default=0.3)
+    p.add_argument("--tta", action="store_true",
+                   help="also score the mean of 8 rot90/flip predictions at each eval epoch")
     p.add_argument("--events", default="", help="comma list: run only these folds (smoke)")
     p.add_argument("--max-chips", type=int, default=0,
                    help="smoke: limit chips per event (numbers are then not a result)")
@@ -335,6 +541,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--table-from", default=None,
                    help="print the markdown table of <dir>/loeo-metrics.csv and exit")
     return p.parse_args(argv)
+
+
+def replay_command(args: argparse.Namespace) -> str:
+    """Command line that re-runs exactly this configuration (flags without values for booleans;
+    0 and 0.0 kept — `--weak-weight 0.0` is not the same run as no weak data)."""
+    parts = []
+    for k, v in vars(args).items():
+        if k in ("out_dir", "device", "table_from") or v is None or v is False or v == "":
+            continue
+        flag = f"--{k.replace('_', '-')}"
+        parts.append(flag if v is True else f"{flag} {v}")
+    return "python -m floodvalue.model.unet.loeo " + " ".join(parts)
 
 
 def git_commit() -> str:
@@ -373,14 +591,17 @@ def main(argv: list[str] | None = None) -> int:
     out = Path(args.out_dir) if args.out_dir else output_dir() / "loeo"
     out.mkdir(parents=True, exist_ok=True)
     eval_epochs = tuple(int(e) for e in args.eval_epochs.split(",") if e.strip())
-    cfg = {k: DEFAULTS[k] for k in ("channels", "base", "dropout", "batch", "lr", "weight_decay",
-                                     "dice_weight", "db_jitter")}
-    cfg |= {"epochs": args.epochs, "crop": args.crop, "seed": args.seed}
+    cfg = {"channels": DEFAULTS["channels"]}
+    cfg |= {k: getattr(args, k) for k in ("base", "dropout", "batch", "lr", "weight_decay",
+                                          "dice_weight", "db_jitter")}
+    cfg |= {"epochs": args.epochs, "crop": args.crop, "seed": args.seed,
+            "steps_mult": args.steps_mult, "tta": args.tta, "weak_weight": args.weak_weight,
+            "finetune_epochs": args.finetune_epochs, "finetune_lr_mult": args.finetune_lr_mult,
+            "hand_frac": args.hand_frac, "chip_norm": args.chip_norm,
+            "arch": args.arch, "pretrained": args.pretrained}
     shipped = shipped_baseline_rule()
     only = {e.strip() for e in args.events.split(",") if e.strip()}
-    command = "python -m floodvalue.model.unet.loeo " + " ".join(
-        f"--{k.replace('_', '-')} {v}" for k, v in vars(args).items()
-        if k not in ("out_dir", "device", "table_from") and v not in ("", 0, None))
+    command = replay_command(args)
     t_all = time.time()
     all_rows, chip_rows, info = [], [], []
     for fold in folds(limit_per_event(pool_chip_ids(), args.max_chips)):
