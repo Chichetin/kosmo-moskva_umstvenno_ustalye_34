@@ -371,6 +371,7 @@ ANALYSIS_STEPS = (
 )
 ANALYSIS_QUEUE_MAX = 3
 ANALYSIS_STEP_TIMEOUT_S = 600
+ANALYSIS_JOBS_KEPT = 50  # finished jobs remembered for status polling
 _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
 _job_queue: queue.Queue[str] = queue.Queue()
@@ -389,7 +390,24 @@ def _public(job: dict) -> dict:
     return {key: value for key, value in job.items() if key != "out"}
 
 
+def _server_paths_hidden(text: str) -> str:
+    """The interface may be public: stderr keeps the error, not the server's directories."""
+    for path, name in ((output_dir(), "<outputs>"), (data_dir(), "<data>"), (REPO_ROOT, "<repo>")):
+        text = text.replace(str(path), name)
+    return text[-600:]
+
+
 def _run_job(job_id: str) -> None:
+    """Never leaves a job running: any unexpected error marks it failed and frees the slot."""
+    try:
+        _run_stages(job_id)
+    except Exception as exc:  # noqa: BLE001 — a worker must survive and report
+        with _jobs_lock:
+            _jobs[job_id].update(status="failed", error="Внутренняя ошибка запуска анализа",
+                                 detail=_server_paths_hidden(repr(exc)), finished_at=time.time())
+
+
+def _run_stages(job_id: str) -> None:
     with _jobs_lock:
         job = _jobs[job_id]
         job.update(status="running", started_at=time.time())
@@ -401,9 +419,9 @@ def _run_job(job_id: str) -> None:
             done = subprocess.run(command, cwd=REPO_ROOT, capture_output=True, text=True,
                                   timeout=ANALYSIS_STEP_TIMEOUT_S)
             failed = done.returncode != 0
-            detail = (done.stderr or done.stdout or "").strip()[-600:]
+            detail = _server_paths_hidden((done.stderr or done.stdout or "").strip())
         except (OSError, subprocess.TimeoutExpired) as exc:
-            failed, detail = True, str(exc)[-600:]
+            failed, detail = True, _server_paths_hidden(str(exc))
         if failed:
             with _jobs_lock:
                 job.update(status="failed", error=f"{label}: этап завершился с ошибкой",
@@ -422,9 +440,18 @@ def _worker_loop() -> None:
 
 def _ensure_worker() -> None:
     global _worker
-    if _worker is None or not _worker.is_alive():
+    with _jobs_lock:  # two requests must not start two workers: one job at a time
+        if _worker is not None and _worker.is_alive():
+            return
         _worker = threading.Thread(target=_worker_loop, name="floodvalue-analysis", daemon=True)
         _worker.start()
+
+
+def _forget_old_jobs() -> None:
+    finished = sorted((job for job in _jobs.values() if job["status"] in ("done", "failed")),
+                      key=lambda job: job.get("finished_at") or 0)
+    for job in finished[:max(0, len(finished) - ANALYSIS_JOBS_KEPT)]:
+        _jobs.pop(job["job_id"], None)
 
 
 @app.post("/api/analyses")
@@ -432,15 +459,18 @@ def start_analysis(chip_id: str = Query(min_length=1, max_length=120)):
     """Queue the analysis of one catalog observation; an existing analysis is returned as is."""
     if os.environ.get("FLOODVALUE_APP_RUN_DIR"):
         raise HTTPException(409, "Открыт один комплект (make app OUT=…): запуск анализа недоступен")
-    if _sealed(chip_id):
-        raise HTTPException(403, "Снимок из test запечатан до eval-test")
-    _observation_file(chip_id)  # 404 when the raw observation is not available
-    for path in _available_runs():
+    for path in _available_runs():  # a finished analysis (a test chip too, after eval-test)
         metadata = _json(path / "run_metadata.json")
         if str(metadata.get("chip_id")) == chip_id:
             return {"job_id": None, "chip_id": chip_id, "status": "done",
                     "run_id": metadata.get("run_id", path.name)}
+    if chip_id.rsplit("_", 1)[0] in TEST_EVENTS:
+        # Never computed from the interface, FLOODVALUE_APP_ALLOW_TEST included: a test run is
+        # eval-test of the frozen configuration with a line in test-log.md (D-010, D-033).
+        raise HTTPException(403, "Снимок из test: анализ только через make eval-test / make all")
+    _observation_file(chip_id)  # 404 when the raw observation is not available
     with _jobs_lock:
+        _forget_old_jobs()
         active = [job for job in _jobs.values() if job["status"] in ("queued", "running")]
         for job in active:
             if job["chip_id"] == chip_id:

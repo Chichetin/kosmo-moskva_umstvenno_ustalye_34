@@ -113,3 +113,31 @@ def test_unknown_job_is_404():
     with pytest.raises(HTTPException) as err:
         run.analysis_status("nope")
     assert err.value.status_code == 404
+
+
+def test_test_chip_is_refused_even_with_allow_test(catalog, monkeypatch):
+    monkeypatch.setenv("FLOODVALUE_APP_ALLOW_TEST", "1")
+    with pytest.raises(HTTPException) as err:
+        run.start_analysis("Spain_7370579")
+    assert err.value.status_code == 403
+
+
+def test_unexpected_error_fails_the_job_and_hides_server_paths(catalog, monkeypatch):
+    def boom(command, **kwargs):
+        raise RuntimeError(f"cannot read {run.output_dir()}/x and {run.REPO_ROOT}/y")
+    monkeypatch.setattr(run.subprocess, "run", boom)
+    job_id = json.loads(run.start_analysis("Synthetic_000001").body)["job_id"]
+    run._run_job(job_id)  # RuntimeError is not OSError: the stage loop does not catch it
+    status = run.analysis_status(job_id)
+    assert status["status"] == "failed"
+    assert str(run.REPO_ROOT) not in status["detail"] and "<outputs>" in status["detail"]
+
+
+def test_finished_jobs_are_bounded(catalog):
+    for index in range(run.ANALYSIS_JOBS_KEPT + 5):
+        run._jobs[f"old{index}"] = {"job_id": f"old{index}", "chip_id": f"X_{index}",
+                                    "status": "done", "finished_at": index}
+    run.start_analysis("Synthetic_000001")
+    finished = [job for job in run._jobs.values() if job["status"] == "done"]
+    assert len(finished) == run.ANALYSIS_JOBS_KEPT
+    assert "old0" not in run._jobs and f"old{run.ANALYSIS_JOBS_KEPT + 4}" in run._jobs
