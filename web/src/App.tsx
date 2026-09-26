@@ -47,17 +47,9 @@ const date = (value: string | null | undefined) =>
         timeZone: "UTC",
       }).format(new Date(value))
     : "Дата неизвестна";
-// Round sums for the budget scale: the 1–2–2.5–5 × 10^k grid.
-const niceStep = (value: number) => {
-  const magnitude = 10 ** Math.floor(Math.log10(Math.max(value, 1)));
-  return ([1, 2, 2.5, 5, 10].find((factor) => factor * magnitude >= value) ?? 10) * magnitude;
-};
-// The smallest round sum at or above value, on a step of about 1/20 of it: 15 940 → 16 000,
-// 4 906 → 5 000, 42 466 → 42 500.
-const roundUpNice = (value: number) => {
-  const step = niceStep(value / 20);
-  return Math.ceil(value / step) * step;
-};
+// Budget scale before a run: plan C's saturation is not known yet; 50 000 ₽ is above full
+// coverage B of the known scenes (37–42 thousand).
+const PRE_RUN_BUDGET_MAX = 50_000;
 const ruPlural = new Intl.PluralRules("ru");
 const countLabel = (count: number, one: string, few: string, many: string) =>
   `${count} ${ruPlural.select(count) === "one" ? one : ruPlural.select(count) === "few" ? few : many}`;
@@ -477,11 +469,11 @@ export default function App() {
   const currentPlan = planFor && planFor.runId === activeSession?.run_id && planFor.budget === budget && planFor.priorityKey === priorityKey ? plan : null;
   const chosen = currentPlan?.comparison.find((row) => row.strategy === "C");
   const chosenZoneIds = new Set(currentPlan?.plans.C ?? []);
-  // Slider scale: fixed for the scene (does not move while typing) and ending at the first round
-  // sum at or above the point where plan C stops changing — no dead tail past it.
-  const sliderMax = Math.min(1_000_000_000, roundUpNice(Math.max(
-    activeSession?.plan_c_saturation_rub ?? 0, activeSession?.metadata.budget.budget_rub ?? 0, 1_000)));
-  const sliderStep = Math.max(100, niceStep(sliderMax / 200));
+  // Slider scale: fixed for the scene (does not move while typing), ending at the point where
+  // plan C stops changing, rounded up to a thousand (15 940 → 16 000).
+  const sliderMax = Math.min(1_000_000_000, Math.ceil(Math.max(
+    activeSession?.plan_c_saturation_rub ?? 0, activeSession?.metadata.budget.budget_rub ?? 0,
+    1_000) / 1_000) * 1_000);
   // The operator knows the country, not a Sen1Floods11 chip id: search by country only,
   // in English (as in the catalog) or Russian.
   const matchingScenes = scenes.filter((item) => countryMatches(item.territory, query));
@@ -530,6 +522,16 @@ export default function App() {
               onChange={(event) =>
                 setAnalysisBudget(Math.min(1_000_000_000, Math.max(0, Number(event.target.value) || 0)))
               }
+            />
+            <input
+              type="range"
+              min="0"
+              max={PRE_RUN_BUDGET_MAX}
+              step="100"
+              value={Math.min(analysisBudget, PRE_RUN_BUDGET_MAX)}
+              disabled={analysisStarting === target.chip_id}
+              onChange={(event) => setAnalysisBudget(Number(event.target.value))}
+              aria-label="Бюджет на дополнительную съёмку"
             />
             <small>
               Карта воды и ущерб считаются по уже полученному снимку S1 — за него не платим.
@@ -1057,7 +1059,7 @@ export default function App() {
                       type="range"
                       min="0"
                       max={sliderMax}
-                      step={sliderStep}
+                      step="100"
                       disabled={exporting}
                       value={Math.min(budget ?? 0, sliderMax)}
                       onChange={(event) =>
@@ -1422,7 +1424,7 @@ export default function App() {
                           type="range"
                           min="0"
                           max={sliderMax}
-                          step={sliderStep}
+                          step="100"
                           disabled={exporting}
                           value={Math.min(budget ?? 0, sliderMax)}
                           onChange={(event) => setBudget(Number(event.target.value))}

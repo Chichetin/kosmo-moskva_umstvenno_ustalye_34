@@ -2144,3 +2144,28 @@ details.context-foot summary { cursor: pointer; margin-bottom: 6px; }
     display: block;
   }
 }
+
+/* Budget fields: typed from the keyboard or set with the slider; no spinner arrows. */
+.budget-field input[type="number"],
+.analysis-budget input[type="number"],
+.analysis-budget-ask input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.budget-field input[type="number"]::-webkit-inner-spin-button,
+.budget-field input[type="number"]::-webkit-outer-spin-button,
+.analysis-budget input[type="number"]::-webkit-inner-spin-button,
+.analysis-budget input[type="number"]::-webkit-outer-spin-button,
+.analysis-budget-ask input[type="number"]::-webkit-inner-spin-button,
+.analysis-budget-ask input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.analysis-budget-ask input[type="range"] {
+  padding: 0;
+  border: 0;
+  background: none;
+  accent-color: #cbd4d8;
+}
