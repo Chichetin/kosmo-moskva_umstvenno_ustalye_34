@@ -37,6 +37,7 @@ from typing import Any
 import numpy as np
 from pyproj import Transformer
 from shapely.geometry import MultiPoint, Point, Polygon, box, mapping, shape
+from shapely.geometry.polygon import orient
 from shapely.ops import transform as shp_transform
 
 from floodvalue.procurement.geometry import AREA_CRS, order_area_km2, polygon_area_km2
@@ -147,7 +148,7 @@ def buffered_hull(points: Iterable[tuple[float, float]], radius_m: float,
         buf = shp_transform(inv.transform, hull_m.buffer(r, quad_segs=QUAD_SEGS))
         poly = buf.intersection(chip).convex_hull
         if poly.geom_type == "Polygon" and polygon_area_km2(poly) >= min_area_km2 * AREA_MARGIN:
-            return poly, r
+            return orient(poly, 1.0), r  # CCW exterior (RFC 7946)
         r *= GROW_FACTOR
     raise ValueError("не удалось построить зону ≥ 1 км² внутри чипа")
 
