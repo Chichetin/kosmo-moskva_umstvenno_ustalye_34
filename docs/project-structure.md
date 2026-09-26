@@ -29,16 +29,49 @@
 ## Правила импортов
 
 - `floodvalue.<модуль>` импортирует только `floodvalue.contracts`, `floodvalue.paths`
-  и сторонние библиотеки. Соседний модуль — только через файл по контракту.
-- Исключения, записанные в контракте: `app` вызывает `procurement.plan(...)` как
-  чистую функцию пересчёта бюджета; `export` вызывает валидаторы из `contracts`.
-- Записанные в `decisions.md` узкие исключения: чтение чипа `floodvalue.data.io`
-  (`load_s1`, `load_label`, `valid_mask`; D-015) и загрузчик split
-  `floodvalue.data.split.chip_ids` (§4 контрактов) — любым этапам; общий алгоритм метрик §7
-  `floodvalue.model.metrics` — этапам, считающим метрики (baseline, calibration, model,
-  eval; D-032), и только он из `model`. Проверка для baseline —
-  `tests/baseline/test_baseline_imports.py`.
-- `cli.py` импортирует модули этапов лениво (по имени этапа).
+  и сторонние библиотеки. Соседний модуль — только через файл по контракту (D-005).
+- Все исключения — одна таблица `ALLOWED` (и `FILES` для имён, разрешённых только
+  отдельным файлам) в `tests/test_import_rules.py`: AST всех `.py` пакета, включая
+  ленивые и относительные импорты, строки-пути модулей в реестрах и атрибуты модулей,
+  импортированных целиком. Лишняя (неиспользуемая) строка таблицы — тоже ошибка. Новый
+  межмодульный импорт = строка таблицы со ссылкой на `D-…` в том же PR.
+- Записанные исключения (только чтение; каждому модулю — только то, что он использует):
+  - чтение чипа `floodvalue.data.io`: `load_s1`, `load_label`, `valid_mask` (D-015) —
+    baseline, model, calibration. Сверх D-015 (D-060): baseline — `layer_path`,
+    `S1_LAYER`; calibration — `layer_path`, `parse_chip_id`; model — `layer_path`,
+    `raw_dir`, `parse_chip_id`, `S1_LAYER`, `JRC_LAYER`; context — `layer_path`,
+    `raw_dir`, `parse_chip_id`; prewater — `layer_path`, `raw_dir`, `parse_chip_id`,
+    `load_label` (D-058), `JRC_LAYER` (D-060). `layer_path`, `raw_dir`, `JRC_LAYER` — только
+    перечисленным в `FILES` файлам (путь к слою мимо замка `load_label`);
+  - split `floodvalue.data.split`: `chip_ids` (§4 контрактов) — baseline, model,
+    calibration. Сверх §4 (D-060): `load_split` — baseline, model, calibration;
+    `SealedTestError` — model, context; `SPLIT_PATH` — только `model/eval_test.py`,
+    `event_of` — только `model/eval_test.py` и `prewater/table.py`; `EVENT_PARTS` — app
+    (D-050), context и model (группы Кёппена в eval-test) (D-060); prewater — `chip_ids`,
+    `event_of`, `METADATA_NAME` (D-058);
+  - общий алгоритм метрик §7 `floodvalue.model.metrics` — baseline, calibration (D-032);
+  - `calibration` → `model.predict.METHODS` (D-041); `model` → `calibration.calibrator`,
+    `calibration.uncertainty` ленивым импортом (D-039, D-041); `model/eval/core.py` →
+    `calibration.run.N_BINS` (ECE в корзинах калибровки, D-057);
+  - `model` → `baseline.predict` — только `model/predict.py` (реестр методов, §3) и
+    `model/unet/report.py` (сравнение с baseline) (D-060, пересмотреть после `eval-test`);
+  - `model/eval_test.py` → `cli.main` (стадия assets через CLI, D-030);
+  - `app` → `procurement.plan` (§10 контрактов, D-050) и `data.split.EVENT_PARTS` (D-050);
+    `app/run.py` запускает `python -m floodvalue.baseline.predict --mask-only` подпроцессом
+    (D-046, D-060 — вызов CLI, не импорт; таблица `CLI_ONLY` пропускает только строку-путь
+    в `app/run.py`, импорт `baseline.predict` в app — ошибка);
+  - `media` — только `floodvalue.paths` (D-051); `context` никто из этапов не импортирует
+    (D-042, `tests/context/test_firewall.py`);
+  - `cli.py` импортирует модули этапов лениво по имени этапа (`STAGES`), `__main__` —
+    `cli.main`.
+- Что тест не видит (D-060): что вызывающий делает с модулем, полученным из реестра через
+  `importlib` (calibration → модули методов по `METHODS` — граница D-041; `eval_test` →
+  `baseline.predict`), имена модулей, собранные f-строкой, `importlib.import_module` строки
+  из `CLI_ONLY` в том же файле и реэкспорт имени из `FILES`
+  через другой файл своего модуля (импорт внутри своего модуля разрешён всегда). Узкие
+  тесты `tests/baseline/test_baseline_imports.py`,
+  `tests/calibration/test_calibration_imports.py`, `tests/context/test_firewall.py` (D-042),
+  `tests/media/test_media_firewall.py` (D-051) остаются.
 
 ## Дерево
 
