@@ -285,7 +285,7 @@ D-038 п. 5, заменил D-023) A получает статус `baseline` (�
 прогнан (`MODE=full`, commit `1eaf2cc9e572`, локально на GPU вместо Colab): IoU U-Net на
 невиданном событии от 0,206 (Somalia) до 0,532 (USA*), ΔIoU к порогу VH того же фолда
 значимо > 0 в 4 из 6 фолдов, в Ghana и Paraguay — не значимо
-(`docs/verification/transfer-loeo.md`; таблица из отчёта прогона, файлы фолдов не приложены).
+(`docs/verification/transfer-loeo.md`; CSV/JSON фолдов, лог и `COMMIT` — `docs/verification/loeo/`).
 
 На доступных данных перенос неоднородный. Выдаваемая модель — U-Net-ансамбль **с
 калибровкой Platt и порогом 0,37**, подобранными на validation (D-029); числа
