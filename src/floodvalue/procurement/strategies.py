@@ -347,7 +347,8 @@ def with_base_rate(cfg: Mapping[str, Any], factor: Decimal) -> dict[str, Any]:
 def coverage_at(catalog: Mapping[str, Any], ok_ids: Iterable[str],
                 deadline: datetime) -> tuple[dict[str, list[str]], set[str]]:
     """Охват и пригодные позиции при другом сроке решения — без перестройки каталога:
-    ``covers_asset_ids`` позиции (``covers`` при построении) ∩ оценённые объекты, если
+    объекты внутри контура позиции (``covers_asset_ids``, у исключённых при построении —
+    ``inside_geometry_asset_ids``, D-048) ∩ оценённые объекты, если
     :func:`zones.exclusion_reason` при этом сроке пуста (event_observation, available_at ≤
     срока, облачность подтверждена)."""
     ok = set(ok_ids)
@@ -357,7 +358,9 @@ def coverage_at(catalog: Mapping[str, Any], ok_ids: Iterable[str],
         p = f["properties"]
         if zones.exclusion_reason(p, deadline) is None:
             eligible.add(p["candidate_id"])
-            cov[p["candidate_id"]] = sorted(a for a in p["covers_asset_ids"] if a in ok)
+            # excluded at build time -> covers_asset_ids is [] (D-048); use its contour
+            inside = p.get("inside_geometry_asset_ids", p["covers_asset_ids"])
+            cov[p["candidate_id"]] = sorted(a for a in inside if a in ok)
         else:
             cov[p["candidate_id"]] = []
     return cov, eligible
