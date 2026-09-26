@@ -229,7 +229,10 @@ def pixel_qc(s1: np.ndarray, label: np.ndarray) -> dict:
     vv_nan, vh_nan = ~np.isfinite(vv), ~np.isfinite(vh)
     s1_nan = vv_nan | vh_nan
     n = label.size
-    share = lambda m: float(np.count_nonzero(m)) / n  # noqa: E731
+
+    def share(m: np.ndarray) -> float:
+        return float(np.count_nonzero(m)) / n
+
     with np.errstate(invalid="ignore"):
         vv_pos, vh_pos = vv > 0, vh > 0
     return {"n_pixels_total": int(n),
