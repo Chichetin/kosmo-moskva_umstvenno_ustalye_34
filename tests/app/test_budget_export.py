@@ -115,8 +115,8 @@ def test_lock_is_freed_when_the_temp_dir_cannot_be_made(bundle, monkeypatch):
 
 def test_budget_argument_is_rounded_half_up(bundle, monkeypatch):
     calls, _ = _fake_steps(monkeypatch)
-    run.download(None, 2500.005)
-    assert calls[0][calls[0].index("--budget") + 1] == "2500.01"
+    run.download(None, 2500.125)  # exact binary half: f"{:.2f}" gives 2500.12 (half-even)
+    assert calls[0][calls[0].index("--budget") + 1] == "2500.13"
 
 
 def test_saturation_is_none_when_the_plan_cannot_be_computed(monkeypatch):
