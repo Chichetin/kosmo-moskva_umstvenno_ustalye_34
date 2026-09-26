@@ -1,7 +1,7 @@
 /* «Зоны плана C на снимке» (PlanZones.tsx): the scene with the chosen zones and a crop per zone. */
 .plan-zones {
-  margin-bottom: 22px;
-  padding: 0 0 18px;
+  margin-bottom: 1.375rem;
+  padding: 0 0 1.125rem;
 }
 
 .plan-zones-head {
@@ -9,21 +9,21 @@
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px 20px;
-  padding: 21px 22px 16px;
+  gap: 0.75rem 1.25rem;
+  padding: 1.3125rem 1.375rem 1rem;
 }
 
 .plan-zones-head h2 {
   margin: 0;
   color: #eef1f2;
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 610;
 }
 
 .plan-zones-head p {
-  margin: 6px 0 0;
+  margin: 0.375rem 0 0;
   color: #a4b0b5;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .plan-zones-head .zone-tabs {
@@ -34,13 +34,13 @@
   display: grid;
   grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
   align-items: start;
-  gap: 18px;
-  padding: 0 22px;
+  gap: 1.125rem;
+  padding: 0 1.375rem;
 }
 
 .plan-zones-scene {
   position: sticky;
-  top: 18px;
+  top: 1.125rem;
   margin: 0;
 }
 
@@ -106,22 +106,22 @@
 .plan-zones-scene figcaption {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 16px;
-  margin-top: 10px;
+  gap: 0.375rem 1rem;
+  margin-top: 0.625rem;
   color: #a4b0b5;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .plan-zones-scene figcaption span {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
 }
 
 .pz-key {
   display: inline-block;
-  width: 10px;
-  height: 10px;
+  width: 0.625rem;
+  height: 0.625rem;
 }
 
 .pz-key.zone {
@@ -141,15 +141,15 @@
 
 .plan-zones-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 11.875rem), 1fr));
+  gap: 0.875rem;
 }
 
 .plan-zone {
   display: grid;
   align-content: start;
-  gap: 10px;
-  padding: 10px;
+  gap: 0.625rem;
+  padding: 0.625rem;
   background: #101315;
   outline: 1px solid transparent;
   transition: outline-color 160ms ease;
@@ -172,40 +172,40 @@
 
 .plan-zone-picture b {
   position: absolute;
-  top: 6px;
-  left: 6px;
-  min-width: 22px;
-  padding: 2px 6px;
+  top: 0.375rem;
+  left: 0.375rem;
+  min-width: 1.375rem;
+  padding: 2px 0.375rem;
   background: #c4f477;
   color: #06121f;
-  font-size: 12px;
+  font-size: 0.75rem;
   text-align: center;
 }
 
 .plan-zone-meta {
   display: grid;
-  gap: 6px;
+  gap: 0.375rem;
   min-width: 0;
 }
 
 .plan-zone-title {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
+  gap: 0.625rem;
   color: #eef1f2;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-variant-numeric: tabular-nums;
 }
 
 .plan-zone-meta small {
   color: #a4b0b5;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.4;
 }
 
 .plan-zone-meta ul {
   display: grid;
-  gap: 4px;
+  gap: 0.25rem;
   margin: 2px 0 0;
   padding: 0;
   list-style: none;
@@ -214,9 +214,9 @@
 .plan-zone-meta li {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 8px;
+  gap: 0.5rem;
   color: #d5dde0;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -237,7 +237,7 @@
 
 .plan-zone-meta details {
   color: #a4b0b5;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .plan-zone-meta details summary {
@@ -245,15 +245,15 @@
 }
 
 .plan-zone-meta details p {
-  margin: 6px 0 0;
+  margin: 0.375rem 0 0;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
 
 .plan-zones-note {
-  margin: 16px 22px 0;
+  margin: 1rem 1.375rem 0;
   color: #8c989d;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.5;
 }
 
@@ -263,18 +263,18 @@
   }
   .plan-zones-scene {
     position: static;
-    max-width: 560px;
+    max-width: 35rem;
   }
 }
 
 @media (max-width: 700px) {
   .plan-zones-head,
   .plan-zones-body {
-    padding-left: 14px;
-    padding-right: 14px;
+    padding-left: 0.875rem;
+    padding-right: 0.875rem;
   }
   .plan-zones-note {
-    margin-left: 14px;
-    margin-right: 14px;
+    margin-left: 0.875rem;
+    margin-right: 0.875rem;
   }
 }
