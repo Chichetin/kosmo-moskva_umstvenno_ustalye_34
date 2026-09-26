@@ -196,9 +196,11 @@
   function initMap() {
     if (typeof L === "undefined") { $("map-fallback").classList.remove("hidden"); $("minimap").classList.add("hidden"); return; }
     map = L.map("minimap", { zoomControl: true, attributionControl: true }).setView([55.75, 37.62], 4);
+    // No Leaflet link; the OSM credit the tile policy requires stays as quiet plain text.
+    map.attributionControl.setPrefix(false);
     // OSM tile policy requires a Referer; the page itself stays no-referrer (status tokens).
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 18, attribution: "© участники OpenStreetMap",
+      maxZoom: 18, attribution: "© OpenStreetMap",
       referrerPolicy: "strict-origin-when-cross-origin" }).addTo(map);
     map.on("click", (e) => setPoint(e.latlng.lat, e.latlng.lng));
     const lat = parseFloat($("lat").value), lon = parseFloat($("lon").value);
