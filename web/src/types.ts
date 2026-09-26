@@ -76,6 +76,8 @@ export type SceneSummary = {
     | null;
   status: "analyzed" | "observation_only";
   preview_url: string | null;
+  analyzable?: boolean;
+  not_analyzable_reason?: string | null;
 };
 
 export type Comparison = {
