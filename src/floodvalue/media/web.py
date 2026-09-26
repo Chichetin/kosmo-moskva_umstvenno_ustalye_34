@@ -44,12 +44,13 @@ from floodvalue.media.store import connect, get_kv, loads, set_kv, sync_sources,
 from floodvalue.paths import data_dir, output_dir
 
 STATIC = Path(__file__).parent / "static"
+FONTS = STATIC / "fonts"  # self-hosted woff2 for the public pages (CSP allows no font CDN)
 MAX_BODY = MAX_PHOTOS * MAX_PHOTO_BYTES + 256 * 1024
 COOKIE = "fv_media_session"
 CSP = ("default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; "
        "style-src 'self' https://cdn.jsdelivr.net; img-src 'self' data: blob: https://cdn.jsdelivr.net "
-       "https://tile.openstreetmap.org; connect-src 'self'; frame-ancestors 'none'; "
-       "base-uri 'none'; form-action 'self'")
+       "https://tile.openstreetmap.org; connect-src 'self'; font-src 'self'; "
+       "frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 STATUS_LIMIT = (60, 3600)
 MAP_PUBLIC_GRID = 0.01  # ≈ 1 km: a public map shows where a report is, not the eyewitness's door
 
@@ -131,6 +132,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         media = "text/javascript" if path.suffix == ".js" else "text/css"
         return FileResponse(path, media_type=media + "; charset=utf-8",
                             headers={"X-Content-Type-Options": "nosniff"})
+
+    @app.get("/media/static/fonts/{name}")
+    def font_file(name: str):
+        path = (FONTS / name).resolve()
+        if path.parent != FONTS.resolve() or path.suffix != ".woff2" or not path.is_file():
+            raise HTTPException(404)
+        return FileResponse(path, media_type="font/woff2",
+                            headers={"X-Content-Type-Options": "nosniff",
+                                     "Cache-Control": "public, max-age=86400"})
 
     @app.get("/api/media/report-config")
     def report_config(request: Request):
