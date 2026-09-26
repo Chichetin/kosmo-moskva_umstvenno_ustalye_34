@@ -7,7 +7,9 @@
 ## Прогон 4 — 26.09 ~15:00, GitVerse @ `93c27f2`, путь жюри без обходов — ✅ (действующий статус)
 
 `bash scripts/sync-gitverse.sh` → GitVerse `main`, `master`, `lfs-probe` = `93c27f2`
-(было `90bf679`), `[verify] ok`: 6 LFS-файлов по sha256. Обычный клон в пустой каталог на
+(было `90bf679`), `[verify] ok`: 6 LFS-файлов по sha256 (вывод скрипта — в терминале сессии, не
+сохранён в файл; независимо: `git ls-remote` GitVerse → `93c27f2` на трёх ветках и sha256 весов в
+самом клоне, ниже). Обычный клон в пустой каталог на
 другом диске (`/tmp` у машины переполнен — первая попытка упала на `Disk quota exceeded`
 при `uv sync`, это окружение, не проект). `FLOODVALUE_DATA_DIR` — каталог, заполненный
 `make data` с нуля (прогон 1b).
@@ -26,7 +28,7 @@ uv sync --frozen && uv run --frozen pytest -o addopts="" -q   # 898 passed, 1 sk
 | Смена бюджета | `make all BUDGET=20000` | `validate` 12/12; C 15 939,51 руб., 6 зон (`E-1`, `E-2`, `Z-A03`, `Z-A06`, `Z-A07`, `U-3`), покрытие EL 1,0 |
 | p/маска/порог не меняются | `sha256sum …/flood_{probability,mask}.tif`, `threshold` в `run_metadata.json` (5000 и 20000) | `b767ad16cf4c3c88…`, `f38ec062c6736074…`, 0,37 в обоих — те же, что в прогонах 0–3 |
 | Другой чип | `make all CHIP=Nigeria_1095404` | `validate` 12/12 |
-| Интерфейс | `FLOODVALUE_APP_PORT=8792 make app` | ✅ `/` 200, `/api/session` 200, `/api/scenes` 200, `/api/plan?budget=12000` — JSON с `plans`, `comparison`, `reasons` (в прогонах 1–3 было ❌, #83 закрыт #163) |
+| Интерфейс | `FLOODVALUE_APP_PORT=8792 make app` (отдельный запуск после основного лога, в котором проверялся несуществующий `/api/runs` → 404) | ✅ `/` 200, `/api/session` 200, `/api/scenes` 200, `/api/plan?budget=12000` — объект с ключами `plans`, `plan_rows`, `comparison`, `reasons`, `social_constraint`, `c_selection` (в прогонах 1–3 было ❌, #83 закрыт #163) |
 | Модуль сообщений | `uv run python -m floodvalue.media --help` | команды `init, sources, ingest, worker, serve, purge, demo` (#168) |
 
 План C при 5 000 руб. отличается от прогона 3 (4 905,96 руб., `Z-A02`, `Z-A10`): с `6d8e99d`
