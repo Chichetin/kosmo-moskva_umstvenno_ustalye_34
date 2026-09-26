@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   ArrowDownToLine,
   ArrowLeft,
@@ -173,6 +173,32 @@ export default function App() {
   const [planFor, setPlanFor] = useState<{ runId: string; budget: number; priorityKey: string } | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
   const [budget, setBudget] = useState<number | null>(null);
+  // The budget control stays where the operator grabbed it: the plan above it (zone cards)
+  // changes height with every budget, so the page is scrolled back by the same amount while
+  // the budget is being changed and the new plan arrives (no jumping under the pointer).
+  const budgetAnchor = useRef<{ el: HTMLElement; top: number; until: number } | null>(null);
+  const changeBudget = (value: number, el: HTMLElement) => {
+    const now = Date.now();
+    const held = budgetAnchor.current;
+    budgetAnchor.current = held && held.el === el && now < held.until
+      ? { ...held, until: now + 2500 }
+      : { el, top: el.getBoundingClientRect().top, until: now + 2500 };
+    setBudget(value);
+  };
+  useLayoutEffect(() => {
+    const held = budgetAnchor.current;
+    if (!held) return;
+    if (Date.now() > held.until || !held.el.isConnected) {
+      budgetAnchor.current = null;
+      return;
+    }
+    const dy = held.el.getBoundingClientRect().top - held.top;
+    if (Math.abs(dy) < 1) return;
+    let scroller: HTMLElement | null = held.el.parentElement;
+    while (scroller && !(scroller.scrollHeight > scroller.clientHeight &&
+        /(auto|scroll)/.test(getComputedStyle(scroller).overflowY))) scroller = scroller.parentElement;
+    (scroller ?? document.scrollingElement ?? document.documentElement).scrollTop += dy;
+  });
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [baseMap, setBaseMap] = useState<"map" | "optical">("map");
@@ -1066,8 +1092,9 @@ export default function App() {
                         disabled={exporting}
                         value={budget ?? 0}
                         onChange={(event) =>
-                          setBudget(
+                          changeBudget(
                             Math.min(1_000_000_000, Math.max(0, Number(event.target.value) || 0)),
+                            event.currentTarget,
                           )
                         }
                       />
@@ -1081,7 +1108,7 @@ export default function App() {
                       disabled={exporting}
                       value={Math.min(budget ?? 0, sliderMax)}
                       onChange={(event) =>
-                        setBudget(Number(event.target.value))
+                        changeBudget(Number(event.target.value), event.currentTarget)
                       }
                       aria-label="Изменить бюджет"
                     />
@@ -1455,7 +1482,7 @@ export default function App() {
                             step="100"
                             disabled={exporting}
                             value={budget ?? 0}
-                            onChange={(event) => setBudget(Math.min(1_000_000_000, Math.max(0, Number(event.target.value) || 0)))}
+                            onChange={(event) => changeBudget(Math.min(1_000_000_000, Math.max(0, Number(event.target.value) || 0)), event.currentTarget)}
                           /> ₽</span>
                         </label>
                         <input
@@ -1465,7 +1492,7 @@ export default function App() {
                           step="100"
                           disabled={exporting}
                           value={Math.min(budget ?? 0, sliderMax)}
-                          onChange={(event) => setBudget(Number(event.target.value))}
+                          onChange={(event) => changeBudget(Number(event.target.value), event.currentTarget)}
                           aria-label="Бюджет данных плана"
                         />
                         {!priorityAssetIds.length && activeSession.plan_c_saturation_rub != null && (
