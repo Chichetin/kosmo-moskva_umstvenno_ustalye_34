@@ -1745,3 +1745,47 @@ tbody tr.selected,
   .sensitivity-panel .sensitivity-section,
   .sensitivity-panel .sensitivity-all { padding: 16px 14px; }
 }
+
+/* Scene list stays inside the window (#UI-fixes 26.09): the left column runs from its top to
+   24px above the bottom and the panel shrinks to it, so the list scrolls instead of running
+   under the browser edge. Computed in the column's own (zoomed) coordinates, so the nested
+   `zoom` above cannot push it past the viewport. The empty part of the column passes clicks
+   to the map. */
+.map-top-left,
+.scene-mode .map-top-left {
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  pointer-events: none;
+}
+.map-top-left > * { pointer-events: auto; }
+.search-panel,
+.scene-mode .search-panel {
+  max-height: 100%;
+  flex: 0 1 auto;
+  min-height: 0;
+}
+.scene-mode .scene-results { max-height: none; }
+
+/* Scene panel: collapse to its heading, a clear way back to all observations, notes folded. */
+.context-heading { display: flex; justify-content: space-between; gap: 12px; }
+.context-heading-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+.back-to-globe {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 22px 14px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--radius);
+  background: #ffffff0d;
+  color: #dde3e5;
+  font-size: 13px;
+  cursor: pointer;
+}
+.back-to-globe:hover { background: #ffffff1a; }
+details.context-foot { padding: 0 22px 18px; }
+details.context-foot summary { cursor: pointer; margin-bottom: 6px; }
+.analysis-head > button { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.context-panel.collapsed { bottom: auto; height: auto; overflow: hidden; }
