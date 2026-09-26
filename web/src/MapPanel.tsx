@@ -5,7 +5,7 @@ import type { FeatureCollection, Geometry, Point, Polygon } from "geojson";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { mapProviders } from "./mapProviders";
-import type { Feature, Plan, SceneSummary, Session } from "./types";
+import type { Feature, MediaMap, Plan, SceneSummary, Session } from "./types";
 
 maplibregl.setWorkerUrl(workerUrl);
 type LayerFlags = {
@@ -23,6 +23,8 @@ type Props = {
   plan: Plan | null;
   baseMap: "map" | "optical";
   visibleLayers: LayerFlags;
+  messages: MediaMap | null;
+  showMessages: boolean;
   overlayOpacity: number;
   selectedAsset: string | null;
   selectedZone: string | null;
@@ -71,6 +73,56 @@ const markers = (scenes: SceneSummary[]): FeatureCollection<Point> => ({
       : [],
   ),
 });
+// «Сообщения» layer (/api/media/map): a reason to look at a territory, never an input to p or EL.
+const mediaFeatures = (items: Feature[]): FeatureCollection => ({
+  type: "FeatureCollection",
+  features: items.flatMap((item) =>
+    item.geometry
+      ? [{ type: "Feature" as const, geometry: item.geometry as Geometry, properties: item.properties }]
+      : [],
+  ),
+});
+const REPORT_TYPE: Record<string, string> = {
+  occurred: "произошло", forecast: "прогноз", warning: "предупреждение",
+  negation: "опровержение", historical: "исторический материал", unclear: "неясно",
+};
+const REVIEW_STATE: Record<string, string> = {
+  new: "новое", needs_geo: "нужно уточнить место", ready: "готово к проверке",
+  under_review: "на проверке", reviewed: "проверено",
+};
+const ORIGIN: Record<string, string> = { news: "СМИ", bulletin: "сводка", citizen: "очевидец" };
+const when = (value: unknown) =>
+  typeof value === "string" && value
+    ? new Intl.DateTimeFormat("ru-RU", {
+        day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC",
+      }).format(new Date(value)) + " UTC"
+    : "время неизвестно";
+// Text nodes only: titles come from news and eyewitnesses and are never parsed as HTML.
+const messageCard = (props: Record<string, unknown>, kind: "event" | "report") => {
+  const node = document.createElement("div");
+  node.className = "map-preview media-preview";
+  const line = (text: string, tag: "strong" | "span" | "small" = "span") => {
+    const el = document.createElement(tag);
+    el.textContent = text;
+    node.append(el);
+  };
+  const demo = props.is_demo ? (props.is_replay ? "ДЕМО · REPLAY · " : "ДЕМО · ") : "";
+  if (kind === "report") {
+    line(`${demo}Обращение очевидца`, "strong");
+    line(String(props.category_label ?? "без категории"));
+    line(`${when(props.observed_at ?? props.submitted_at)} · ждёт модерации`);
+    if (props.location_precision === "coarsened") line("место показано с точностью ≈ 1 км", "small");
+  } else {
+    line(`${demo}${String(props.title ?? "Сообщение")}`, "strong");
+    const origins = String(props.source_kinds ?? "")
+      .split(",").filter(Boolean).map((k) => ORIGIN[k] ?? k).join(", ");
+    line(`${REPORT_TYPE[String(props.report_type)] ?? "тип неизвестен"} · ${origins || "источник неизвестен"}`);
+    if (props.place_label) line(String(props.place_label));
+    line(`${when(props.event_time_start ?? props.first_detected_at)} · ${REVIEW_STATE[String(props.review_state)] ?? ""}`);
+  }
+  line("Сообщение не проверено по снимкам и не входит в p, ущерб и план.", "small");
+  return node;
+};
 const reducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const minimumZoom = () => (window.innerWidth < 700 ? 0.9 : 1.15);
@@ -96,6 +148,8 @@ export default function MapPanel(props: Props) {
       overlayOpacity,
       selectedAsset,
       selectedZone,
+      messages,
+      showMessages,
     } = current.current;
     const show: Record<string, boolean> = {
       optical: baseMap === "optical",
@@ -115,6 +169,9 @@ export default function MapPanel(props: Props) {
       "plan-fill": !!scene && visibleLayers.zones,
       "plan-line": !!scene && visibleLayers.zones,
       "zone-focus": !!scene && visibleLayers.zones,
+      "media-area": showMessages && !!messages,
+      "media-event": showMessages && !!messages,
+      "media-report": showMessages && !!messages,
     };
     for (const [id, visible] of Object.entries(show)) {
       if (map.getLayer(id))
@@ -456,6 +513,48 @@ export default function MapPanel(props: Props) {
           "circle-stroke-width": 2,
         },
       });
+      const media = current.current.messages;
+      map.addSource("media-events", {
+        type: "geojson",
+        data: mediaFeatures(media?.events.features ?? []),
+      });
+      map.addSource("media-reports", {
+        type: "geojson",
+        data: mediaFeatures(media?.reports.features ?? []),
+      });
+      // Calm markers on top of rasters and zones: an outline for areas, no fill, no pulsing.
+      map.addLayer({
+        id: "media-area",
+        type: "line",
+        source: "media-events",
+        filter: ["!=", ["geometry-type"], "Point"],
+        paint: { "line-color": "#f0b85a", "line-width": 1.4, "line-opacity": 0.75, "line-dasharray": [2, 2] },
+      });
+      map.addLayer({
+        id: "media-event",
+        type: "circle",
+        source: "media-events",
+        filter: ["==", ["geometry-type"], "Point"],
+        paint: {
+          "circle-radius": 6,
+          "circle-color": "#f0b85a",
+          "circle-opacity": ["case", ["==", ["get", "review_state"], "reviewed"], 0.95, 0.7],
+          "circle-stroke-color": "#1a1408",
+          "circle-stroke-width": 1.5,
+        },
+      });
+      map.addLayer({
+        id: "media-report",
+        type: "circle",
+        source: "media-reports",
+        paint: {
+          "circle-radius": 6,
+          "circle-color": "#f0b85a",
+          "circle-opacity": 0.12,
+          "circle-stroke-color": "#f0b85a",
+          "circle-stroke-width": 2,
+        },
+      });
       updateScene();
       setReady((value) => value + 1);
       current.current.onIssue(
@@ -557,6 +656,22 @@ export default function MapPanel(props: Props) {
       map.getCanvas().style.cursor = "";
       popup.current?.remove();
     });
+    const showMessage = (kind: "event" | "report") => (event: maplibregl.MapLayerMouseEvent) => {
+      const feature = event.features?.[0];
+      if (!feature) return;
+      popup.current?.remove();
+      popup.current = new maplibregl.Popup({ closeButton: true, closeOnClick: true, offset: 12, maxWidth: "280px" })
+        .setLngLat(event.lngLat)
+        .setDOMContent(messageCard(feature.properties ?? {}, kind))
+        .addTo(map);
+    };
+    map.on("click", "media-event", showMessage("event"));
+    map.on("click", "media-area", showMessage("event"));
+    map.on("click", "media-report", showMessage("report"));
+    for (const id of ["media-event", "media-report"]) {
+      map.on("mouseenter", id, () => (map.getCanvas().style.cursor = "pointer"));
+      map.on("mouseleave", id, () => (map.getCanvas().style.cursor = ""));
+    }
     map.on("click", "assets", (event) => {
       const id = event.features?.[0]?.properties?.asset_id;
       if (typeof id === "string") current.current.onSelectAsset(id);
@@ -622,8 +737,19 @@ export default function MapPanel(props: Props) {
     );
   }, [props.scene?.chip_id, props.session?.run_id, ready]);
   useEffect(() => {
+    const map = mapRef.current;
+    (map?.getSource("media-events") as GeoJSONSource | undefined)?.setData(
+      mediaFeatures(props.messages?.events.features ?? []),
+    );
+    (map?.getSource("media-reports") as GeoJSONSource | undefined)?.setData(
+      mediaFeatures(props.messages?.reports.features ?? []),
+    );
+  }, [props.messages, ready]);
+  useEffect(() => {
     updateVisibility();
   }, [
+    props.messages,
+    props.showMessages,
     props.baseMap,
     props.visibleLayers,
     props.overlayOpacity,
