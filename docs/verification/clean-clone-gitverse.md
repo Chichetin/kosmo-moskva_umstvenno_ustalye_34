@@ -4,7 +4,37 @@
 `make all`. Демо-чип до `eval-test` — `Sri-Lanka_713926` (validation, D-010); другой чип —
 `Nigeria_1095404` (validation, не train, не демо). Test-чипы не читались.
 
-## Прогон 3 — 26.09 00:30, GitVerse @ `6d8e99d`, путь жюри без обходов — ✅ (действующий статус)
+## Прогон 4 — 26.09 ~15:00, GitVerse @ `93c27f2`, путь жюри без обходов — ✅ (действующий статус)
+
+`bash scripts/sync-gitverse.sh` → GitVerse `main`, `master`, `lfs-probe` = `93c27f2`
+(было `90bf679`), `[verify] ok`: 6 LFS-файлов по sha256. Обычный клон в пустой каталог на
+другом диске (`/tmp` у машины переполнен — первая попытка упала на `Disk quota exceeded`
+при `uv sync`, это окружение, не проект). `FLOODVALUE_DATA_DIR` — каталог, заполненный
+`make data` с нуля (прогон 1b).
+
+```bash
+git clone https://gitverse.ru/hackrus.experts/kosmo-moskva_umstvenno_ustalye_34.git r && cd r
+# HEAD=93c27f294c2227b1f5a8390eaa9de00d9d9b880b, ветка по умолчанию lfs-probe, 442 файла
+git lfs ls-files -s   # 6 файлов, все «*»: model.joblib (488 KB), member_0..4.pt (7.8 MB)
+sha256sum models/unet/member_*.pt models/pixel/model.joblib   # 6c2df137…, e077be95…, 8ff688ab…, 80745de0…, 6aa23270…, 6672fa09… = OID LFS
+uv sync --frozen && uv run --frozen pytest -o addopts="" -q   # 898 passed, 1 skipped in 105.51s
+```
+
+| Шаг | Команда | Результат |
+|---|---|---|
+| Сквозной путь | `make all` | `validate` 12/12; A 0,00; B 42 465,93 руб. (`budget_feasible=false`); C 4 207,54 руб. за данные, зоны `E-2`, `Z-A03` |
+| Смена бюджета | `make all BUDGET=20000` | `validate` 12/12; C 15 939,51 руб., 6 зон (`E-1`, `E-2`, `Z-A03`, `Z-A06`, `Z-A07`, `U-3`), покрытие EL 1,0 |
+| p/маска/порог не меняются | `sha256sum …/flood_{probability,mask}.tif`, `threshold` в `run_metadata.json` (5000 и 20000) | `b767ad16cf4c3c88…`, `f38ec062c6736074…`, 0,37 в обоих — те же, что в прогонах 0–3 |
+| Другой чип | `make all CHIP=Nigeria_1095404` | `validate` 12/12 |
+| Интерфейс | `FLOODVALUE_APP_PORT=8792 make app` | ✅ `/` 200, `/api/session` 200, `/api/scenes` 200, `/api/plan?budget=12000` — JSON с `plans`, `comparison`, `reasons` (в прогонах 1–3 было ❌, #83 закрыт #163) |
+| Модуль сообщений | `uv run python -m floodvalue.media --help` | команды `init, sources, ingest, worker, serve, purge, demo` (#168) |
+
+План C при 5 000 руб. отличается от прогона 3 (4 905,96 руб., `Z-A02`, `Z-A10`): с `6d8e99d`
+менялись каталог зон и выбор C (`src/floodvalue/procurement/`); p, маска и порог те же.
+Демо-чип — `Sri-Lanka_713926` (validation): `eval-test` ещё не проводился (до 20:00, D-033).
+После `eval-test`, смены демо-чипа и финальной синхронизации прогон повторяется (прогон 5).
+
+## Прогон 3 — 26.09 00:30, GitVerse @ `6d8e99d`, путь жюри без обходов — ✅
 
 GitVerse `main`, `master` и `lfs-probe` = `6d8e99d` (синхронизация с загрузкой LFS через PUT с
 Content-Length, #98; `--verify` прошёл). Обычный клон с включённым git lfs, данные из `make data` с нуля (прогон 1b).
