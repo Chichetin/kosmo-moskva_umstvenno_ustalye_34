@@ -247,6 +247,7 @@ def plan(run_dir: Path, budget_rub: float, social: bool | None = None) -> dict:
       "plan_rows":   [dict]  # строки procurement_plan.csv (поля §6) БЕЗ "reason":
                              #   reason подставляет procure из reasons["B"|"C"]
       "comparison":  [dict]  # строки strategy_comparison.csv для A, B, C (поля §6);
+                             #   + addressed_decision_risk_rub, decision_risk_share (D-049: Σ R = V·q·min(p, 1−p) покрытых ok; доля None при Σ R = 0);
                              #   включая covered_asset_ids (asset_id через пробел);
                              #   значения — Python-типы (str/Decimal/float/bool/None), не строки CSV;
                              #   budget_rub = аргумент, округлённый до 0,01
