@@ -321,3 +321,11 @@ details[open] summary::before { transform: rotate(45deg); }
 @media (forced-colors: active) {
   .chips input:checked + .chip { border: 3px solid CanvasText; }
 }
+
+/* Map credit: no Leaflet link, the OSM credit required by the tile policy as quiet plain text. */
+#minimap .leaflet-control-attribution {
+  background: transparent !important;
+  color: #8a8f94;
+  font-size: 10px;
+  box-shadow: none;
+}

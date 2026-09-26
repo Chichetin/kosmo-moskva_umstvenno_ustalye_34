@@ -10,6 +10,7 @@
 | `/report`, `/report/status` | форма очевидца и статус обращения по токену | публично | `floodvalue.media.web` |
 | `/media/analyst` | очередь модерации, события, источники | вход по токену аналитика | `floodvalue.media.web` |
 | `/api/media/map` | слой «Сообщения» для карты оператора | см. ниже | `floodvalue.media.web` |
+| `/api/media/news` | лента «Новости» оператора: публикации источников с местом и снимками рядом | как `/api/media/map` | `floodvalue.media.web` |
 | `/api/media/*` (остальное) | API аналитика | вход по токену аналитика | `floodvalue.media.web` |
 
 Почему диспетчер лежит в `scripts/`, а не в пакете: ни одна стадия FloodValue не импортирует
