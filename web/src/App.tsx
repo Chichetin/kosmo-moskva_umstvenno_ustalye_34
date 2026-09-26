@@ -47,6 +47,17 @@ const date = (value: string | null | undefined) =>
         timeZone: "UTC",
       }).format(new Date(value))
     : "Дата неизвестна";
+// Round sums for the budget scale: the 1–2–2.5–5 × 10^k grid.
+const niceStep = (value: number) => {
+  const magnitude = 10 ** Math.floor(Math.log10(Math.max(value, 1)));
+  return ([1, 2, 2.5, 5, 10].find((factor) => factor * magnitude >= value) ?? 10) * magnitude;
+};
+// The smallest round sum at or above value, on a step of about 1/20 of it: 15 940 → 16 000,
+// 4 906 → 5 000, 42 466 → 42 500.
+const roundUpNice = (value: number) => {
+  const step = niceStep(value / 20);
+  return Math.ceil(value / step) * step;
+};
 const ruPlural = new Intl.PluralRules("ru");
 const countLabel = (count: number, one: string, few: string, many: string) =>
   `${count} ${ruPlural.select(count) === "one" ? one : ruPlural.select(count) === "few" ? few : many}`;
@@ -463,11 +474,11 @@ export default function App() {
   const currentPlan = planFor && planFor.runId === activeSession?.run_id && planFor.budget === budget && planFor.priorityAssetId === priorityAssetId ? plan : null;
   const chosen = currentPlan?.comparison.find((row) => row.strategy === "C");
   const chosenZoneIds = new Set(currentPlan?.plans.C ?? []);
-  // Keep the slider scale fixed while the operator changes the budget.
-  const sliderMax = Math.min(1_000_000_000, Math.ceil(
-    Math.max(activeSession?.plan_c_saturation_rub ?? 0,
-      activeSession?.metadata.budget.budget_rub ?? 0, 5_000) * 1.1 / 1_000,
-  ) * 1_000);
+  // Slider scale: fixed for the scene (does not move while typing) and ending at the first round
+  // sum at or above the point where plan C stops changing — no dead tail past it.
+  const sliderMax = Math.min(1_000_000_000, roundUpNice(Math.max(
+    activeSession?.plan_c_saturation_rub ?? 0, activeSession?.metadata.budget.budget_rub ?? 0, 1_000)));
+  const sliderStep = Math.max(100, niceStep(sliderMax / 200));
   // The operator knows the country, not a Sen1Floods11 chip id: search by country only,
   // in English (as in the catalog) or Russian.
   const matchingScenes = scenes.filter((item) => countryMatches(item.territory, query));
@@ -1021,7 +1032,7 @@ export default function App() {
                       type="range"
                       min="0"
                       max={sliderMax}
-                      step="100"
+                      step={sliderStep}
                       disabled={exporting}
                       value={Math.min(budget ?? 0, sliderMax)}
                       onChange={(event) =>
@@ -1385,7 +1396,7 @@ export default function App() {
                           type="range"
                           min="0"
                           max={sliderMax}
-                          step="100"
+                          step={sliderStep}
                           disabled={exporting}
                           value={Math.min(budget ?? 0, sliderMax)}
                           onChange={(event) => setBudget(Number(event.target.value))}
