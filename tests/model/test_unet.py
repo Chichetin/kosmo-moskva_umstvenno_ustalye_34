@@ -146,8 +146,9 @@ def test_predict_cli_writes_contract_rasters(tiny_model_dir, tmp_path, monkeypat
     monkeypatch.setenv("FLOODVALUE_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setattr(cli_predict, "MODELS_DIR", tiny_model_dir.parent)
     monkeypatch.setattr(P, "DEFAULT_MODEL_DIR", tiny_model_dir)
-    (tiny_model_dir.parent / "unet").exists() or (tiny_model_dir.parent / "unet").symlink_to(
-        tiny_model_dir)
+    if not (tiny_model_dir.parent / "unet").exists():
+        # copy, not symlink: symlinks need admin/developer mode on Windows (WinError 1314)
+        shutil.copytree(tiny_model_dir, tiny_model_dir.parent / "unet")
 
     args = type("Args", (), {"chip": chip, "out": str(tmp_path / "out")})
     assert cli_predict.run(args) == 0

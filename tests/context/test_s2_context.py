@@ -105,13 +105,14 @@ def test_build_writes_png_and_json(tmp_path, monkeypatch):
     _write(raw / "HandLabeled/S2Hand/Sri-Lanka_1_S2Hand.tif", _s2())
     _write(raw / "HandLabeled/S1Hand/Sri-Lanka_1_S1Hand.tif", np.zeros((2, H, W), np.float32))
     (raw / ctx.METADATA).write_text(json.dumps({"features": [{"properties": {
-        "location": "Sri-Lanka", "s1_date": "2017/05/30", "s2_date": "2017/05/28"}}]}))
+        "location": "Sri-Lanka", "s1_date": "2017/05/30", "s2_date": "2017/05/28"}}]}),
+            encoding="utf-8")
     monkeypatch.setenv("FLOODVALUE_DATA_DIR", str(tmp_path / "data"))
     out = tmp_path / "run"
     meta = ctx.build("Sri-Lanka_1", out, download=False)
     img = Image.open(out / "context_s2_rgb.png")
     assert img.size == (W, H) and img.mode == "RGBA"
-    saved = json.loads((out / "context_s2.json").read_text())
+    saved = json.loads((out / "context_s2.json").read_text(encoding="utf-8"))
     assert saved == meta and saved["offline"]["days_from_s1"] == -2
     w, s, e, n = saved["offline"]["bounds_lonlat"]
     assert (w, n) == pytest.approx((81.6, 7.8)) and e > w and n > s

@@ -149,7 +149,7 @@ def run(state: FakeLfs, *args: str, cwd: Path | None = None) -> subprocess.Compl
     env.update(GITVERSE_USER=USER, GITVERSE_TOKEN=TOKEN, GITVERSE_URL=state.url,
                GITVERSE_LFS_RETRY_DELAY="0", GITVERSE_LFS_HTTP_TIMEOUT="10")
     return subprocess.run([sys.executable, str(SCRIPT), *args], cwd=cwd or REPO_ROOT, env=env,
-                          capture_output=True, text=True, timeout=60)
+                          capture_output=True, text=True, encoding="utf-8", timeout=60)
 
 
 def no_secret(res: subprocess.CompletedProcess) -> None:
@@ -236,7 +236,7 @@ def test_network_reset_gives_up_after_three_attempts(server: FakeLfs, blobs: lis
 def test_missing_credentials(server: FakeLfs, blobs: list[Path]) -> None:
     env = {k: v for k, v in os.environ.items() if not k.startswith("GITVERSE_")}
     res = subprocess.run([sys.executable, str(SCRIPT), str(blobs[0])], env=env,
-                         capture_output=True, text=True, timeout=30)
+                         capture_output=True, text=True, encoding="utf-8", timeout=30)
     assert res.returncode == 2
     assert not server.log
 
@@ -247,7 +247,8 @@ def test_commit_mode_reads_local_lfs_store(server: FakeLfs, tmp_path: Path) -> N
     git = ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t"]
     subprocess.run(["git", "init", "-q", str(repo)], check=True)
     subprocess.run([*git, "lfs", "install", "--local"], check=True, capture_output=True)
-    (repo / ".gitattributes").write_text("*.pt filter=lfs diff=lfs merge=lfs -text\n")
+    (repo / ".gitattributes").write_text("*.pt filter=lfs diff=lfs merge=lfs -text\n",
+        encoding="utf-8")
     (repo / "models").mkdir()
     weights = repo / "models" / "w.pt"
     weights.write_bytes(os.urandom(50_000))

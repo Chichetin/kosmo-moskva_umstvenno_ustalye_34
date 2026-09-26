@@ -1,5 +1,7 @@
 """One cycle at a time, an off switch, and schedule by interval."""
 
+import subprocess
+import sys
 from datetime import UTC, datetime, timedelta
 
 from floodvalue.media import pipeline, worker
@@ -10,6 +12,22 @@ def test_second_cycle_is_refused_while_first_holds_lock(settings, conn):
     with worker.cycle_lock(settings) as got:
         assert got
         assert worker.run_cycle(settings, manual=True) is None
+
+
+def test_lock_is_exclusive_and_released_after_the_holder_exits(settings):
+    with worker.cycle_lock(settings) as first:
+        assert first
+        with worker.cycle_lock(settings) as second:
+            assert not second
+    with worker.cycle_lock(settings) as again:
+        assert again
+
+
+def test_worker_imports_in_a_fresh_interpreter():
+    # POSIX-only modules (fcntl) must not be imported unconditionally: Windows has none (#133).
+    res = subprocess.run([sys.executable, "-c", "import floodvalue.media.worker"],
+                         capture_output=True, text=True, encoding="utf-8")
+    assert res.returncode == 0, res.stderr
 
 
 def test_monitoring_switch_and_schedule(settings, conn, monkeypatch):

@@ -39,9 +39,9 @@ def models(tmp_path: Path) -> Path:
     (root / "unet").mkdir(parents=True)
     (root / "baseline").mkdir()
     (root / "unet" / "member_0.pt").write_bytes(b"PK\x03\x04 synthetic weights " * 100)
-    (root / "unet" / "config.json").write_text('{"arch": "synthetic"}\n')
-    (root / "baseline" / "config.json").write_text('{"threshold_db": -23.0}\n')
-    (root / ".gitkeep").write_text("")
+    (root / "unet" / "config.json").write_text('{"arch": "synthetic"}\n', encoding="utf-8")
+    (root / "baseline" / "config.json").write_text('{"threshold_db": -23.0}\n', encoding="utf-8")
+    (root / ".gitkeep").write_text("", encoding="utf-8")
     return root
 
 
@@ -55,7 +55,7 @@ def test_build_on_reference_kit_gives_two_zips_and_checkable_sums(models, tmp_pa
     names = sorted(p.name for p in paths)
     assert names == ["models_fixture.zip", "run_Synthetic_000001_5000_fixture.zip"]
 
-    sums = (dest / "SHA256SUMS").read_text().splitlines()
+    sums = (dest / "SHA256SUMS").read_text(encoding="utf-8").splitlines()
     assert sorted(sums) == sorted(f"{_sha(p)}  {p.name}" for p in paths)
     if shutil.which("sha256sum"):
         res = subprocess.run(["sha256sum", "-c", "SHA256SUMS"], cwd=dest,
@@ -111,8 +111,8 @@ def test_refuses_on_lfs_pointer_in_models(models, tmp_path):
 def test_refuses_models_without_weight_files(tmp_path):
     root = tmp_path / "models"
     root.mkdir()
-    (root / ".gitkeep").write_text("")
-    (root / "README.md").write_text("no weights\n")
+    (root / ".gitkeep").write_text("", encoding="utf-8")
+    (root / "README.md").write_text("no weights\n", encoding="utf-8")
     with pytest.raises(rb.ReleaseError, match="весов"):
         rb.check_models(root)
 
@@ -295,7 +295,7 @@ def test_models_must_equal_the_commit_that_produced_the_kit(tmp_path):
     with pytest.raises(rb.ReleaseError, match="models/unet/member_0.pt"):
         rb.check_models_committed(repo, repo / "models", v1[:7])  # kit made by v1, models are v2
 
-    (repo / ".gitignore").write_text("*.bin\n")
+    (repo / ".gitignore").write_text("*.bin\n", encoding="utf-8")
     (repo / "models" / "unet" / "ignored.bin").write_bytes(b"ignored but would be zipped")
     with pytest.raises(rb.ReleaseError, match="ignored.bin"):
         rb.check_models_committed(repo, repo / "models", "HEAD")
@@ -330,7 +330,7 @@ def test_cli_refuses_to_upload_dirty_kit(models, tmp_path, fake_api):
     res = subprocess.run([sys.executable, "-c",
                           "import sys, importlib.util as u; s=u.spec_from_file_location('rb', sys.argv[1]);"
                           "m=u.module_from_spec(s); s.loader.exec_module(m);"
-                          "m.check_run=lambda d: __import__('json').loads((d/'run_metadata.json').read_text());"
+                          "m.check_run=lambda d: __import__('json').loads((d/'run_metadata.json').read_text(encoding='utf-8'));"
                           "m.check_models_committed=lambda *a: None;"
                           "sys.exit(m.main(['--out', sys.argv[2], '--models', sys.argv[3], '--dest', sys.argv[4],"
                           " '--upload', 'v-test']))", str(SCRIPT), *monkeypatch_argv],
