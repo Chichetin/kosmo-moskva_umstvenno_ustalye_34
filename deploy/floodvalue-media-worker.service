@@ -1,0 +1,15 @@
+# systemd: scheduled collection of media sources (GDACS, GDELT, RSS), separate from the site (#174).
+[Unit]
+Description=FloodValue media worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=floodvalue
+WorkingDirectory=/opt/floodvalue
+EnvironmentFile=/etc/floodvalue.env
+ExecStart=/usr/bin/env uv run --frozen python -m floodvalue.media worker
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

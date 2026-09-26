@@ -1,0 +1,17 @@
+# systemd: the site process (operator UI + /report + /media + /api/media) behind Caddy (#174).
+# Install: copy to /etc/systemd/system/, fill /etc/floodvalue.env (deploy/README.md), then
+#   systemctl daemon-reload && systemctl enable --now floodvalue-site floodvalue-media-worker
+[Unit]
+Description=FloodValue site: operator UI, eyewitness form, media API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=floodvalue
+WorkingDirectory=/opt/floodvalue
+EnvironmentFile=/etc/floodvalue.env
+ExecStart=/usr/bin/env uv run --frozen python scripts/serve_site.py --host 127.0.0.1 --port 8000
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
