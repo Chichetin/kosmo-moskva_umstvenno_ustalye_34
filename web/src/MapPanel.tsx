@@ -135,6 +135,11 @@ const overviewPadding = () => {
   };
 };
 const noPadding = () => ({ top: 0, right: 0, bottom: 0, left: 0 });
+// Panel sizes are in rem (1rem = 16px × the interface scale step): px for the camera padding.
+const rem = (value: number) =>
+  value * parseFloat(getComputedStyle(document.documentElement).fontSize || "16");
+// The message card: 25rem wide, 1.5rem from the right edge.
+const messageCardInset = () => (window.innerWidth > 700 ? Math.round(rem(26.5)) : 0);
 
 export default function MapPanel(props: Props) {
   const host = useRef<HTMLDivElement>(null);
@@ -741,7 +746,7 @@ export default function MapPanel(props: Props) {
       current.current.onSelectMessage?.({ kind, id: String(id), lngLat, props });
       const zoom = kind === "report" ? 10 : 9;  // as selectMessageFromList in App
       if (map.getZoom() >= zoom - 0.5) return;
-      const padding = { ...overviewPadding(), right: window.innerWidth > 700 ? 424 : 0 };
+      const padding = { ...overviewPadding(), right: messageCardInset() };
       map.stop();
       if (reducedMotion()) map.jumpTo({ center: lngLat, zoom, padding });
       else map.flyTo({ center: lngLat, zoom, padding, duration: 1500, curve: 1.15, essential: true });
@@ -803,7 +808,7 @@ export default function MapPanel(props: Props) {
     // panel, or the message card that opens with it: fixed, 400 + 24 px).
     const destinationPadding = news
       ? { ...overviewPadding(), right: Math.max(0, Math.round(window.innerWidth - news.left)) }
-      : { ...overviewPadding(), right: window.innerWidth > 700 ? 424 : 0 };
+      : { ...overviewPadding(), right: messageCardInset() };
     map.stop();
     map.setPadding(noPadding());
     if (reducedMotion()) {
@@ -845,7 +850,7 @@ export default function MapPanel(props: Props) {
         padding:
           window.innerWidth < 700
             ? { top: 70, right: 22, bottom: 255, left: 22 }
-            : { top: 80, right: 420, bottom: 90, left: 340 },
+            : { top: rem(5), right: rem(26.25), bottom: rem(5.625), left: rem(21.25) },
         maxZoom: 12.5,
         duration: reducedMotion() ? 0 : 850,
       },
