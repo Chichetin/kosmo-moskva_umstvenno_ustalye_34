@@ -50,6 +50,28 @@ sources:
       initial_hours: 24
       overlap_minutes: 30
 
+  - source_id: mchs_news
+    name: "МЧС России — новости"
+    kind: news
+    adapter: rss
+    url: https://mchs.gov.ru/
+    enabled: true
+    terms_status: checked
+    terms_url: https://creativecommons.org/licenses/by/4.0/deed.ru
+    terms_checked: "2026-09-26"
+    # Подвал mchs.gov.ru: «Все материалы сайта доступны по лицензии: Creative Commons
+    # «Attribution» 4.0 Всемирная» — выдержки можно хранить и показывать с указанием авторства.
+    # Лента общая (пожары, ДТП, учения): о паводках — малая доля, остальное отсекает фильтр.
+    attribution: "МЧС России, mchs.gov.ru — CC BY 4.0"
+    content_storage_policy: summary
+    poll_interval_s: 900
+    config:
+      endpoint: https://mchs.gov.ru/deyatelnost/press-centr/novosti/rss
+      allowed_hosts: [mchs.gov.ru]
+      min_interval_s: 2
+      language: ru
+      content_storage_policy: summary
+
   - source_id: example_rss
     name: "RSS-лента издания (пример, выключено)"
     kind: news
