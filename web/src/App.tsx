@@ -10,14 +10,17 @@ import {
 } from "lucide-react";
 import Backdrop from "./Backdrop";
 import MapPanel from "./MapPanel";
+import {
+  formatExactProbability,
+  formatNumber as money,
+  formatProbability,
+  formatRub,
+  formatScenarioAmount,
+  formatScenarioLabel,
+  formatShare as pct,
+} from "./format";
 import type { Feature, MediaMap, Plan, SceneSummary, Session } from "./types";
 
-const money = (value: unknown) =>
-  value == null || value === ""
-    ? "—"
-    : new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(
-        Number(value),
-      );
 const dateTimeUtc = (value: string | null | undefined) =>
   value
     ? `${new Intl.DateTimeFormat("ru-RU", {
@@ -28,8 +31,6 @@ const dateTimeUtc = (value: string | null | undefined) =>
         timeZone: "UTC",
       }).format(new Date(value))} UTC`
     : "—";
-const pct = (value: number | null | undefined) =>
-  value == null ? "—" : `${Math.round(value * 100)}%`;
 function useCountUp(value: number | null | undefined, enabled: boolean) {
   const [shown, setShown] = useState<number | null>(value ?? null);
   const lastShown = useRef<number | null>(value ?? null);
@@ -93,16 +94,6 @@ const labels: Record<string, string> = {
 const assetName = (feature: Feature) =>
   labels[String(feature.properties.asset_class)] ??
   String(feature.properties.asset_class).replaceAll("_", " ");
-const sensitivityValue = (row: Record<string, string>) => {
-  if (row.covered_expected_loss_rub) return row.covered_expected_loss_rub;
-  try {
-    return String(
-      JSON.parse(row.changed_inputs_json).portfolio_expected_loss_rub ?? "",
-    );
-  } catch {
-    return "";
-  }
-};
 const pointInZone = (asset: Feature, zone: Feature) => {
   if (asset.geometry.type !== "Point" || zone.geometry.type !== "Polygon")
     return false;
@@ -506,7 +497,7 @@ export default function App() {
     : null;
   return (
     <div className="app">
-      <Backdrop paused={!mapActive || !!scene} />
+      <Backdrop paused={!mapActive || !!scene} ocean={baseMap === "optical"} />
       <header className={`topbar ${mapVisible ? "topbar-map" : "topbar-analysis"}`}>
         <button className="brand" onClick={overview} aria-label="Митрандир — обзор Земли">
           <svg className="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -540,7 +531,7 @@ export default function App() {
           <a
             className="top-export"
             href={exportUrl}
-            title="Комплект файлов из make all; для другого бюджета — make all CHIP=… BUDGET=…"
+            title="Выгрузить файлы текущего анализа"
           >
             <ArrowDownToLine size={16} />
             <span>Выгрузить комплект</span>
@@ -877,20 +868,20 @@ export default function App() {
                     />
                     <div className="plan-summary">
                       <span>План C · {plan?.plans.C.length ?? "—"} зон</span>
-                      <strong>{money(chosen?.data_cost_rub)} ₽</strong>
+                      <strong>{formatRub(chosen?.data_cost_rub)}</strong>
                     </div>
                     <div className="plan-summary">
                       <span>Охват ожидаемого ущерба</span>
                       <strong>{pct(chosen?.coverage_share)}</strong>
                     </div>
                     <div className="plan-summary">
-                      <span>Цена ошибки решения в зонах · сценарий</span>
+                      <span>Доля адресуемой цены ошибки · сценарий</span>
                       <strong>{pct(chosen?.decision_risk_share)}</strong>
                     </div>
                     <p className="hint-note">
                       Цены по сценарной ставке Б ={" "}
                       {activeSession.metadata.pricing?.base_rate_rub_km2 ?? "—"}{" "}
-                      ₽/км² (scenario), не тариф. Срок решения —{" "}
+                      ₽/км², не тариф. Срок решения —{" "}
                       {dateTimeUtc(activeSession.metadata.budget.decision_deadline)}.
                     </p>
                     {planError && <p className="inline-error">{planError}</p>}
@@ -912,11 +903,11 @@ export default function App() {
                           <p>
                             {String(activeAsset.properties.asset_id)} ·
                             вероятность воды{" "}
-                            {pct(Number(activeAsset.properties.p_flood))}
+                            {formatProbability(activeAsset.properties.p_flood)}
                           </p>
                           <p>
                             Ожидаемый ущерб{" "}
-                            {money(activeAsset.properties.expected_loss_rub)} ₽
+                            {formatRub(activeAsset.properties.expected_loss_rub)}
                           </p>
                         </>
                       )}
@@ -1076,18 +1067,18 @@ export default function App() {
                   </div>
                   <div>
                     <span>Ожидаемый ущерб</span>
-                    <strong>{money(shownLoss)} ₽</strong>
+                    <strong>{formatRub(shownLoss)}</strong>
                   </div>
                   <div>
                     <span>План C · данные</span>
-                    <strong>{money(shownCost)} ₽</strong>
+                    <strong>{formatRub(shownCost)}</strong>
                   </div>
                   <div>
                     <span>Охват ущерба</span>
                     <strong>{pct(shownCoverage)}</strong>
                   </div>
                   <div>
-                    <span>Цена ошибки решения · сценарий</span>
+                    <span>Доля адресуемой цены ошибки · сценарий</span>
                     <strong>{pct(chosen?.decision_risk_share)}</strong>
                   </div>
                 </div>
@@ -1104,7 +1095,7 @@ export default function App() {
                             <th>Объект</th>
                             <th>Вероятность воды</th>
                             <th>Ожидаемый ущерб</th>
-                            <th>Неопределённость</th>
+                            <th>Неопределённость карты</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1144,10 +1135,12 @@ export default function App() {
                               <td>
                                 {item.properties.status === "no_data"
                                   ? "—"
-                                  : pct(Number(item.properties.p_flood))}
+                                  : <span title={`Точное p: ${formatExactProbability(item.properties.p_flood)}`}>
+                                      {formatProbability(item.properties.p_flood)}
+                                    </span>}
                               </td>
                               <td>
-                                {money(item.properties.expected_loss_rub)} ₽
+                                {formatRub(item.properties.expected_loss_rub)}
                               </td>
                               <td>
                                 {item.properties.uncertainty == null ||
@@ -1169,7 +1162,7 @@ export default function App() {
                         уязвимость{" "}
                         {Number(
                           activeAsset.properties.vulnerability_coef,
-                        ).toFixed(2)}
+                        ).toFixed(2)} · точное p: {formatExactProbability(activeAsset.properties.p_flood)}
                       </div>
                     )}
                   </section>
@@ -1194,9 +1187,9 @@ export default function App() {
                                   : "Приоритетный заказ"}
                             </strong>
                             <small>
-                              Данные {money(row.data_cost_rub)} ₽ · охват
-                              ущерба {pct(row.coverage_share)} · цена ошибки
-                              решения {pct(row.decision_risk_share)}
+                              Данные {formatRub(row.data_cost_rub)} · охват
+                              ущерба {pct(row.coverage_share)} · доля адресуемой
+                              цены ошибки {pct(row.decision_risk_share)}
                             </small>
                             {row.strategy === "B" && !row.budget_feasible && (
                               <small>
@@ -1214,18 +1207,17 @@ export default function App() {
                         </div>
                       ))}
                       <div className="card-foot">
-                        Охват — доля ожидаемого ущерба в зонах, а не
-                        предотвращённый ущерб. Цена ошибки решения R = V·q·min(p,
-                        1−p) — сценарий: доля там, где снимок может изменить
-                        решение «ехать / не ехать» (D-049); снижение потерь не
-                        заявляется. C не снимает объекты, где по карте почти
-                        наверняка вода: они сразу идут на осмотр. Цены — по
-                        сценарной ставке Б ={" "}
-                        {activeSession.metadata.pricing?.base_rate_rub_km2 ?? "—"}{" "}
-                        ₽/км² (scenario), не тариф. «Выгрузить комплект» отдаёт
-                        файлы make all при бюджете{" "}
-                        {money(activeSession.metadata.budget.budget_rub)} ₽; для
-                        другого бюджета — make all CHIP=… BUDGET=….
+                        <p>Охват — доля ожидаемого ущерба объектов в зонах, а не предотвращённый ущерб.</p>
+                        <p>Цены рассчитаны по сценарной ставке {money(activeSession.metadata.pricing?.base_rate_rub_km2)} ₽/км²; это не тариф.</p>
+                        <details>
+                          <summary>Методика расчёта</summary>
+                          <p>Сценарная цена ошибки решения R = V·q·min(p, 1−p). Показана доля R объектов в зонах от R всех оценённых объектов; снижение фактических потерь не заявляется.</p>
+                          <p>План C не покупает новые данные ради объектов, для которых исход по карте почти определён: их осмотр планируется по исходным данным.</p>
+                        </details>
+                        <details>
+                          <summary>Воспроизводимость</summary>
+                          <p>Исходная выгрузка соответствует бюджету {formatRub(activeSession.metadata.budget.budget_rub)}. Метод и входные данные записаны в комплекте файлов.</p>
+                        </details>
                       </div>
                     </section>
                     <section className="analysis-card">
@@ -1327,10 +1319,8 @@ export default function App() {
                         )
                         .map((item) => (
                           <div className="scenario" key={item.scenario_id}>
-                            <span>{item.scenario_id.replaceAll("_", " ")}</span>
-                            <b>
-                              {money(item.covered_expected_loss_rub)} ₽ охват
-                            </b>
+                            <span>{formatScenarioLabel(item)}</span>
+                            <b>{formatScenarioAmount(item)} охват</b>
                           </div>
                         ))}
                     </div>
@@ -1344,8 +1334,8 @@ export default function App() {
                         )
                         .map((item) => (
                           <div className="scenario" key={item.scenario_id}>
-                            <span>{item.scenario_id.replaceAll("_", " ")}</span>
-                            <b>{money(sensitivityValue(item))} ₽</b>
+                            <span>{formatScenarioLabel(item)}</span>
+                            <b>{formatScenarioAmount(item)}</b>
                           </div>
                         ))}
                     </div>
