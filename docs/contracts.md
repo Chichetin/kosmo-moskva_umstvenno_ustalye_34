@@ -23,6 +23,10 @@ CSV/JSON с отказом на NaN/Inf). Валидатор — `floodvalue.exp
 | `flood_mask.tif` | UInt8, 1 канал | 1 вода, 0 не вода; 1 ⇔ p ≥ `threshold` из `run_metadata.json` | 255 |
 | `uncertainty.tif` (доп.) | Float32 | показатель неопределённости, смысл — `run_metadata.json` | −9999 |
 | `baseline_mask.tif` (доп.) | UInt8 | маска baseline | 255 |
+| `pre_event_water.tif` (доп., #149) | UInt8 | 1 — вода на S1 до события (VH ≤ −23 dB не менее чем в 50 % наблюдений окна архива), 0 — нет; 255 — < 5 наблюдений | 255 |
+| `new_water_probability.tif` (доп., #149) | Float32 | p × (1 − `pre_event_water`): вода относительно окна до события; не вход EL | −9999 (p нет или слой 255) |
+
+`pre_event_water.json` (доп., #149): статус `ok`/`insufficient`/`unavailable`, окно, параметры, сцены архива (id, дата, орбита, лицензия), `sources` — записи `source_manifest.json` (§9), которые export добавляет только при `ok`. Слой пишет `python -m floodvalue prewater --chip <id>`; ни один модуль p, маски, порога, EL и плана его не читает (`tests/prewater/test_prewater_firewall.py`). Без сети — предупреждение, код 0, 12 файлов не меняются.
 
 Невалидный пиксель: S1 не конечен (NaN) в любом канале. Метка −1 на растры не влияет.
 

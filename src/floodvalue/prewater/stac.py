@@ -4,6 +4,7 @@ of a scene resampled onto the chip grid. The only module of `prewater` that touc
 
 from __future__ import annotations
 
+import threading
 import time
 from datetime import date
 
@@ -59,12 +60,29 @@ def search(bbox: tuple[float, float, float, float], first: date, last: date) -> 
                         **({"json": nxt["body"]} if nxt.get("body") else {}))
 
 
+# The SAS endpoint answers 429 when every chip asks for its own token: one token (valid ~1 h)
+# and one licence lookup per process, shared by all chips and threads.
+TOKEN_TTL_S = 30 * 60
+_cache: dict[str, tuple[float, str]] = {}
+_lock = threading.Lock()
+
+
+def _cached(key: str, fetch) -> str:
+    with _lock:
+        hit = _cache.get(key)
+        if hit and time.monotonic() - hit[0] < TOKEN_TTL_S:
+            return hit[1]
+        value = fetch()
+        _cache[key] = (time.monotonic(), value)
+        return value
+
+
 def collection_license() -> str:
-    return str(_request("GET", COLLECTION_URL).get("license", "CC-BY-4.0"))
+    return _cached("license", lambda: str(_request("GET", COLLECTION_URL).get("license", "CC-BY-4.0")))
 
 
 def sas_token() -> str:
-    return str(_request("GET", SAS_URL)["token"])
+    return _cached("token", lambda: str(_request("GET", SAS_URL)["token"]))
 
 
 def read_vh(href: str, token: str, transform, shape: tuple[int, int]) -> np.ndarray:

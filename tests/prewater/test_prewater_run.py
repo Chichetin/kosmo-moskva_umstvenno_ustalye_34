@@ -154,3 +154,16 @@ def test_parameters_are_recorded(data):
     assert meta["params"]["vh_water_db"] == core.VH_WATER_DB
     assert meta["window"] == {"first": "2016-12-21", "last": "2017-03-30",
                               "days": core.WINDOW_DAYS, "guard_days": core.GUARD_DAYS}
+
+
+def test_sas_token_and_license_are_fetched_once_per_process(monkeypatch):
+    calls = []
+
+    def fake_request(method, url, **kw):
+        calls.append(url)
+        return {"token": "sig=1", "license": "CC-BY-4.0"}
+    monkeypatch.setattr(stac, "_request", fake_request)
+    monkeypatch.setattr(stac, "_cache", {})
+    assert [stac.sas_token() for _ in range(5)] == ["sig=1"] * 5
+    assert stac.collection_license() == stac.collection_license() == "CC-BY-4.0"
+    assert calls == [stac.SAS_URL, stac.COLLECTION_URL]
