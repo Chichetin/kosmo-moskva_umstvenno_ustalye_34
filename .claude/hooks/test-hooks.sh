@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Проверка хуков на временном git-репозитории: bash .claude/hooks/test-hooks.sh
 set -uo pipefail
+unset FLOODVALUE_SKIP_TEST_HOOK  # the local opt-out must not leak into hook tests
 
 HOOKS="$(cd "$(dirname "$0")" && pwd)"
 TMP="$(mktemp -d)"
@@ -48,6 +49,7 @@ fake_pytest 5
 expect pass  "pytest: тестов не найдено (код 5)"     check-tests.sh
 fake_pytest 1; touch tests/test_x.py
 expect block "pytest красный"                        check-tests.sh
+FLOODVALUE_SKIP_TEST_HOOK=1 expect pass "pytest красный, локальный opt-out" check-tests.sh
 fake_pytest 0
 expect pass  "pytest зелёный"                        check-tests.sh
 fake_pytest 1; touch -d '-1 min' .venv/bin/python tests/test_x.py
