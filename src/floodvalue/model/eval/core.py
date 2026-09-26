@@ -3,7 +3,7 @@
 Confusion counts and IoU come from `floodvalue.model.metrics` (docs/contracts.md §7); this
 module adds what the comparison report needs on top: the identical-pixel check, the paired
 chip bootstrap of ΔIoU, reliability/ECE/Brier, uncertainty-vs-error AUROC, the damage proxy
-check and the test gate (configuration hash, test-log row).
+check, the per-chip pixel QC (#64) and the test gate (configuration hash, test-log row).
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from pathlib import Path
 import numpy as np
 from scipy.stats import rankdata
 
+from floodvalue.data import io
 from floodvalue.model import metrics as M
 
 N_BINS = 10
@@ -252,3 +253,56 @@ def log_row(when: str, commit: str, config_hash: str, methods: str, who: str,
                  result: str) -> str:
     cells = [when, f"`{commit}`", f"`{config_hash}`", methods, who, result]
     return "| " + " | ".join(c.replace("|", "/").replace("\n", " ") for c in cells) + " |"
+
+
+# --- pixel QC of the evaluated chips (#64, criterion 1) ----------------------------------------
+
+QC_COLUMNS = ["chip_id", "event", "n_pixels_total", "s1_nan_share", "label_invalid_share",
+              "vv_gt0_share", "vh_gt0_share", "n_s1_nan_label_01", "n_s1_nan",
+              "n_label_invalid", "n_vv_finite", "n_vv_gt0",
+              "n_vh_finite", "n_vh_gt0"]
+
+
+def _share(num: int, den: int) -> float:
+    return num / den if den else float("nan")
+
+
+def pixel_qc(s1_db: np.ndarray, label: np.ndarray) -> dict:
+    """Pixel QC of one chip from the arrays eval-test already holds: share of pixels with S1
+    non-finite in any band, share of label -1 (both over all pixels), share of VV > 0 dB and
+    VH > 0 dB among finite pixels of that band, and the count of pixels with non-finite S1
+    under label 0/1 (the dataset trap). Water share is not a QC field (it is in the metrics)."""
+    n = int(label.size)
+    s1_nan = ~io.valid_mask(s1_db)
+    n_nan, n_inv = int(s1_nan.sum()), int((label == -1).sum())
+    out = {"n_pixels_total": n, "n_s1_nan": n_nan, "n_label_invalid": n_inv,
+           "s1_nan_share": _share(n_nan, n), "label_invalid_share": _share(n_inv, n),
+           "n_s1_nan_label_01": int((s1_nan & ((label == 0) | (label == 1))).sum())}
+    for band, name in ((0, "vv"), (1, "vh")):
+        x = s1_db[band]
+        finite = np.isfinite(x)
+        n_fin, n_pos = int(finite.sum()), int((finite & (np.nan_to_num(x) > 0)).sum())
+        out.update({f"n_{name}_finite": n_fin, f"n_{name}_gt0": n_pos,
+                    f"{name}_gt0_share": _share(n_pos, n_fin)})
+    return out
+
+
+def qc_summary(rows: list[dict]) -> dict[str, dict]:
+    """Pooled pixel QC per event (in order of first appearance) and ALL."""
+    scopes = list(dict.fromkeys(r["event"] for r in rows)) + ["ALL"]
+    out = {}
+    for scope in scopes:
+        rs = [r for r in rows if scope in ("ALL", r["event"])]
+        n = sum(r["n_pixels_total"] for r in rs)
+        out[scope] = {
+            "n_chips": len(rs),
+            "s1_nan_share": _share(sum(r["n_s1_nan"] for r in rs), n),
+            "label_invalid_share": _share(sum(r["n_label_invalid"] for r in rs), n),
+            "vv_gt0_share": _share(sum(r["n_vv_gt0"] for r in rs),
+                                   sum(r["n_vv_finite"] for r in rs)),
+            "vh_gt0_share": _share(sum(r["n_vh_gt0"] for r in rs),
+                                   sum(r["n_vh_finite"] for r in rs)),
+            "n_s1_nan_label_01": sum(r["n_s1_nan_label_01"] for r in rs),
+            "chips_s1_nan_label_01": sum(r["n_s1_nan_label_01"] > 0 for r in rs),
+            "chips_with_nan": sum(r["n_s1_nan"] > 0 for r in rs)}
+    return out
