@@ -8,6 +8,17 @@
     "observed_local", "observed_precision"];
   let draft = load();
   let marker = null, map = null;
+  let shotUrls = [];
+  const NS = "http://www.w3.org/2000/svg";
+  const wave = (y) => `M2.5 ${y}q1.6-1.4 3.2 0t3.2 0t3.2 0t3.2 0t3.2 0t3.2 0`;
+  const ICONS = {
+    flooding: ["M4 11 12 4.5l8 6.5", "M6.5 9.3V14", "M17.5 9.3V14", wave(17.5), wave(21)],
+    water_rising: ["M12 13V3.5", "M8 7.5 12 3.5l4 4", wave(17.5), wave(21)],
+    threat: ["M10.3 4.2 2.8 17.5a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0z",
+      "M12 9.5v4.2", "M12 17.2h.01"],
+    other: ["M20 15a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z",
+      "M8.5 10.5h.01", "M12 10.5h.01", "M15.5 10.5h.01"],
+  };
 
   function load() {
     try { return JSON.parse(localStorage.getItem(DRAFT)) || {}; } catch (e) { return {}; }
@@ -40,9 +51,9 @@
     const sign = off >= 0 ? "+" : "-";
     return `${local}:00${sign}${pad(Math.floor(Math.abs(off) / 60))}:${pad(Math.abs(off) % 60)}`;
   }
-  function setError(name, text) {
+  function setError(name, text, info) {
     const el = $("err-" + name);
-    if (el) el.textContent = text || "";
+    if (el) { el.textContent = text || ""; el.classList.toggle("info", !!info); }
   }
   function clearErrors() {
     ["category", "description", "place", "time", "photos", "form"].forEach((n) => setError(n, ""));
@@ -52,9 +63,63 @@
     $("lat").value = lat.toFixed(6);
     $("lon").value = lon.toFixed(6);
     if (map) {
-      if (marker) marker.setLatLng([lat, lon]); else marker = L.marker([lat, lon]).addTo(map);
+      if (marker) marker.setLatLng([lat, lon]);
+      else {
+        marker = L.marker([lat, lon], { icon: L.divIcon({ className: "pin", html: "<span></span>",
+          iconSize: [30, 40], iconAnchor: [15, 38] }), draggable: true, alt: "Отмеченное место" }).addTo(map);
+        marker.on("dragend", () => { const p = marker.getLatLng(); setPoint(p.lat, p.lng); });
+      }
     }
     save();
+    steps();
+  }
+
+  function icon(paths) {
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    paths.forEach((d) => {
+      const path = document.createElementNS(NS, "path");
+      path.setAttribute("d", d);
+      svg.append(path);
+    });
+    return svg;
+  }
+  // Visual only: a step gets a check once it has what the submit check asks for.
+  function steps() {
+    const cat = document.querySelector("input[name=category]:checked");
+    const done = [
+      !!cat && $("description").value.trim().length >= 10,
+      ($("lat").value.trim() !== "" && $("lon").value.trim() !== "") || $("place_text").value.trim() !== "",
+      $("observed_precision").value === "unknown" || $("observed_local").value !== "",
+      ($("photos").files || []).length > 0,
+    ];
+    done.forEach((ok, i) => $("step" + (i + 1)).classList.toggle("is-done", ok));
+    $("progress").style.transform = `scaleX(${done.slice(0, 3).filter(Boolean).length / 3})`;
+  }
+  function showPhotos() {
+    shotUrls.forEach((u) => URL.revokeObjectURL(u));
+    shotUrls = [];
+    const box = $("shots");
+    box.replaceChildren();
+    const files = Array.from($("photos").files || []);
+    files.slice(0, 6).forEach((f) => {
+      const img = document.createElement("img");
+      const url = URL.createObjectURL(f);
+      shotUrls.push(url);
+      img.src = url;
+      img.alt = f.name;
+      box.append(img);
+    });
+    if (files.length) {
+      const clear = document.createElement("button");
+      clear.type = "button";
+      clear.className = "btn ghost";
+      clear.textContent = "Убрать фото";
+      clear.addEventListener("click", () => { $("photos").value = ""; showPhotos(); steps(); });
+      box.append(clear);
+    }
   }
 
   async function init() {
@@ -77,9 +142,12 @@
       input.type = "radio"; input.name = "category"; input.value = value;
       input.checked = draft.category === value;
       input.addEventListener("change", save);
+      const chip = document.createElement("span");
+      chip.className = "chip";
       const span = document.createElement("span");
       span.textContent = text;
-      label.append(input, span);
+      chip.append(icon(ICONS[value] || ICONS.other), span);
+      label.append(input, chip);
       box.append(label);
     });
     $("photo-hint").textContent = `До ${config.max_photos} фото, JPEG, PNG или WebP, до ${config.max_photo_mb} МБ каждое.`;
@@ -97,7 +165,7 @@
         (pos) => {
           setPoint(pos.coords.latitude, pos.coords.longitude);
           if (map) map.setView([pos.coords.latitude, pos.coords.longitude], 15);
-          setError("place", "Отмечено ваше текущее положение. Если вода в другом месте — перенесите точку.");
+          setError("place", "Отмечено ваше текущее положение. Если вода в другом месте — перенесите точку.", true);
         },
         () => setError("place", "Не удалось определить положение — отметьте место на карте."),
         { enableHighAccuracy: false, timeout: 10000 });
@@ -106,9 +174,23 @@
       $("lat").value = ""; $("lon").value = "";
       if (marker && map) { map.removeLayer(marker); marker = null; }
       save();
+      steps();
     });
+    $("photos").addEventListener("change", showPhotos);
+    $("form").addEventListener("input", steps);
+    $("form").addEventListener("change", steps);
+    steps();
     $("form").addEventListener("submit", submit);
     $("another").addEventListener("click", () => { location.reload(); });
+    $("copy-link").addEventListener("click", async () => {
+      const url = new URL($("done-link").getAttribute("href"), location.href).href;
+      try {
+        await navigator.clipboard.writeText(url);
+        $("copied").textContent = "Ссылка скопирована.";
+      } catch (e) {
+        $("copied").textContent = "Не удалось скопировать — нажмите «Открыть статус обращения» и добавьте страницу в закладки.";
+      }
+    });
   }
 
   function initMap() {
