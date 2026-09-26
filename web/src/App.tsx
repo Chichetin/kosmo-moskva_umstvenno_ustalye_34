@@ -174,7 +174,7 @@ export default function App() {
   const cache = useRef<Record<string, Session>>({});
   const budgets = useRef<Record<string, number>>({});
   const [plan, setPlan] = useState<Plan | null>(null);
-  const [planFor, setPlanFor] = useState<{ runId: string; budget: number; priorityAssetId: string | null } | null>(null);
+  const [planFor, setPlanFor] = useState<{ runId: string; budget: number; priorityKey: string } | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
   const [budget, setBudget] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -184,7 +184,10 @@ export default function App() {
   const [opacity, setOpacity] = useState(0.76);
   const [assetId, setAssetId] = useState<string | null>(null);
   const selectedObjectRef = useRef<HTMLElement | null>(null);
-  const [priorityAssetId, setPriorityAssetId] = useState<string | null>(null);
+  const [priorityAssetIds, setPriorityAssetIds] = useState<string[]>([]);
+  const priorityKey = priorityAssetIds.join("|");
+  const togglePriority = (id: string) => setPriorityAssetIds((current) =>
+    current.includes(id) ? current.filter((item) => item !== id) : [...current, id].sort());
   const [zoneId, setZoneId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [analysisQuery, setAnalysisQuery] = useState("");
@@ -261,7 +264,7 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!scene?.run_id) {
-      setPriorityAssetId(null);
+      setPriorityAssetIds([]);
       setSession(null);
       setPlan(null);
       setPlanFor(null);
@@ -270,7 +273,7 @@ export default function App() {
       return;
     }
     const runId = scene.run_id;
-    setPriorityAssetId(null);
+    setPriorityAssetIds([]);
     const cached = cache.current[runId];
     if (cached) {
       setSession(cached);
@@ -315,13 +318,13 @@ export default function App() {
     const controller = new AbortController();
     const timer = setTimeout(() => {
       json<Plan>(
-        `/api/plan?budget=${budget}&run_id=${encodeURIComponent(runId)}${priorityAssetId ? `&priority_asset_id=${encodeURIComponent(priorityAssetId)}` : ""}`,
+        `/api/plan?budget=${budget}&run_id=${encodeURIComponent(runId)}${priorityAssetIds.map((id) => `&priority_asset_id=${encodeURIComponent(id)}`).join("")}`,
         controller.signal,
       )
         .then((result) => {
           if (!controller.signal.aborted) {
             setPlan(result);
-            setPlanFor({ runId, budget, priorityAssetId });
+            setPlanFor({ runId, budget, priorityKey });
             setPlanError(null);
           }
         })
@@ -333,7 +336,7 @@ export default function App() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [activeSession?.run_id, budget, priorityAssetId]);
+  }, [activeSession?.run_id, budget, priorityKey]);
   useEffect(() => setExportError(null), [activeSession?.run_id, budget]);
   const openFinishedAnalysis = useCallback(async (finished: AnalysisJob) => {
     const updated = await json<SceneSummary[]>("/api/scenes");
@@ -471,7 +474,7 @@ export default function App() {
     key, descending: current.key === key ? !current.descending : key !== "name",
   }));
   const zones = activeSession?.candidates.features ?? [];
-  const currentPlan = planFor && planFor.runId === activeSession?.run_id && planFor.budget === budget && planFor.priorityAssetId === priorityAssetId ? plan : null;
+  const currentPlan = planFor && planFor.runId === activeSession?.run_id && planFor.budget === budget && planFor.priorityKey === priorityKey ? plan : null;
   const chosen = currentPlan?.comparison.find((row) => row.strategy === "C");
   const chosenZoneIds = new Set(currentPlan?.plans.C ?? []);
   // Slider scale: fixed for the scene (does not move while typing) and ending at the first round
@@ -559,7 +562,27 @@ export default function App() {
   const activeAsset = assets.find(
     (item) => item.properties.asset_id === assetId,
   );
-  const priorityAsset = assets.find((item) => String(item.properties.asset_id) === priorityAssetId);
+  const priorityAssets = priorityAssetIds.map((id) => ({
+    id, feature: assets.find((item) => String(item.properties.asset_id) === id),
+  }));
+  const renderPriorityList = () => priorityAssetIds.length > 0 && (
+    <div className="priority-summary" aria-label="Приоритетные объекты">
+      <div className="priority-heading">
+        <strong>Приоритетные объекты · {priorityAssetIds.length}</strong>
+        <button onClick={() => setPriorityAssetIds([])}>Сбросить все</button>
+      </div>
+      <p>Сначала подбираются зоны для этих объектов, затем распределяется остаток бюджета.</p>
+      <div className="priority-items">
+        {priorityAssets.map(({ id, feature }) => (
+          <div className="priority-item" key={id}>
+            <span><b>{feature ? assetName(feature) : id}</b><small>{id} · <span className={currentPlan?.priority?.covered_asset_ids.includes(id) ? "priority-success" : "priority-unavailable"}>{currentPlan?.priority?.reasons[id] ?? "Пересчитываем…"}</span></small></span>
+            <button onClick={() => togglePriority(id)} aria-label={`Убрать ${feature ? assetName(feature) : id} из приоритетов`}>×</button>
+          </div>
+        ))}
+      </div>
+      {currentPlan?.priority && chosen && <p>Обычный план: {formatRub(currentPlan.priority.baseline_data_cost_rub)} · охват {pct(currentPlan.priority.baseline_coverage_share)}. С приоритетами: {formatRub(chosen.data_cost_rub)} · охват {pct(chosen.coverage_share)}.</p>}
+    </div>
+  );
   useEffect(() => {
     if (!mapVisible || !activeAsset) return;
     const frame = requestAnimationFrame(() => selectedObjectRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
@@ -579,7 +602,7 @@ export default function App() {
     .filter((row) => row.strategy === "C")
     .map((row) => [String(row.candidate_id), row]));
   const downloadCurrentPlan = async () => {
-    if (!activeSession || budget === null || !currentPlan || exporting || priorityAssetId) return;
+    if (!activeSession || budget === null || !currentPlan || exporting || priorityAssetIds.length) return;
     setExporting(true);
     setExportError(null);
     try {
@@ -657,14 +680,14 @@ export default function App() {
           <button
             className="top-export"
             type="button"
-            disabled={!currentPlan || exporting || !!priorityAssetId}
+            disabled={!currentPlan || exporting || !!priorityAssetIds.length}
             aria-busy={exporting}
             onClick={() => void downloadCurrentPlan()}
             title="Выгрузить файлы этой сцены и выбранного бюджета"
           >
             <ArrowDownToLine size={16} />
             <span>{exporting ? "Готовим комплект…" : "Выгрузить комплект"}</span>
-            <small className="export-note">{priorityAssetId ? "сначала сбросьте приоритет" : `при бюджете ${formatRub(budget)}`}</small>
+            <small className="export-note">{priorityAssetIds.length ? "сначала сбросьте приоритеты" : `при бюджете ${formatRub(budget)}`}</small>
           </button>
         )}
       </header>
@@ -712,6 +735,7 @@ export default function App() {
             showMessages={true}
             overlayOpacity={opacity}
             selectedAsset={assetId}
+            priorityAssetIds={priorityAssetIds}
             selectedZone={zoneId}
             active={mapVisible}
             overviewRequest={overviewRequest}
@@ -893,14 +917,15 @@ export default function App() {
                   <p>{String(activeAsset.properties.asset_id)} · вероятность воды {formatProbability(activeAsset.properties.p_flood)}</p>
                   <p>Ожидаемый ущерб {formatRub(activeAsset.properties.expected_loss_rub)}</p>
                   <button
-                    className={`priority-action${priorityAssetId === String(activeAsset.properties.asset_id) ? " active" : ""}`}
+                    className={`priority-action${priorityAssetIds.includes(String(activeAsset.properties.asset_id)) ? " active" : ""}`}
                     disabled={activeAsset.properties.status === "no_data"}
-                    onClick={() => setPriorityAssetId((current) => current === String(activeAsset.properties.asset_id) ? null : String(activeAsset.properties.asset_id))}
-                  >{priorityAssetId === String(activeAsset.properties.asset_id) ? "✓ Приоритет установлен · сбросить" : "Сделать приоритетом"}</button>
+                    onClick={() => togglePriority(String(activeAsset.properties.asset_id))}
+                  >{priorityAssetIds.includes(String(activeAsset.properties.asset_id)) ? "✓ В приоритете · убрать" : "Добавить в приоритет"}</button>
                   {activeAsset.properties.status === "no_data" && <p>Для объекта нет расчёта, поэтому его нельзя включить в план.</p>}
-                  {priorityAssetId === String(activeAsset.properties.asset_id) && currentPlan?.priority && (
-                    <p className={currentPlan.priority.covered ? "priority-success" : "priority-unavailable"} role="status">{currentPlan.priority.reason}</p>
+                  {priorityAssetIds.includes(String(activeAsset.properties.asset_id)) && currentPlan?.priority && (
+                    <p className={currentPlan.priority.covered_asset_ids.includes(String(activeAsset.properties.asset_id)) ? "priority-success" : "priority-unavailable"} role="status">{currentPlan.priority.reasons[String(activeAsset.properties.asset_id)]}</p>
                   )}
+                  {priorityAssetIds.length > 0 && <p>Всего в приоритете: {priorityAssetIds.length}. Можно выбрать ещё один кружок на карте.</p>}
                 </section>
               )}
               {scene.status === "observation_only" && renderAnalysisAction(scene)}
@@ -1040,11 +1065,12 @@ export default function App() {
                       }
                       aria-label="Изменить бюджет"
                     />
-                    {!priorityAssetId && activeSession.plan_c_saturation_rub != null && (
+                    {!priorityAssetIds.length && activeSession.plan_c_saturation_rub != null && (
                       <p className="budget-saturation">
                         Свыше ≈ {formatRub(activeSession.plan_c_saturation_rub)} состав плана C не меняется.
                       </p>
                     )}
+                    {renderPriorityList()}
                     <div className="plan-summary">
                       <span>План C · {currentPlan ? countLabel(currentPlan.plans.C.length, "зона", "зоны", "зон") : "—"}</span>
                       <strong>{formatRub(chosen?.data_cost_rub)}</strong>
@@ -1361,10 +1387,10 @@ export default function App() {
                           <span>Стоимость {formatRub(activeAsset.properties.asset_value_rub)} · уязвимость {money(activeAsset.properties.vulnerability_coef)} · точное p {formatExactProbability(activeAsset.properties.p_flood)}</span>
                         </div>
                         <button
-                          className={priorityAssetId === String(activeAsset.properties.asset_id) ? "priority-active" : ""}
+                          className={priorityAssetIds.includes(String(activeAsset.properties.asset_id)) ? "priority-active" : ""}
                           disabled={activeAsset.properties.status === "no_data"}
-                          onClick={() => setPriorityAssetId((current) => current === String(activeAsset.properties.asset_id) ? null : String(activeAsset.properties.asset_id))}
-                        >{priorityAssetId === String(activeAsset.properties.asset_id) ? "Сбросить приоритет" : "Сделать приоритетом"}</button>
+                          onClick={() => togglePriority(String(activeAsset.properties.asset_id))}
+                        >{priorityAssetIds.includes(String(activeAsset.properties.asset_id)) ? "Убрать из приоритетов" : "Добавить в приоритет"}</button>
                         <button onClick={() => {
                           setLayers((current) => ({ ...current, assets: true }));
                           setPanelOpen(true);
@@ -1402,21 +1428,11 @@ export default function App() {
                           onChange={(event) => setBudget(Number(event.target.value))}
                           aria-label="Бюджет данных плана"
                         />
-                        {!priorityAssetId && activeSession.plan_c_saturation_rub != null && (
+                        {!priorityAssetIds.length && activeSession.plan_c_saturation_rub != null && (
                           <p>Свыше ≈ {formatRub(activeSession.plan_c_saturation_rub)} состав плана C не меняется.</p>
                         )}
                       </div>
-                      {priorityAssetId && <div className="priority-summary" role="status" aria-live="polite">
-                        <div className="priority-heading">
-                          <strong>Приоритет: {priorityAsset ? assetName(priorityAsset) : priorityAssetId}</strong>
-                          <button onClick={() => setPriorityAssetId(null)}>Сбросить</button>
-                        </div>
-                        {currentPlan?.priority ? <>
-                          <p className={currentPlan.priority.covered ? "priority-success" : "priority-unavailable"}>{currentPlan.priority.reason}</p>
-                          <p>Сначала подбирается доступная зона для объекта, затем оставшийся бюджет распределяется по цене ошибки решения.</p>
-                          {chosen && <p>Обычный план: {formatRub(currentPlan.priority.baseline_data_cost_rub)} · охват {pct(currentPlan.priority.baseline_coverage_share)}. С приоритетом: {formatRub(chosen.data_cost_rub)} · охват {pct(chosen.coverage_share)}.</p>}
-                        </> : <p>Пересчитываем зоны для выбранного объекта…</p>}
-                      </div>}
+                      {renderPriorityList()}
                       {planError ? <p className="inline-error">{planError}</p>
                         : !currentPlan && <p className="analysis-plan-loading" role="status">Пересчитываем план…</p>}
                       {chosen && <div className="analysis-plan-totals">

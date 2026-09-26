@@ -278,7 +278,7 @@ def _plan_c_saturation(run_dir: Path) -> float | None:
 
 @app.get("/api/plan")
 def recalculated_plan(budget: float = Query(ge=0, le=1_000_000_000), run_id: str | None = None,
-                      priority_asset_id: str | None = None):
+                      priority_asset_id: list[str] = Query(default=[])):
     try:
         run_dir = _run_dir(run_id)
         result = (priority_plan(run_dir, budget, priority_asset_id)

@@ -99,9 +99,9 @@ export type Comparison = {
 
 export type Plan = {
   priority?: {
-    asset_id: string;
-    covered: boolean;
-    reason: string;
+    asset_ids: string[];
+    covered_asset_ids: string[];
+    reasons: Record<string, string>;
     baseline_candidate_ids: string[];
     baseline_data_cost_rub: number;
     baseline_coverage_share: number | null;
