@@ -61,6 +61,7 @@ export type Session = {
   assets: FeatureCollection;
   candidates: FeatureCollection;
   sensitivity: Array<Record<string, string>>;
+  plan_c_saturation_rub: number | null;
 };
 
 export type SceneSummary = {
