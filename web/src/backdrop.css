@@ -8,9 +8,16 @@
   overflow: hidden;
   pointer-events: none;
   background:
-    radial-gradient(1200px 900px at 68% 38%, #262b30 0%, transparent 62%),
-    radial-gradient(900px 700px at 12% 92%, #171b1f 0%, transparent 60%),
-    linear-gradient(180deg, #0b0d10 0%, #050607 100%);
+    radial-gradient(1200px 900px at 68% 38%, #15181b 0%, transparent 62%),
+    radial-gradient(900px 700px at 12% 92%, #0d1012 0%, transparent 60%),
+    linear-gradient(180deg, #07090b 0%, #030405 100%);
+}
+
+/* Satellite base map: the same blue as the satellite ocean (fallback without WebGL). */
+.backdrop.is-ocean {
+  background:
+    radial-gradient(1200px 900px at 68% 38%, #162640 0%, transparent 62%),
+    linear-gradient(180deg, #111e35 0%, #0e192d 100%);
 }
 
 .backdrop-canvas {

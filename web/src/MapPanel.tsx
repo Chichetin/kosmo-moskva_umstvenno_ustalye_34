@@ -390,9 +390,9 @@ export default function MapPanel(props: Props) {
         "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 0.25, 5, 0],
       });
       if (map.getLayer("background"))
-        map.setPaintProperty("background", "background-color", "#30383b");
+        map.setPaintProperty("background", "background-color", "#1c2124");
       if (map.getLayer("water"))
-        map.setPaintProperty("water", "fill-color", "#151d21");
+        map.setPaintProperty("water", "fill-color", "#0a0f12");
       for (const id of [
         "place_country_major",
         "place_country_minor",
