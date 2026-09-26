@@ -582,8 +582,10 @@ export default function MapPanel(props: Props) {
           "text-field": ["get", "label"],
           "text-font": ["Noto Sans Regular"],
           "text-size": 12,
-          "text-anchor": "left",
-          "text-offset": [0.9, 0],
+          // a free side of the point: close neighbours (A06/A09) both stay signed
+          "text-variable-anchor": ["left", "right", "top", "bottom", "top-left", "bottom-left", "top-right", "bottom-right"],
+          "text-radial-offset": 0.9,
+          "text-justify": "auto",
           "text-optional": true,
         },
         paint: {
