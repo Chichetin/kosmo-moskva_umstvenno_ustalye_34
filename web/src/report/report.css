@@ -1,0 +1,640 @@
+/* Public citizen form: the same graphite palette as the operator app, one task per page. */
+:root {
+  font-family: "Noto Sans", "Adwaita Sans", Arial, sans-serif;
+  color: #e9edef;
+  background: #08090b;
+  font-synthesis: none;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #08090b;
+}
+
+button,
+input,
+textarea,
+a {
+  font: inherit;
+}
+
+a {
+  color: #cfdbe0;
+}
+
+:focus-visible {
+  outline: 2px solid #c7d4da;
+  outline-offset: 3px;
+}
+
+.report-page {
+  min-height: 100vh;
+}
+
+.report-head {
+  display: flex;
+  align-items: center;
+  height: 56px;
+  padding: 0 20px;
+}
+
+.report-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #eef1f2;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  text-decoration: none;
+}
+
+.report-brand svg {
+  width: 22px;
+  height: 22px;
+}
+
+.report-main {
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 8px 16px 64px;
+}
+
+.report-intro h1,
+.report-done h1 {
+  margin: 12px 0 10px;
+  color: #f0f3f4;
+  font-size: 26px;
+  line-height: 1.2;
+  font-weight: 620;
+  letter-spacing: -0.04em;
+}
+
+.report-intro p,
+.report-done p {
+  margin: 0 0 10px;
+  color: #b3bec3;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.report-warning {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #2b2520;
+  color: #e6d8c8 !important;
+}
+
+.report-warning a {
+  color: #fff;
+  font-weight: 650;
+}
+
+.report-errors {
+  margin: 16px 0;
+  padding: 12px 14px;
+  border: 1px solid #d88b7a55;
+  border-radius: 12px;
+  background: #2a1d1b;
+  color: #f1d3cc;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.report-errors p {
+  margin: 0;
+}
+
+.report-errors p + p {
+  margin-top: 6px;
+}
+
+.report-section {
+  min-width: 0; /* fieldset defaults to min-content and would overflow on phones */
+  margin: 18px 0 0;
+  padding: 20px 18px 18px;
+  border: 0;
+  border-radius: 16px;
+  background: #15191c;
+}
+
+.report-section legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  float: left;
+  width: 100%;
+  margin: 0 0 14px;
+  padding: 0;
+  color: #f0f3f4;
+  font-size: 17px;
+  font-weight: 610;
+  letter-spacing: -0.02em;
+}
+
+.report-section legend + * {
+  clear: both;
+}
+
+.report-section legend span {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: #ffffff13;
+  color: #d9e1e4;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.report-section em,
+.report-field em {
+  color: #8d999e;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 500;
+}
+
+.kind-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.kind-option,
+.segmented label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 13px;
+  border: 1px solid #ffffff1c;
+  border-radius: 10px;
+  background: #0f1214;
+  color: #c5cfd3;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.kind-option input,
+.segmented input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.kind-option:has(input:focus-visible),
+.segmented label:has(input:focus-visible) {
+  outline: 2px solid #c7d4da;
+  outline-offset: 2px;
+}
+
+.kind-option.active,
+.segmented label.active {
+  border-color: #d5dee1;
+  background: #2a3135;
+  color: #f4f6f7;
+}
+
+.report-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 14px;
+  color: #c0cacf;
+  font-size: 13px;
+  font-weight: 540;
+}
+
+.report-field small {
+  color: #8d999e;
+  font-size: 12px;
+  font-weight: 450;
+}
+
+.report-field textarea,
+.report-field input,
+.report-input-icon {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #ffffff22;
+  border-radius: 10px;
+  background: #0f1214;
+  color: #eff2f3;
+  font-size: 16px; /* keeps mobile browsers from zooming in on focus */
+  line-height: 1.45;
+}
+
+.report-field textarea {
+  resize: vertical;
+}
+
+.report-field input::placeholder,
+.report-field textarea::placeholder,
+.report-input-icon input::placeholder {
+  color: #6f7b80;
+}
+
+.report-hint,
+.report-note {
+  margin: 0 0 12px;
+  color: #9aa6ab;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.report-note {
+  margin-top: 10px;
+  color: #c9d3d7;
+}
+
+.search-row {
+  display: flex;
+  gap: 8px;
+}
+
+.report-input-icon {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  color: #8d999e;
+}
+
+.report-input-icon input {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: #eff2f3;
+  font-size: 16px;
+}
+
+.report-input-icon:focus-within {
+  outline: 2px solid #c7d4da;
+  outline-offset: 2px;
+}
+
+.ghost-button,
+.primary-button,
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 15px;
+  border: 1px solid #ffffff22;
+  border-radius: 10px;
+  background: #1d2226;
+  color: #dfe6e8;
+  font-size: 14px;
+  font-weight: 560;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.ghost-button:hover {
+  background: #262c30;
+}
+
+.ghost-button:disabled,
+.primary-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.primary-button {
+  width: 100%;
+  border: 0;
+  background: #d5dee1;
+  color: #111619;
+  font-size: 15px;
+  font-weight: 640;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: #f0f4f5;
+}
+
+.danger-button {
+  border-color: #d88b7a66;
+  background: #2a1d1b;
+  color: #f4d7d0;
+}
+
+.geo-results {
+  margin: 10px 0 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid #ffffff17;
+  border-radius: 12px;
+  background: #0f1214;
+}
+
+.geo-results button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  width: 100%;
+  padding: 10px 11px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: #e3e9eb;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.geo-results button:hover {
+  background: #ffffff0d;
+}
+
+.geo-results small {
+  color: #8d999e;
+  font-size: 12px;
+}
+
+.geo-attribution {
+  padding: 6px 11px 4px;
+  color: #758186;
+  font-size: 11px;
+}
+
+.picker {
+  position: relative;
+  margin-top: 12px;
+}
+
+.picker-map {
+  height: 240px;
+  overflow: hidden;
+  border: 1px solid #ffffff1a;
+  border-radius: 12px;
+  background: #111318;
+}
+
+.picker-problem {
+  position: absolute;
+  inset: auto 10px 40px;
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: #2b2520;
+  color: #e6d8c8;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.report-pin {
+  width: 18px;
+  height: 18px;
+  border: 3px solid #111719;
+  border-radius: 50%;
+  background: #f1f5f6;
+  box-shadow: 0 0 0 3px #f1f5f655;
+}
+
+.place-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  margin-top: 10px;
+  color: #c3cdd1;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.place-summary button {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-left: auto;
+  border: 0;
+  border-radius: 8px;
+  background: #ffffff0d;
+  color: #dde3e5;
+  cursor: pointer;
+}
+
+.place-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.manual-coords {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.photo-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.photo-list li {
+  position: relative;
+}
+
+.photo-list img {
+  display: block;
+  width: 96px;
+  height: 96px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.photo-list button {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 7px;
+  background: #08090bcc;
+  color: #fff;
+  cursor: pointer;
+}
+
+.photo-add {
+  position: relative;
+}
+
+.photo-add input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.photo-add:has(input:focus-visible) {
+  outline: 2px solid #c7d4da;
+  outline-offset: 2px;
+}
+
+.report-submit {
+  margin-top: 22px;
+}
+
+.report-submit p {
+  margin: 0 0 14px;
+  color: #9aa6ab;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.report-done {
+  padding-top: 8px;
+}
+
+.report-done > .primary-button {
+  margin-top: 18px;
+}
+
+.report-number {
+  font-size: 15px !important;
+  color: #d9e1e4 !important;
+}
+
+.report-number strong {
+  display: block;
+  margin-top: 4px;
+  color: #f4f6f7;
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.status-link {
+  margin: 18px 0;
+  padding: 16px;
+  border-radius: 14px;
+  background: #15191c;
+  color: #b3bec3;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.status-link code {
+  display: block;
+  margin: 10px 0 4px;
+  padding: 10px;
+  overflow-wrap: anywhere;
+  border-radius: 9px;
+  background: #0f1214;
+  color: #dfe6e8;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 10px 18px;
+  margin: 18px 0;
+  padding: 16px;
+  border-radius: 14px;
+  background: #15191c;
+  font-size: 14px;
+}
+
+.status-grid dt {
+  color: #8d999e;
+}
+
+.status-grid dd {
+  margin: 0;
+  color: #e3e9eb;
+}
+
+.report-back {
+  display: inline-block;
+  margin-top: 22px;
+  color: #aeb9be;
+  font-size: 14px;
+}
+
+.maplibregl-ctrl-group {
+  border: 1px solid #ffffff1c !important;
+  border-radius: 10px !important;
+  background: #171b1e !important;
+}
+
+.maplibregl-ctrl-group button + button {
+  border-top-color: #ffffff1c !important;
+}
+
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: invert(0.9);
+}
+
+@media (min-width: 700px) {
+  .report-main {
+    padding-top: 28px;
+  }
+  .report-section {
+    padding: 24px 24px 22px;
+  }
+  .picker-map {
+    height: 300px;
+  }
+  .primary-button {
+    width: auto;
+    min-width: 240px;
+  }
+}
+
+@media (max-width: 420px) {
+  .manual-coords {
+    grid-template-columns: 1fr 1fr;
+  }
+  .manual-coords .ghost-button {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

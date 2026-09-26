@@ -23,6 +23,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
+from floodvalue.media.api import router as media_router
 from floodvalue.paths import REPO_ROOT, data_dir, output_dir
 from floodvalue.procurement.pricing import load_pricing, price_basket
 from floodvalue.procurement.run import plan
@@ -34,6 +35,7 @@ REQUIRED = (
     "strategy_comparison.csv", "procurement_plan.csv", "sensitivity.csv",
 )
 app = FastAPI(title="FloodValue operator")
+app.include_router(media_router)
 
 
 def _available_runs() -> list[Path]:

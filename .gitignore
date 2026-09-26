@@ -24,3 +24,6 @@ __pycache__/
 # IDE
 .idea/
 .vscode/
+
+# media monitoring: database, photos, secrets (FLOODVALUE_MEDIA_DIR)
+/var/
