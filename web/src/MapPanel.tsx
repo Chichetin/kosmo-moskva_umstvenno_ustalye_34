@@ -81,6 +81,8 @@ const markers = (scenes: SceneSummary[]): FeatureCollection<Point> => ({
   ),
 });
 // «Сообщения» layer (/api/media/map): a reason to look at a territory, never an input to p or EL.
+// Image sources of the selected scene (updateScene): their failure is worth a notice.
+const SCENE_LAYERS = new Set(["s1", "probability", "mask", "uncertainty"]);
 const NEWS_COLOR = "#39ff88";  // news: events from bulletins and media (neon green)
 const REPORT_COLOR = "#f0b85a";  // eyewitness messages (amber)
 // An event known only from eyewitnesses is a message (amber); any news/bulletin source makes it news.
@@ -688,13 +690,26 @@ export default function MapPanel(props: Props) {
       );
     };
     map.on("style.load", onStyle);
-    map.on("error", () =>
+    // Only failures that matter to the operator reach the banner. A basemap tile cancelled or
+    // missing during a camera flight (every jump to a message aborts dozens of tiles) is routine
+    // and used to leave «Не удалось загрузить подложку» on screen for good. The basemap style
+    // itself failing is handled by the 8-second fallback below; here — the scene's own layers.
+    let sceneLayerFailed = false;
+    map.on("error", (event) => {
+      const source = (event as { sourceId?: string }).sourceId;
+      const cause = (event as { error?: { name?: string; status?: number } }).error;
+      if (cause?.name === "AbortError" || cause?.status === 0) return;
+      if (!source || !SCENE_LAYERS.has(source)) return;
+      sceneLayerFailed = true;
       current.current.onIssue(
-        map.isStyleLoaded()
-          ? "Часть картографических данных недоступна. Локальные данные и анализ сохранены."
-          : "Не удалось загрузить географическую подложку. Локальные данные и анализ доступны.",
-      ),
-    );
+        "Не загрузился слой сцены (снимок или карта воды). Обновите страницу; расчёт и план не затронуты.",
+      );
+    });
+    // The map settled: a notice from an earlier hiccup goes away (the fallback notice stays).
+    map.on("idle", () => {
+      if (!sceneLayerFailed && !fallbackUsed) current.current.onIssue(null);
+      sceneLayerFailed = false;
+    });
     const timeout = window.setTimeout(() => {
       if (!styleReady) {
         fallbackUsed = true;
