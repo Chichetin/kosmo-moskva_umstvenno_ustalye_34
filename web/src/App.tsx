@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import Backdrop from "./Backdrop";
 import MapPanel from "./MapPanel";
+import MessagePanel, { type SelectedMessage } from "./MessagePanel";
 import {
   formatExactProbability,
   formatNumber as money,
@@ -202,6 +203,11 @@ export default function App() {
   // or closed to this viewer); the toggle is then hidden rather than shown broken.
   const [messages, setMessages] = useState<MediaMap | null>(null);
   const [showMessages, setShowMessages] = useState(true);
+  const [message, setMessage] = useState<SelectedMessage | null>(null);
+  const [messageFocus, setMessageFocus] = useState<{ lngLat: [number, number]; zoom: number; request: number } | null>(null);
+  useEffect(() => {
+    if (!showMessages) setMessage(null);
+  }, [showMessages]);
   useEffect(() => {
     let stopped = false;
     const load = () =>
@@ -575,7 +581,16 @@ export default function App() {
               setPanelOpen(true);
             }}
             onIssue={setMapIssue}
+            onSelectMessage={setMessage}
+            focus={messageFocus}
           />
+          {message && (
+            <MessagePanel
+              message={message}
+              onClose={() => setMessage(null)}
+              onZoom={(lngLat, zoom) => setMessageFocus((f) => ({ lngLat, zoom, request: (f?.request ?? 0) + 1 }))}
+            />
+          )}
           <div className="map-top-left">
             <div className="search-panel">
               <div className="scene-library-head">
