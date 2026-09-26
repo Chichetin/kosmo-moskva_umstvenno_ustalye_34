@@ -84,7 +84,7 @@ def test_photo_is_reencoded_without_exif():
 
 def test_png_and_webp_accepted_large_downscaled():
     for fmt in ("PNG", "WEBP"):
-        clean, width, height = reports.sanitize_photo(_image(fmt, size=(4000, 1000)))
+        _, width, height = reports.sanitize_photo(_image(fmt, size=(4000, 1000)))
         assert max(width, height) == reports.MAX_SIDE
 
 

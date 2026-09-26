@@ -9,6 +9,10 @@ import {
   X,
 } from "lucide-react";
 import MapPanel from "./MapPanel";
+import EventCard from "./media/EventCard";
+import MessagesPanel from "./media/MessagesPanel";
+import type { MediaEvent } from "./media/types";
+import { useMedia } from "./media/useMedia";
 import type { Feature, Plan, SceneSummary, Session } from "./types";
 
 const money = (value: unknown) =>
@@ -74,7 +78,10 @@ const pointInZone = (asset: Feature, zone: Feature) => {
   return !!rings[0] && inside(rings[0]) && !rings.slice(1).some(inside);
 };
 const parseRoute = () => {
-  const match = /^#\/(earth|scene|analysis)(?:\/([^/]+))?/.exec(location.hash);
+  const match =
+    /^#\/(earth|scene|analysis)(?:\/(?!event\/)([^/]+))?(?:\/event\/(\d+))?/.exec(
+      location.hash,
+    );
   return {
     view: match?.[1] === "analysis" ? "analysis" : "map",
     chipId:
@@ -83,10 +90,15 @@ const parseRoute = () => {
         : match?.[2]
           ? decodeURIComponent(match[2])
           : null,
+    eventId: match?.[3] ? Number(match[3]) : null,
   };
 };
-const navigate = (mode: "earth" | "scene" | "analysis", id?: string) => {
-  location.hash = `#/${mode}${id ? `/${encodeURIComponent(id)}` : ""}`;
+const navigate = (
+  mode: "earth" | "scene" | "analysis",
+  id?: string,
+  eventId?: number | null,
+) => {
+  location.hash = `#/${mode}${id ? `/${encodeURIComponent(id)}` : ""}${eventId != null ? `/event/${eventId}` : ""}`;
 };
 async function json<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, { signal });
@@ -135,6 +147,14 @@ export default function App() {
   const [overviewRequest, setOverviewRequest] = useState(0);
   const [mapIssue, setMapIssue] = useState<string | null>(null);
   const [zoneView, setZoneView] = useState<"plan" | "all">("plan");
+  const [libraryTab, setLibraryTab] = useState<"observations" | "messages">(() =>
+    parseRoute().eventId != null ? "messages" : "observations",
+  );
+  const [eventFocus, setEventFocus] = useState<{
+    event: MediaEvent;
+    request: number;
+  } | null>(null);
+  const media = useMedia(route.eventId);
   const scene = scenes.find((item) => item.chip_id === route.chipId) ?? null;
   const activeSession = scene?.run_id === session?.run_id ? session : null;
   const mapActive = route.view === "map";
@@ -240,6 +260,24 @@ export default function App() {
     setSearchOpen(true);
     setOverviewRequest((value) => value + 1);
   };
+  const selectEvent = (event: MediaEvent) => {
+    setPanelOpen(true);
+    focusedCard.current = event.lat != null ? event.event_id : null;
+    navigate(scene ? "scene" : "earth", scene?.chip_id, event.event_id);
+    if (event.lat != null)
+      setEventFocus((value) => ({ event, request: (value?.request ?? 0) + 1 }));
+  };
+  const closeEvent = () => navigate(scene ? "scene" : "earth", scene?.chip_id);
+  // An event opened without coordinates at hand (e.g. just accepted from the queue) is
+  // focused once when its card arrives; list refreshes never move the camera.
+  const focusedCard = useRef<number | null>(null);
+  useEffect(() => {
+    const event = media.card?.event;
+    if (!event || event.lat == null || focusedCard.current === event.event_id) return;
+    focusedCard.current = event.event_id;
+    if (eventFocus?.event.event_id !== event.event_id)
+      setEventFocus((value) => ({ event, request: (value?.request ?? 0) + 1 }));
+  }, [media.card?.event.event_id]);
   const toggle = (key: keyof LayerFlags) =>
     setLayers((value) => ({ ...value, [key]: !value[key] }));
   const assets = useMemo(
@@ -348,12 +386,49 @@ export default function App() {
               setPanelOpen(true);
             }}
             onIssue={setMapIssue}
+            events={media.operator ? media.events : []}
+            showEvents={!!media.operator && media.showOnMap}
+            selectedEvent={route.eventId}
+            eventFocus={eventFocus}
+            onSelectEvent={(id) => {
+              const found = media.events.find((item) => item.event_id === id);
+              if (found) selectEvent(found);
+            }}
           />
           <div className="map-top-left">
-            <div className="search-panel">
-              <div className="scene-library-head">
-                <h1>Наблюдения</h1>
+            <div className={`search-panel ${libraryTab === "messages" ? "messages-mode" : ""}`}>
+              <div className="scene-library-head library-tabs" role="tablist">
+                <button
+                  role="tab"
+                  aria-selected={libraryTab === "observations"}
+                  className={libraryTab === "observations" ? "active" : ""}
+                  onClick={() => setLibraryTab("observations")}
+                >
+                  Наблюдения
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={libraryTab === "messages"}
+                  className={libraryTab === "messages" ? "active" : ""}
+                  onClick={() => setLibraryTab("messages")}
+                >
+                  Сообщения
+                  {!!media.summary?.pending_reports && (
+                    <span className="tab-count">{media.summary.pending_reports}</span>
+                  )}
+                </button>
               </div>
+              {libraryTab === "messages" ? (
+                <MessagesPanel
+                  media={media}
+                  selectedEventId={route.eventId}
+                  onSelectEvent={(event) => {
+                    const found = media.events.find((item) => item.event_id === event.event_id);
+                    selectEvent(found ?? event);
+                  }}
+                />
+              ) : (
+              <>
               <label className="search-box">
                 <Search size={17} />
                 <input
@@ -432,6 +507,8 @@ export default function App() {
                   )}
                 </div>
               )}
+              </>
+              )}
             </div>
           </div>
           <div className="map-top-center">
@@ -450,7 +527,27 @@ export default function App() {
               </button>
             </div>
           </div>
-          {scene && panelOpen && (
+          {route.eventId != null && panelOpen && (
+            <EventCard
+              card={media.card?.event.event_id === route.eventId ? media.card : null}
+              error={
+                media.operator === null
+                  ? "Карточка сообщения доступна после входа аналитика (вкладка «Сообщения»)."
+                  : media.cardError
+              }
+              onClose={closeEvent}
+              onChanged={(card) => {
+                if (card) media.setCard(card);
+                media.refresh();
+              }}
+              onOpenTerritory={(event) =>
+                setEventFocus((value) => ({ event, request: (value?.request ?? 0) + 1 }))
+              }
+              onOpenScene={(chipId) => navigate("scene", chipId, route.eventId)}
+              onSelectEvent={(id) => navigate(scene ? "scene" : "earth", scene?.chip_id, id)}
+            />
+          )}
+          {scene && panelOpen && route.eventId == null && (
             <aside className="context-panel">
               <div className="context-heading">
                 <div>
@@ -579,6 +676,19 @@ export default function App() {
                     </label>
                   </>
                 )}
+                {media.operator && (
+                  <label className="layer-row">
+                    <input
+                      type="checkbox"
+                      checked={media.showOnMap}
+                      onChange={() => media.setShowOnMap(!media.showOnMap)}
+                    />
+                    <span>
+                      Сообщения
+                      <small>СМИ, сводки, очевидцы · не результат модели</small>
+                    </span>
+                  </label>
+                )}
               </section>
               {activeSession && (
                 <>
@@ -680,7 +790,7 @@ export default function App() {
               </p>
             </aside>
           )}
-          {scene && !panelOpen && (
+          {(scene || route.eventId != null) && !panelOpen && (
             <button className="reopen-panel" onClick={() => setPanelOpen(true)}>
               <Layers3 size={17} /> Слои и сцена
             </button>

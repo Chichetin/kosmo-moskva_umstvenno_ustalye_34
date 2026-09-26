@@ -27,7 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from starlette.datastructures import UploadFile
 
 from floodvalue.media import events as registry
-from floodvalue.media import geo, reports
+from floodvalue.media import geo, observations, reports
 from floodvalue.media.net import FetchError
 from floodvalue.media.store import (
     attachments_dir,
@@ -688,6 +688,40 @@ def review_event(event_id: int, body: EventReviewIn, name: str = Depends(require
                     body.basis, body.comment, body.follow_up, row["review_state"],
                     changes["review_state"] if "review_state" in changes
                     else row["review_state"]))
+    return event_card(event_id, name)
+
+
+@router.post("/api/ops/events/{event_id}/observations/search")
+def search_observations(event_id: int, name: str = Depends(require_operator)):
+    with connect() as db:
+        row = db.execute("SELECT * FROM event WHERE event_id = ?", (event_id,)).fetchone()
+    if row is None:
+        raise HTTPException(404, "Событие не найдено")
+    if row["lat"] is None:
+        raise HTTPException(409, "Сначала уточните место события")
+    start = parse_iso(row["event_time_start"]) if row["event_time_start"] else None
+    end = parse_iso(row["event_time_end"]) if row["event_time_end"] else None
+    found = observations.search_local(row["lat"], row["lon"], start, end)
+    stamp = now()
+    with connect() as db:
+        for item in found:
+            db.execute(
+                "INSERT INTO observation_match(event_id, catalog, observation_ref, product_type, "
+                "observation_at, footprint_json, spatial_relation, distance_km, time_offset_days, "
+                "suitability, reason, stage, analysis_run_id, searched_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(event_id, catalog, observation_ref) DO UPDATE SET "
+                "spatial_relation = excluded.spatial_relation, distance_km = excluded.distance_km, "
+                "time_offset_days = excluded.time_offset_days, suitability = excluded.suitability, "
+                "reason = excluded.reason, stage = excluded.stage, "
+                "analysis_run_id = excluded.analysis_run_id, searched_at = excluded.searched_at",
+                (event_id, item["catalog"], item["observation_ref"], item["product_type"],
+                 item["observation_at"], json.dumps(item["footprint"]), item["spatial_relation"],
+                 item["distance_km"], item["time_offset_days"], item["suitability"],
+                 item["reason"], item["stage"], item["analysis_run_id"], stamp))
+        suitable = sum(item["suitability"] == "suitable" for item in found)
+        record_history(db, event_id, name, "observations_searched",
+                       after={"catalog": "local", "found": len(found), "suitable": suitable})
     return event_card(event_id, name)
 
 

@@ -5,6 +5,8 @@ import type { FeatureCollection, Geometry, Point, Polygon } from "geojson";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { mapProviders } from "./mapProviders";
+import { eventAreas, eventPoints, eventPopup } from "./media/mapLayers";
+import type { MediaEvent } from "./media/types";
 import type { Feature, Plan, SceneSummary, Session } from "./types";
 
 maplibregl.setWorkerUrl(workerUrl);
@@ -31,6 +33,11 @@ type Props = {
   onSelectAsset: (id: string) => void;
   onSelectZone: (id: string) => void;
   onIssue: (message: string | null) => void;
+  events: MediaEvent[];
+  showEvents: boolean;
+  selectedEvent: number | null;
+  eventFocus: { event: MediaEvent; request: number } | null;
+  onSelectEvent: (id: number) => void;
 };
 const empty: FeatureCollection = { type: "FeatureCollection", features: [] };
 const features = (items: Feature[]): FeatureCollection => ({
@@ -70,6 +77,64 @@ const markers = (scenes: SceneSummary[]): FeatureCollection<Point> => ({
       : [],
   ),
 });
+const MEDIA_LAYERS = [
+  "media-area-hit", "media-area", "media-area-focus", "media-cluster",
+  "media-cluster-count", "media-point", "media-point-focus",
+];
+// Messages differ from S1 scene markers: hollow sand/steel rings instead of solid white
+// dots, and districts/regions are dashed areas rather than a pin at the centroid.
+const MEDIA_COLOR = [
+  "match", ["get", "family"],
+  "alert", "#94aabb",
+  "negation", "#9ea79f",
+  "#e0b77e",
+] as maplibregl.ExpressionSpecification;
+function addMediaLayers(map: Map, events: MediaEvent[]) {
+  map.addSource("media-areas", { type: "geojson", data: eventAreas(events) });
+  map.addLayer({
+    id: "media-area-hit", type: "fill", source: "media-areas",
+    paint: { "fill-color": MEDIA_COLOR, "fill-opacity": 0.035 },
+  });
+  map.addLayer({
+    id: "media-area", type: "line", source: "media-areas",
+    paint: { "line-color": MEDIA_COLOR, "line-width": 1.3, "line-opacity": 0.75,
+             "line-dasharray": [2, 2] },
+  });
+  map.addLayer({
+    id: "media-area-focus", type: "line", source: "media-areas",
+    filter: ["==", ["get", "event_id"], -1],
+    paint: { "line-color": "#f4f6f7", "line-width": 2.4 },
+  });
+  map.addSource("media-points", {
+    type: "geojson", data: eventPoints(events), cluster: true, clusterRadius: 34,
+    clusterMaxZoom: 8,
+  });
+  map.addLayer({
+    id: "media-cluster", type: "circle", source: "media-points",
+    filter: ["has", "point_count"],
+    paint: { "circle-color": "#e0b77e", "circle-opacity": 0.16, "circle-radius": 13,
+             "circle-stroke-color": "#e0b77e", "circle-stroke-width": 1.6 },
+  });
+  map.addLayer({
+    id: "media-cluster-count", type: "symbol", source: "media-points",
+    filter: ["has", "point_count"],
+    layout: { "text-field": ["get", "point_count_abbreviated"], "text-size": 11,
+              "text-font": ["Noto Sans Regular"] },
+    paint: { "text-color": "#f3e6d2" },
+  });
+  map.addLayer({
+    id: "media-point", type: "circle", source: "media-points",
+    filter: ["!", ["has", "point_count"]],
+    paint: { "circle-color": MEDIA_COLOR, "circle-opacity": 0.2, "circle-radius": 6.5,
+             "circle-stroke-color": MEDIA_COLOR, "circle-stroke-width": 2 },
+  });
+  map.addLayer({
+    id: "media-point-focus", type: "circle", source: "media-points",
+    filter: ["==", ["get", "event_id"], -1],
+    paint: { "circle-color": "#000", "circle-opacity": 0, "circle-radius": 11,
+             "circle-stroke-color": "#f4f6f7", "circle-stroke-width": 2.4 },
+  });
+}
 const reducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const minimumZoom = () => (window.innerWidth < 700 ? 0.9 : 1.15);
@@ -113,6 +178,9 @@ export default function MapPanel(props: Props) {
       "plan-fill": !!scene && visibleLayers.zones,
       "plan-line": !!scene && visibleLayers.zones,
       "zone-focus": !!scene && visibleLayers.zones,
+      ...Object.fromEntries(
+        MEDIA_LAYERS.map((id) => [id, current.current.showEvents]),
+      ),
     };
     for (const [id, visible] of Object.entries(show)) {
       if (map.getLayer(id))
@@ -155,6 +223,13 @@ export default function MapPanel(props: Props) {
         ["get", "candidate_id"],
         selectedZone ?? "",
       ]);
+    for (const id of ["media-point-focus", "media-area-focus"])
+      if (map.getLayer(id))
+        map.setFilter(id, [
+          "==",
+          ["get", "event_id"],
+          current.current.selectedEvent ?? -1,
+        ]);
   };
 
   const updateScene = () => {
@@ -454,6 +529,7 @@ export default function MapPanel(props: Props) {
           "circle-stroke-width": 2,
         },
       });
+      addMediaLayers(map, current.current.events);
       updateScene();
       setReady((value) => value + 1);
       current.current.onIssue(
@@ -555,6 +631,46 @@ export default function MapPanel(props: Props) {
       map.getCanvas().style.cursor = "";
       popup.current?.remove();
     });
+    const selectEvent = (event: {
+      features?: Array<{ properties?: Record<string, unknown> }>;
+    }) => {
+      const id = Number(event.features?.[0]?.properties?.event_id);
+      if (Number.isFinite(id)) current.current.onSelectEvent(id);
+    };
+    map.on("click", "media-point", selectEvent);
+    map.on("click", "media-area-hit", (event) => {
+      if (map.queryRenderedFeatures(event.point, { layers: ["media-point", "assets"] }).length)
+        return;
+      selectEvent(event);
+    });
+    map.on("click", "media-cluster", (event) => {
+      const feature = event.features?.[0];
+      const source = map.getSource("media-points") as GeoJSONSource | undefined;
+      if (source && feature?.geometry.type === "Point") {
+        const center = feature.geometry.coordinates as [number, number];
+        source
+          .getClusterExpansionZoom(Number(feature.properties?.cluster_id))
+          .then((zoom) => map.easeTo({ center, zoom, duration: reducedMotion() ? 0 : 400 }));
+      }
+    });
+    const showEventPreview = (event: maplibregl.MapLayerMouseEvent) => {
+      map.getCanvas().style.cursor = "pointer";
+      const id = Number(event.features?.[0]?.properties?.event_id);
+      const item = current.current.events.find((entry) => entry.event_id === id);
+      if (!item) return;
+      popup.current?.remove();
+      popup.current = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 14 })
+        .setLngLat(event.lngLat)
+        .setDOMContent(eventPopup(item))
+        .addTo(map);
+    };
+    for (const id of ["media-point", "media-area-hit"]) {
+      map.on("mouseenter", id, showEventPreview);
+      map.on("mouseleave", id, () => {
+        map.getCanvas().style.cursor = "";
+        popup.current?.remove();
+      });
+    }
     map.on("click", "assets", (event) => {
       const id = event.features?.[0]?.properties?.asset_id;
       if (typeof id === "string") current.current.onSelectAsset(id);
@@ -620,8 +736,44 @@ export default function MapPanel(props: Props) {
     );
   }, [props.scene?.chip_id, props.session?.run_id, ready]);
   useEffect(() => {
+    const map = mapRef.current;
+    (map?.getSource("media-points") as GeoJSONSource | undefined)?.setData(
+      eventPoints(props.events),
+    );
+    (map?.getSource("media-areas") as GeoJSONSource | undefined)?.setData(
+      eventAreas(props.events),
+    );
+  }, [props.events, ready]);
+  useEffect(() => {
+    const map = mapRef.current;
+    const target = props.eventFocus?.event;
+    if (!map || !ready || !target || target.lat == null || target.lon == null) return;
+    map.stop();
+    popup.current?.remove();
+    const padding =
+      window.innerWidth < 700
+        ? { top: 70, right: 22, bottom: 255, left: 22 }
+        : { top: 80, right: 420, bottom: 90, left: 340 };
+    if (target.bbox && target.geo_precision !== "point" && target.geo_precision !== "street") {
+      const [west, south, east, north] = target.bbox;
+      map.fitBounds([[west, south], [east, north]], {
+        padding, maxZoom: 12, duration: reducedMotion() ? 0 : 850,
+      });
+    } else {
+      const zoom = { point: 13, street: 13, locality: 11, district: 9, region: 7, country: 5 }[
+        target.geo_precision
+      ] ?? 8;
+      map.easeTo({
+        center: [target.lon, target.lat], zoom, padding,
+        duration: reducedMotion() ? 0 : 850,
+      });
+    }
+  }, [props.eventFocus?.request, ready]);
+  useEffect(() => {
     updateVisibility();
   }, [
+    props.showEvents,
+    props.selectedEvent,
     props.baseMap,
     props.visibleLayers,
     props.overlayOpacity,
