@@ -9,3 +9,37 @@ flood.example.org {
 	}
 	reverse_proxy 127.0.0.1:8000
 }
+
+# Optional second domain for the eyewitness form only (D-062). Same process; the operator UI, the
+# analyst page, the analyst API and the operator map layer answer 404 here, and `/` redirects to the
+# form. /media/static/* also serves the analyst's JS/CSS: static code, no data, public on the first
+# domain anyway. Replace report.example.org with the real domain or delete this block.
+report.example.org {
+	encode zstd gzip
+	request_body {
+		max_size 30MB
+	}
+	@pages {
+		method GET HEAD
+		path /report /report/status /media/static/* /api/media/report-config
+	}
+	@submit {
+		method POST
+		path /api/media/reports /api/media/reports/status
+	}
+	handle @pages {
+		reverse_proxy 127.0.0.1:8000
+	}
+	handle @submit {
+		reverse_proxy 127.0.0.1:8000
+	}
+	handle / {
+		redir * /report 302
+	}
+	handle /report/ {
+		redir * /report 302
+	}
+	handle {
+		respond "Not found" 404
+	}
+}

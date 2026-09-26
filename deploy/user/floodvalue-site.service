@@ -1,0 +1,20 @@
+# systemd --user variant of ../floodvalue-site.service for a server without root (D-062):
+# code in ~/apps/floodvalue, env in ~/.config/floodvalue/floodvalue.env (port: FLOODVALUE_APP_PORT).
+# Install: copy to ~/.config/systemd/user/, then
+#   systemctl --user daemon-reload && systemctl --user enable --now floodvalue-site floodvalue-media-worker
+# Needs `loginctl enable-linger <user>` so the units run without a login session.
+[Unit]
+Description=FloodValue site: operator UI, eyewitness form, media API
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/apps/floodvalue
+EnvironmentFile=%h/.config/floodvalue/floodvalue.env
+ExecStart=%h/apps/floodvalue/.venv/bin/python scripts/serve_site.py --host 127.0.0.1
+NoNewPrivileges=true
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
