@@ -109,6 +109,9 @@ gh issue list --assignee @me          # мои задачи
 
 ## GitVerse (сдача)
 
+> **GitVerse ЗАМОРОЖЕН с 27.09.2026 01:00 МСК (стоп-код прошёл).** Сданная версия — `c04f681`. Любой push в GitVerse (main, master, lfs-probe, теги, LFS, `scripts/sync-gitverse.sh`) запрещён навсегда — ни людям, ни агентам. Работа дальше — только PR в GitHub `main` и деплой стенда.
+
+
 Репозиторий: https://gitverse.ru/hackrus.experts/kosmo-moskva_umstvenno_ustalye_34
 (приватный, у нас push без admin). GitHub — рабочий, GitVerse — зеркало `origin/main`.
 

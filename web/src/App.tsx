@@ -52,7 +52,6 @@ const date = (value: string | null | undefined) =>
     : "Дата неизвестна";
 // Budget scale before a run: plan C's saturation is not known yet; 50 000 ₽ is above full
 // coverage B of the known scenes (37–42 thousand).
-const PRE_RUN_BUDGET_MAX = 50_000;
 const ruPlural = new Intl.PluralRules("ru");
 const countLabel = (count: number, one: string, few: string, many: string) =>
   `${count} ${ruPlural.select(count) === "one" ? one : ruPlural.select(count) === "few" ? few : many}`;
@@ -194,7 +193,6 @@ export default function App() {
   const [analysisStarting, setAnalysisStarting] = useState<string | null>(null);
   const [analysisJobError, setAnalysisJobError] = useState<string | null>(null);
   // Data budget the operator sets before the run: plan A/B/C of the bundle is built for it.
-  const [analysisBudget, setAnalysisBudget] = useState(5_000);
   const [readyAnalysisNotice, setReadyAnalysisNotice] = useState<{ chipId: string; territory: string } | null>(null);
   const [searchOpen, setSearchOpen] = useState(() => window.innerWidth >= 700);
   // the observation list grows as it scrolls: all scenes are reachable from the list itself
@@ -374,7 +372,7 @@ export default function App() {
     setAnalysisJobError(null);
     try {
       const result = await json<AnalysisJob>(
-        `/api/analyses?chip_id=${encodeURIComponent(target.chip_id)}&budget=${analysisBudget}`,
+        `/api/analyses?chip_id=${encodeURIComponent(target.chip_id)}`,
         undefined,
         { method: "POST" },
       );
@@ -385,7 +383,7 @@ export default function App() {
     } finally {
       setAnalysisStarting(null);
     }
-  }, [openFinishedAnalysis, analysisBudget]);
+  }, [openFinishedAnalysis]);
   useEffect(() => {
     if (!analysisJob?.job_id || !["queued", "running"].includes(analysisJob.status)) return;
     let stopped = false;
@@ -540,35 +538,11 @@ export default function App() {
     return (
       <div className="analysis-job">
         {asking && (
-          <label className="analysis-budget-ask">
-            <span>Бюджет на дополнительную съёмку, ₽</span>
-            <input
-              type="number"
-              min="0"
-              max="1000000000"
-              step="100"
-              value={analysisBudget}
-              disabled={analysisStarting === target.chip_id}
-              onChange={(event) =>
-                setAnalysisBudget(Math.min(1_000_000_000, Math.max(0, Number(event.target.value) || 0)))
-              }
-            />
-            <input
-              type="range"
-              min="0"
-              max={PRE_RUN_BUDGET_MAX}
-              step="100"
-              value={Math.min(analysisBudget, PRE_RUN_BUDGET_MAX)}
-              disabled={analysisStarting === target.chip_id}
-              onChange={(event) => setAnalysisBudget(Number(event.target.value))}
-              aria-label="Бюджет на дополнительную съёмку"
-            />
-            <small>
-              Карта воды и ущерб считаются по уже полученному снимку S1 — за него не платим.
-              Бюджет ограничивает только дозаказ снимков: под него строится план C. После
-              расчёта бюджет можно изменить.
-            </small>
-          </label>
+          <small className="analysis-budget-note">
+            Карта воды, вероятность и ущерб считаются по уже полученному снимку S1 и от бюджета
+            не зависят. Бюджет на дозаказ снимков задаётся после расчёта на странице анализа —
+            план C пересчитывается сразу, без повторного анализа.
+          </small>
         )}
         <button
           className="analysis-start"
@@ -577,7 +551,7 @@ export default function App() {
         >
           {running ? "Анализ выполняется" : analysisStarting === target.chip_id
             ? "Отправляем запрос…" : current?.status === "failed" ? "Повторить анализ"
-            : `Запустить анализ · ${formatRub(analysisBudget)}`}
+            : "Запустить анализ"}
         </button>
         {statusText && <p className={errorText ? "inline-error" : undefined} role="status" aria-live="polite">{statusText}</p>}
         {current?.status === "failed" && current.detail && (
