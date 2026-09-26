@@ -1,4 +1,5 @@
-"""export: run_metadata.proxy_check from docs/verification/eval-<part>-summary.json (#107).
+"""export: run_metadata.proxy_check from docs/verification/eval-<part>-summary.json
+(test: test-eval-summary.json) (#107, #134).
 
 Export only reads the aggregated summary written by eval-test; it never reads labels or rasters.
 The numbers are taken only for the same chip, main method and threshold as the result set.
@@ -56,7 +57,7 @@ def test_validation_summary_of_the_same_chip_gives_numbers_but_stays_planned():
 
 def test_test_summary_is_done_and_independent():
     out = _proxy(_summary(part="test", chip="Spain_7370579"), chip="Spain_7370579", part="test",
-                 source="docs/verification/eval-test-summary.json")
+                 source="docs/verification/test-eval-summary.json")
     assert out["status"] == "done" and out["result"]["independent"] is True
     assert out["result"]["demo_chip"]["n_points"] == 10
 
@@ -211,3 +212,10 @@ def test_unknown_commit_or_no_git_is_stale(repo, tmp_path):
     plain = tmp_path / "plain"
     plain.mkdir()
     assert export_run.models_unchanged_since(_head(repo), plain) is False
+
+
+def test_summary_file_matches_eval_test_prefix():
+    from floodvalue.export.assemble import eval_summary_file
+    from floodvalue.model.eval_test import prefix_of
+    for part in ("dev", "validation", "test"):
+        assert eval_summary_file(part) == f"docs/verification/{prefix_of(part)}-summary.json"

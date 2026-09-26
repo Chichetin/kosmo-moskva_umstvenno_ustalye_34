@@ -41,7 +41,7 @@ STAGE_META = ("prediction.json", "assets_metadata.json", "procurement_metadata.j
               "procurement_sensitivity.csv")
 BASELINE_METRICS = "docs/verification/baseline-metrics.csv"
 MAIN_METRICS = "docs/verification/main-metrics.csv"  # written by the main method when it lands
-VERIFICATION_DIR = REPO_ROOT / "docs" / "verification"  # eval-<part>-summary.json (#107)
+VERIFICATION_DIR = REPO_ROOT / "docs" / "verification"  # eval-<part>-summary.json, test: test-eval-summary.json (#107, #134)
 BASELINE_CONFIG = MODELS_DIR / "baseline" / "config.json"
 SPLIT_FILE = SPLITS_DIR / "split_v1.json"
 PACKAGES = ("numpy", "rasterio", "shapely", "pyproj", "pydantic", "pyyaml", "scikit-learn",
