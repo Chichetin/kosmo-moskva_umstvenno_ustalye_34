@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 # Operator API display check (interface from PR #120): python scripts/check_display.py <api_base_url> <kit_dir>
-"""Display chain check for the operator API (PR #120): file values vs what the API serves.
-Usage: python api_check.py <base_url> <kit_dir>"""
+"""Display chain check for the operator API (PR #120): file values vs what the API serves."""
 import io, json, sys, csv, urllib.request
 import numpy as np, rasterio
 from PIL import Image
 from rasterio.transform import rowcol
 
+if len(sys.argv) != 3:
+    print(__doc__ + "\n\nusage: python scripts/check_display.py <api_base_url> <kit_dir>")
+    sys.exit(0 if sys.argv[1:] in (["-h"], ["--help"]) else 2)
 base, kit = sys.argv[1].rstrip("/"), sys.argv[2]
 fails = []
 def check(ok, msg):

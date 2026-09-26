@@ -9,6 +9,9 @@ from pathlib import Path
 import numpy as np, rasterio
 from rasterio.transform import rowcol
 
+if len(sys.argv) != 4:
+    print(__doc__ + "\n\nusage: python scripts/check_chain.py <kit_dir> <chip_id> <data_dir>")
+    sys.exit(0 if sys.argv[1:] in (["-h"], ["--help"]) else 2)
 kit = Path(sys.argv[1]); chip = sys.argv[2]; data = Path(sys.argv[3])
 fails = []
 def check(ok, msg):

@@ -227,9 +227,6 @@ make check        # pytest + test-hooks + validate — перед каждым p
   `orchestrate` (`/orchestrate`): взять свои issues, завести worktree, запустить
   параллельных `builder`, провести каждый PR через `reviewer` → `evaluator` → merge.
 - `submission-checklist` — проверка комплекта сдачи перед 27.09 00:00.
-- Автопилот обучения — `docs/automation/training-autopilot.md` (протокол и бюджет —
-  `configs/training-autopilot.yaml`); после новой сессии, `/clear` или сжатия контекста —
-  `docs/automation/training-resume.md`: сначала процессы и состояние, потом шаг, без дублей.
 - Хуки (`bash .claude/hooks/test-hooks.sh`): SessionStart — ветка, мои issues, занятые
   `area:`; PreToolUse — страж данных на `git commit` (растры Sen1Floods11 и файлы > 5 МБ
   вне LFS); Stop — секреты, pytest, чужие коммиты в `origin/main`; SubagentStop —
