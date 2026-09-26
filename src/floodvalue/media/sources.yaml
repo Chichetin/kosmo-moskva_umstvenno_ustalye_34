@@ -69,7 +69,12 @@ sources:
       endpoint: https://api.gdeltproject.org/api/v2/doc/doc
       allowed_hosts: [api.gdeltproject.org]
       min_interval_s: 6
-      query: '(flood OR flooding OR "flash flood" OR наводнение OR паводок OR подтопление)'
+      # Каждая повторная попытка — отдельный запрос из бюджета цикла, поэтому обрыв по таймауту
+      # съедал 3–4 запроса. Две попытки по 30 с, пауза между ними не меньше min_interval_s.
+      read_timeout_s: 30
+      attempts: 2
+      # Весь мир: слово «паводок» на основных языках публикаций GDELT; sourcelang не задан.
+      query: '(flood OR flooding OR "flash flood" OR inundation OR наводнение OR паводок OR подтопление OR inondation OR inondations OR inundación OR inundaciones OR Überschwemmung OR Hochwasser OR alluvione OR enchente OR inundação OR banjir OR 洪水 OR فيضان OR sel OR taşkın)'
       maxrecords: 100
       initial_hours: 24
       overlap_minutes: 30
