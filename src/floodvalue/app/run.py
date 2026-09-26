@@ -173,14 +173,42 @@ def scenes():
             if _sealed(chip_id):
                 continue
             info = _raster_info(path)
+            empty = _s1_empty(chip_id)
             result.append({"run_id": None, "chip_id": chip_id,
                            "fixture": False,
                            "territory": source.get("event_id") or chip_id,
                            "observation_date": source.get("observation_date"),
                            "position": _scene_position(path), "bounds": info["bounds"],
                            "corners": info["corners"], "status": "observation_only",
-                           "preview_url": f"/api/observations/{chip_id}/preview.png"})
+                           "preview_url": f"/api/observations/{chip_id}/preview.png",
+                           "analyzable": not empty,
+                           "not_analyzable_reason": S1_EMPTY_REASON if empty else None})
     return sorted(result, key=lambda item: (item["status"] != "analyzed", item["territory"], item["chip_id"]))
+
+
+S1_EMPTY_REASON = "В снимке S1 нет валидных пикселей — объекты разместить негде, анализ невозможен"
+
+
+@lru_cache(maxsize=4)
+def _s1_nan_fractions(qc_path: Path, mtime_ns: int) -> dict[str, float]:
+    """chip_id → max(vv_nan_frac, vh_nan_frac) from `make data` QC; sealed test rows are empty."""
+    result = {}
+    with qc_path.open(encoding="utf-8", newline="") as source:
+        for row in csv.DictReader(source):
+            try:
+                result[row["chip_id"]] = max(float(row["vv_nan_frac"]), float(row["vh_nan_frac"]))
+            except (KeyError, TypeError, ValueError):
+                continue
+    return result
+
+
+def _s1_empty(chip_id: str) -> bool:
+    """True when QC says no pixel has both S1 bands: assets need valid S1 (portfolio placement).
+    Without qc.csv nothing is claimed — the pipeline itself reports the failure then."""
+    qc_path = data_dir() / "interim" / "qc.csv"
+    if not qc_path.is_file():
+        return False
+    return _s1_nan_fractions(qc_path, qc_path.stat().st_mtime_ns).get(chip_id, 0.0) >= 1.0
 
 
 def _observation_file(chip_id: str) -> Path:
@@ -533,6 +561,8 @@ def start_analysis(chip_id: str = Query(min_length=1, max_length=120)):
         # eval-test of the frozen configuration with a line in test-log.md (D-010, D-033).
         raise HTTPException(403, "Снимок из test: анализ только через make eval-test / make all")
     _observation_file(chip_id)  # 404 when the raw observation is not available
+    if _s1_empty(chip_id):
+        raise HTTPException(422, S1_EMPTY_REASON)
     with _jobs_lock:
         _forget_old_jobs()
         active = [job for job in _jobs.values() if job["status"] in ("queued", "running")]
