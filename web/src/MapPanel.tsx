@@ -585,6 +585,8 @@ export default function MapPanel(props: Props) {
           // a free side of the point: close neighbours (A06/A09) both stay signed
           "text-variable-anchor": ["left", "right", "top", "bottom", "top-left", "bottom-left", "top-right", "bottom-right"],
           "text-radial-offset": 0.9,
+          // placement order A10 → A01: a label reaching over a later neighbour yields its side
+          "symbol-sort-key": ["-", 0, ["to-number", ["slice", ["get", "asset_id"], 1], 0]],
           "text-justify": "auto",
           "text-optional": true,
         },
