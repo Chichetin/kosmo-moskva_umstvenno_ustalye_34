@@ -246,6 +246,38 @@ def shipped_baseline_rule(path: Path | None = None) -> dict:
     return {"threshold_db": float(cfg["threshold_db"]), "fitted_on": cfg.get("fitted_on")}
 
 
+class SmpNet(torch.nn.Module):
+    """segmentation_models_pytorch model with the (N, H, W) logits contract of our UNet."""
+
+    def __init__(self, net: torch.nn.Module):
+        super().__init__()
+        self.net = net
+
+    def forward(self, x):
+        return self.net(x)[:, 0]
+
+
+SMP_ARCHS = ("smp_unet", "smp_unetpp", "smp_deeplabv3p")
+
+
+def build_net(cfg: dict, config: dict) -> torch.nn.Module:
+    """cfg["arch"]: "unet" (D-019, default) or "<smp_arch>:<encoder>", e.g. "smp_unet:resnet34".
+    smp models are an experiment only: the library lives in the GPU venv, not in uv.lock, so a
+    winning architecture would still need a dependency PR before it can ship (CPU inference)."""
+    arch = cfg.get("arch") or "unet"
+    if arch == "unet":
+        return build_model(config)
+    kind, _, encoder = arch.partition(":")
+    if kind not in SMP_ARCHS or not encoder:
+        raise ValueError(f"unknown arch {arch!r}; expected unet or one of {SMP_ARCHS} with :<encoder>")
+    import segmentation_models_pytorch as smp
+
+    cls = {"smp_unet": smp.Unet, "smp_unetpp": smp.UnetPlusPlus,
+           "smp_deeplabv3p": smp.DeepLabV3Plus}[kind]
+    return SmpNet(cls(encoder, encoder_weights="imagenet" if cfg.get("pretrained") else None,
+                      in_channels=len(config["features"]["channels"]) + 1, classes=1))
+
+
 def train_fold(x, y, m, cfg: dict, eval_epochs=EVAL_EPOCHS, device: str = "cpu", log=print):
     """One U-Net on the fold's training tensors (D-019 loop). Returns {epoch: state_dict} at
     the fixed `eval_epochs` (no selection) and steps per epoch."""
@@ -253,7 +285,7 @@ def train_fold(x, y, m, cfg: dict, eval_epochs=EVAL_EPOCHS, device: str = "cpu",
     channels = cfg["channels"]
     config = {"arch": {"base": cfg["base"], "dropout": cfg["dropout"]},
               "features": {"channels": channels}}
-    model = build_model(config).to(device)
+    model = build_net(cfg, config).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"])
     steps = max(1, (2 * len(x) * cfg.get("steps_mult", 1)) // cfg["batch"])
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=cfg["lr"], pct_start=0.1,
@@ -489,6 +521,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--weak-weight", type=float, default=None,
                    help=f"add weakly-labeled chips ({WEAK_LABEL}) of the fold's training events "
                         f"among {', '.join(WEAK_EVENTS)} with this loss weight (hand = 1)")
+    p.add_argument("--arch", default="unet",
+                   help="unet (D-019) or <smp_unet|smp_unetpp|smp_deeplabv3p>:<encoder> (experiment)")
+    p.add_argument("--pretrained", action="store_true",
+                   help="smp archs: ImageNet encoder weights (downloaded by the library)")
     p.add_argument("--chip-norm", action="store_true",
                    help="network input: subtract each chip's own median dB per band (baseline stays raw)")
     p.add_argument("--hand-frac", type=float, default=None,
@@ -561,7 +597,8 @@ def main(argv: list[str] | None = None) -> int:
     cfg |= {"epochs": args.epochs, "crop": args.crop, "seed": args.seed,
             "steps_mult": args.steps_mult, "tta": args.tta, "weak_weight": args.weak_weight,
             "finetune_epochs": args.finetune_epochs, "finetune_lr_mult": args.finetune_lr_mult,
-            "hand_frac": args.hand_frac, "chip_norm": args.chip_norm}
+            "hand_frac": args.hand_frac, "chip_norm": args.chip_norm,
+            "arch": args.arch, "pretrained": args.pretrained}
     shipped = shipped_baseline_rule()
     only = {e.strip() for e in args.events.split(",") if e.strip()}
     command = replay_command(args)

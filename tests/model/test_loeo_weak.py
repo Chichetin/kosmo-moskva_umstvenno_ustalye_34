@@ -116,3 +116,19 @@ def test_chip_median_norm_shifts_each_band_and_keeps_nan_and_label():
     assert np.isnan(out[0, 1, 0]) and np.isnan(out[1, 1, 1]) and lab2 is lab
     assert np.allclose(out[0] - np.nanmedian(s1[0]) * 0, s1[0] - np.nanmedian(s1[0]), equal_nan=True)
     assert not np.shares_memory(out, s1)  # the raw reader's array (baseline) is not modified
+
+
+def test_build_net_default_is_d019_unet_and_rejects_unknown_arch():
+    from floodvalue.model.unet.net import UNet
+    config = {"arch": {"base": 16, "dropout": 0.1}, "features": {"channels": ["vv", "vh", "vv_minus_vh"]}}
+    assert isinstance(L.build_net({}, config), UNet)
+    assert isinstance(L.build_net({"arch": "unet"}, config), UNet)
+    with pytest.raises(ValueError, match="unknown arch"):
+        L.build_net({"arch": "resnet"}, config)
+
+
+def test_smp_net_has_the_unet_logits_shape():
+    pytest.importorskip("segmentation_models_pytorch")
+    config = {"arch": {"base": 16}, "features": {"channels": ["vv", "vh", "vv_minus_vh"]}}
+    net = L.build_net({"arch": "smp_unet:resnet18", "pretrained": False}, config)
+    assert net(torch.randn(2, 4, 64, 64)).shape == (2, 64, 64)
