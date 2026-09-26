@@ -36,7 +36,7 @@
   }
   async function api(url, body) {
     const r = await fetch(url, body === undefined ? {} : { method: "POST",
-      headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      headers: { "Content-Type": "application/json", "X-FloodValue-Media": "1" }, body: JSON.stringify(body) });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw Object.assign(new Error(typeof data.detail === "string" ? data.detail : `Ошибка ${r.status}`), { status: r.status });
     return data;
