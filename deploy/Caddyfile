@@ -1,0 +1,11 @@
+# One domain for the operator UI, the eyewitness form and media monitoring (#174).
+# Replace flood.example.org with the real domain; Caddy gets the TLS certificate itself.
+# The app listens on 127.0.0.1:8000 only; Caddy adds X-Forwarded-For/Proto, which the app trusts
+# from 127.0.0.1 (real client IP for rate limits, Secure cookie over https).
+flood.example.org {
+	encode zstd gzip
+	request_body {
+		max_size 30MB
+	}
+	reverse_proxy 127.0.0.1:8000
+}

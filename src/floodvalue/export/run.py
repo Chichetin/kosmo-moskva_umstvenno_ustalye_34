@@ -286,16 +286,11 @@ def export(chip_id: str, work: Path, dest: Path | None = None,
     proxy = assemble.proxy_check(summary, summary_rel if part != "none" else "", chip_id, part,
                                  prediction, models_match=models_match)
     budget_arg = assemble.budget_label(budget)
-    reproduce = [
-        f"git checkout {commit}",
-        "make setup",
-        "make data",
-        f"make all CHIP={chip_id} BUDGET={budget_arg}",
-        f"make validate OUT={dest}",
-        ("# по этапам: make predict CHIP=… (пока нет floodvalue.model.predict — "
-         "uv run --frozen python -m floodvalue.baseline.predict --chip …), make assets CHIP=…, "
-         "make procure CHIP=… BUDGET=…, make export CHIP=… BUDGET=…"),
-    ]
+    # the default set lives in $FLOODVALUE_OUTPUT_DIR (outputs/): no machine-specific path
+    out_arg = (f"${{FLOODVALUE_OUTPUT_DIR:-outputs}}/{dest.name}"
+               if dest.resolve().parent == output_dir().resolve() else str(dest))
+    reproduce = assemble.reproduce_commands(commit, chip_id, budget_arg, out_arg,
+                                            prediction.get("method"))
     meta = assemble.run_metadata(
         run_id=run_id, chip_id=chip_id, event_id=event_id, event_date=str(event_date),
         created_at=datetime.now(UTC).isoformat(timespec="seconds"), commit=commit,

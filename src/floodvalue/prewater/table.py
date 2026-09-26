@@ -91,7 +91,7 @@ def render_md(groups: dict[str, dict]) -> str:
         "- **IoU с JRC** — только диагностика: JRC набора, вероятно, собран и по данным после "
         "событий 2016–2018 (CLAUDE.md), поэтому он не эталон и не вход.",
         "",
-        "Ограничения слоя — `pre_event_water.json` (`caveats`) и D-053.",
+        "Ограничения слоя — `pre_event_water.json` (`caveats`) и D-058.",
         "",
     ]
     return "\n".join(lines)

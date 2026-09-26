@@ -15,6 +15,7 @@ module's share; `budget_rub`, `base_rate_rub_km2` belong to procurement/P18b) so
 """
 
 import json
+from decimal import Decimal
 
 from floodvalue.assets.portfolio import (
     UNCERTAINTY_NAME,
@@ -79,6 +80,11 @@ def _baseline(assets: list[Asset], loss_rows: list[dict]) -> dict[str, dict]:
             "asset_class": a.asset_class,
         }
     return base
+
+
+def _kopeck_sum(values) -> float:
+    """Exact decimal sum of kopeck EL (None skipped): no float tail in changed_inputs_json."""
+    return float(sum((Decimal(repr(v)) for v in values if v is not None), Decimal(0)))
 
 
 def _clip01(x: float) -> float:
@@ -208,8 +214,8 @@ def _scenario_row(
 
     base_els = {aid: (expected_loss(b["p"], b["V"], b["q"]) if b["status"] == "ok" else None)
                 for aid, b in base.items()}
-    base_total = sum(v for v in base_els.values() if v is not None)
-    new_total = sum(v for v in new_els.values() if v is not None)
+    base_total = _kopeck_sum(base_els.values())
+    new_total = _kopeck_sum(new_els.values())
     moves = order_moves(_inspection(base, {}, base_els, {aid: b["rank"] for aid, b in base.items()}),
                         _inspection(base, overrides, new_els, new_ranks))
 

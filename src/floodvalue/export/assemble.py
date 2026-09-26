@@ -12,7 +12,7 @@ from decimal import Decimal
 from typing import Any
 
 from floodvalue.contracts import files as F
-from floodvalue.contracts.geo import round_half_up
+from floodvalue.contracts.geo import product_half_up, round_half_up
 
 SPLIT_PARTS = ("train", "dev", "validation", "test")
 METRICS_FIELDS = ["method", "split", "event", "iou", "f1", "precision", "recall", "tp", "fp",
@@ -27,6 +27,27 @@ def budget_label(budget_rub: float) -> str:
     """5000 -> '5000', 2500.5 -> '2500.5' (no exponent, no trailing zeros)."""
     d = Decimal(str(budget_rub)).normalize()
     return format(d.quantize(Decimal(1)) if d == d.to_integral_value() else d, "f")
+
+
+def reproduce_commands(commit: str, chip_id: str, budget: str, out: str,
+                       method: str | None) -> list[str]:
+    """run_metadata.reproduce: the Makefile path (`make all`) and its stages, same order.
+
+    `method` is prediction.json "method"; a plain name (unet, baseline) is passed as
+    FLOODVALUE_METHOD so `make predict`/`make all` redo the same p-raster.
+    """
+    env = f"FLOODVALUE_METHOD={method} " if method and method.isidentifier() else ""
+    return [
+        f"git checkout {commit}",
+        "make setup",
+        "make data",
+        f"{env}make all CHIP={chip_id} BUDGET={budget}",
+        f"make validate OUT={out}",
+        (f"# по этапам, как в make all: {env}make predict CHIP={chip_id}; "
+         f"uv run --frozen python -m floodvalue.baseline.predict --chip {chip_id} --mask-only; "
+         f"make assets CHIP={chip_id}; make procure CHIP={chip_id} BUDGET={budget}; "
+         f"make export CHIP={chip_id} BUDGET={budget}; make validate OUT={out}"),
+    ]
 
 
 def make_run_id(chip_id: str, budget_rub: float, short_commit: str) -> str:
@@ -95,7 +116,8 @@ PARAM_CLIP = {"p_flood": True, "asset_value_rub": False, "vulnerability_coef": T
 def perturbed_el(assets: dict[str, dict], loss: dict[str, dict], changed: dict) -> dict[str, float]:
     """EL of every `ok` asset under one assets_sensitivity scenario (D-028 rules):
     x' = x * k for the scenario's parameter, clipped to [0, 1] for p and q; `scope` is
-    `portfolio` (all ok assets) or `single_asset` (`asset_id`)."""
+    `portfolio` (all ok assets) or `single_asset` (`asset_id`). Each EL to the kopeck,
+    ROUND_HALF_UP of the exact decimal p*V*q, as assets writes it (#127)."""
     param = next(k for k in PARAM_CLIP if k in changed)
     k = float(changed[param]["factor"])
     targets = ({changed["asset_id"]} if changed.get("scope") == "single_asset"
@@ -108,7 +130,8 @@ def perturbed_el(assets: dict[str, dict], loss: dict[str, dict], changed: dict) 
             x[param] *= k
             if PARAM_CLIP[param]:
                 x[param] = min(1.0, max(0.0, x[param]))
-        out[aid] = x["p_flood"] * x["asset_value_rub"] * x["vulnerability_coef"]
+        out[aid] = product_half_up(
+            [x["p_flood"], x["asset_value_rub"], x["vulnerability_coef"]], "0.01")
     return out
 
 

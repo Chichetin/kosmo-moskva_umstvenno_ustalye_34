@@ -90,12 +90,12 @@ python3 scripts/download_sen1floods11.py            # HandLabeled + perm_water +
 `make check` (`test` + `hooks-test` + `validate`) — обязателен перед каждым push; без
 `OUT=` `validate` проверяет самый свежий комплект в `outputs/`, если он есть, иначе
 эталон `tests/fixtures/good` (12/12); `make validate OUT=<комплект>` — конкретный
-собранный комплект. Чистый клон GitVerse `6fe66f0`: `uv sync --frozen && uv run --frozen
-pytest` → 473 passed, `make all` → validate 12/12 (`docs/verification/clean-clone-gitverse.md`).
-Число 473 относится к commit `6fe66f0` (прогон из чистого клона), 646 ниже — к `89c8e4f`
-(26.09); текущее число — вывод `make check` на нужном commit.
-На commit `89c8e4f` (26.09) `make check` → 646 passed, 4 skipped, `test-hooks.sh` OK,
-`validate` 12/12. Число тестов растёт с каждым PR.
+собранный комплект. Чистый клон GitVerse `93c27f2` (26.09, прогон 4): `uv sync --frozen && uv run
+--frozen pytest` → 898 passed, 1 skipped; `make all`, `make all BUDGET=20000` и
+`make all CHIP=Nigeria_1095404` → validate 12/12; sha256 `flood_probability.tif`/`flood_mask.tif`
+и порог 0,37 при смене бюджета не меняются; `make app` отвечает
+(`docs/verification/clean-clone-gitverse.md`). Число тестов относится к этому commit и растёт
+с каждым PR; текущее — вывод `make check` на нужном commit.
 
 ## Интерфейс оператора
 
@@ -146,6 +146,18 @@ D-049); B сверх бюджета помечена контрфактичес�
 и `cd web && npm install && npm run dev` в другом, затем откройте
 `http://127.0.0.1:5173`. Скриншоты текущей сборки (headless Chromium, комплект `Sri-Lanka_713926`):
 [сцена](docs/verification/ui-scene.png), [анализ](docs/verification/ui-analysis.png).
+
+**Митрандир — интерфейс оператора FloodValue.** Один адрес с формой очевидца и
+сообщениями СМИ: `make site` поднимает на
+`http://127.0.0.1:8000` интерфейс оператора (`/`), форму очевидца (`/report`) и страницу
+аналитика (`/media/analyst`); слой «Сообщения» для карты — `/api/media/map`. Развёртывание на
+домене (Caddy, systemd, токен аналитика) — `deploy/README.md` (D-054).
+
+**Анализ новой сцены из интерфейса:** для наблюдения из каталога без готового комплекта
+`POST /api/analyses?chip_id=<чип>` ставит в очередь те же этапы, что `make all` (predict →
+маска baseline → assets → procure → export → validate), по одной сцене за раз; статус и шаг —
+`GET /api/analyses/<job_id>`. Чипы test запечатаны до `eval-test` (403); бюджет — из
+`configs/run.yaml`, другой бюджет пересчитывается в интерфейсе без переобучения.
 
 ## Основной метод (критерий 3)
 

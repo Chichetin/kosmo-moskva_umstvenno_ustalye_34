@@ -50,7 +50,7 @@ def public_dns(monkeypatch):
 
 
 def test_gdacs_saved_answer_parses():
-    data = json.loads((FIXTURES / "gdacs_live_2026-09-26.json").read_text())
+    data = json.loads((FIXTURES / "gdacs_live_2026-09-26.json").read_text(encoding="utf-8"))
     items = [gdacs_item(f) for f in data["features"]]
     assert items and all(i["structured"]["kind"] == "bulletin" for i in items)
     s = items[0]["structured"]

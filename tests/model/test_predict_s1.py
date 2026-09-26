@@ -44,7 +44,8 @@ def fake_method(tmp_path, monkeypatch):
     models = tmp_path / "models"
     (models / "half").mkdir(parents=True)
     (models / "half" / "config.json").write_text(json.dumps(
-        {"threshold": THRESHOLD, "threshold_status": "fixed", "weights_sha256": "abc"}))
+        {"threshold": THRESHOLD, "threshold_status": "fixed", "weights_sha256": "abc"}),
+            encoding="utf-8")
     monkeypatch.setattr(predict, "MODELS_DIR", models)
     monkeypatch.setitem(predict.METHODS, "half", __name__)
     monkeypatch.setenv("FLOODVALUE_METHOD", "half")

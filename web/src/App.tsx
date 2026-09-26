@@ -8,8 +8,9 @@ import {
   Search,
   X,
 } from "lucide-react";
+import Backdrop from "./Backdrop";
 import MapPanel from "./MapPanel";
-import type { Feature, Plan, SceneSummary, Session } from "./types";
+import type { Feature, MediaMap, Plan, SceneSummary, Session } from "./types";
 
 const money = (value: unknown) =>
   value == null || value === ""
@@ -29,6 +30,41 @@ const dateTimeUtc = (value: string | null | undefined) =>
     : "—";
 const pct = (value: number | null | undefined) =>
   value == null ? "—" : `${Math.round(value * 100)}%`;
+function useCountUp(value: number | null | undefined, enabled: boolean) {
+  const [shown, setShown] = useState<number | null>(value ?? null);
+  const lastShown = useRef<number | null>(value ?? null);
+  const hasAnimated = useRef(false);
+  useEffect(() => {
+    if (value == null) {
+      setShown(null);
+      lastShown.current = null;
+      hasAnimated.current = false;
+      return;
+    }
+    if (!enabled || window.matchMedia("(prefers-reduced-motion: reduce)").matches || value === 0) {
+      setShown(value);
+      lastShown.current = value;
+      if (enabled && value !== 0) hasAnimated.current = true;
+      return;
+    }
+    const from = hasAnimated.current ? (lastShown.current ?? 0) : 0;
+    hasAnimated.current = true;
+    if (from === value) return;
+    let frame = 0;
+    const start = performance.now();
+    setShown(from);
+    const tick = (now: number) => {
+      const progress = Math.min((now - start) / 850, 1);
+      const next = from + (value - from) * (1 - Math.pow(1 - progress, 3));
+      setShown(next);
+      lastShown.current = next;
+      if (progress < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [value, enabled]);
+  return shown;
+}
 const date = (value: string | null | undefined) =>
   value
     ? new Intl.DateTimeFormat("ru-RU", {
@@ -147,6 +183,28 @@ export default function App() {
   const [panelOpen, setPanelOpen] = useState(true);
   const [overviewRequest, setOverviewRequest] = useState(0);
   const [mapIssue, setMapIssue] = useState<string | null>(null);
+  // «Сообщения» (/api/media/map): null — the layer is unavailable here (media not served,
+  // or closed to this viewer); the toggle is then hidden rather than shown broken.
+  const [messages, setMessages] = useState<MediaMap | null>(null);
+  const [showMessages, setShowMessages] = useState(true);
+  useEffect(() => {
+    let stopped = false;
+    const load = () =>
+      fetch("/api/media/map", { credentials: "same-origin" })
+        .then((response) => (response.ok ? (response.json() as Promise<MediaMap>) : null))
+        .catch(() => null)
+        .then((data) => {
+          if (!stopped) setMessages(data);
+        });
+    load();
+    const timer = window.setInterval(load, 60_000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+  const messageCount =
+    (messages?.events.features.length ?? 0) + (messages?.reports.features.length ?? 0);
   const [zoneView, setZoneView] = useState<"plan" | "all">("plan");
   const scene = scenes.find((item) => item.chip_id === route.chipId) ?? null;
   const activeSession = scene?.run_id === session?.run_id ? session : null;
@@ -295,17 +353,21 @@ export default function App() {
     (sum, item) => sum + Number(item.properties.expected_loss_rub || 0),
     0,
   );
+  const shownLoss = useCountUp(activeSession ? totalLoss : null, !mapActive && !!activeSession);
+  const shownCost = useCountUp(chosen?.data_cost_rub, !mapActive && !!activeSession);
+  const shownCoverage = useCountUp(chosen?.coverage_share, !mapActive && !!activeSession);
   const exportUrl = activeSession
     ? `/api/download?run_id=${encodeURIComponent(activeSession.run_id)}`
     : null;
   return (
     <div className="app">
+      <Backdrop paused={!mapActive || !!scene} />
       <header className={`topbar ${mapActive ? "topbar-map" : "topbar-analysis"}`}>
-        <button className="brand" onClick={overview} aria-label="Меридиан — обзор Земли">
+        <button className="brand" onClick={overview} aria-label="Митрандир — обзор Земли">
           <svg className="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M3.5 18.5V5.5L12 14l8.5-8.5v13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          Меридиан
+          Митрандир
         </button>
         <span className="top-divider" />
         <nav className="top-nav">
@@ -345,6 +407,8 @@ export default function App() {
       <main className="workspace">
         <div
           className={`map-screen ${mapActive ? "" : "map-hidden"} ${scene ? "scene-mode" : ""} ${baseMap === "optical" ? "optical-mode" : ""}`}
+          aria-hidden={!mapActive}
+          inert={!mapActive}
         >
           <MapPanel
             scenes={scenes}
@@ -353,6 +417,8 @@ export default function App() {
             plan={plan}
             baseMap={baseMap}
             visibleLayers={layers}
+            messages={messages}
+            showMessages={showMessages}
             overlayOpacity={opacity}
             selectedAsset={assetId}
             selectedZone={zoneId}
@@ -421,9 +487,10 @@ export default function App() {
                         : "Нет доступных наблюдений. Добавьте исходные данные или готовый комплект."}
                     </p>
                   )}
-                  {filtered.map((item) => (
+                  {filtered.map((item, index) => (
                     <button
                       key={item.chip_id}
+                      style={{ animationDelay: `${Math.min(index, 8) * 42 + 80}ms` }}
                       role="option"
                       aria-selected={scene?.chip_id === item.chip_id}
                       onClick={() => selectScene(item)}
@@ -435,13 +502,9 @@ export default function App() {
                           <code>{item.chip_id}</code>
                         </small>
                       </span>
-                      <em>
-                        {item.fixture
-                          ? "Тест"
-                          : item.status === "analyzed"
-                            ? "Анализ"
-                            : ""}
-                      </em>
+                      {(item.fixture || item.status === "analyzed") && (
+                        <em>{item.fixture ? "Тест" : "Анализ"}</em>
+                      )}
                     </button>
                   ))}
                   {!filtered.length && scenes.length > 0 && (
@@ -472,6 +535,18 @@ export default function App() {
                 Спутник
               </button>
             </div>
+            {messages && (
+              <div className="basemap-switch media-switch">
+                <button
+                  className={showMessages ? "active" : ""}
+                  onClick={() => setShowMessages(!showMessages)}
+                  aria-pressed={showMessages}
+                  title={`События из СМИ и обращения очевидцев: ${messages.events.features.length} событий, ${messages.reports.features.length} обращений ждут модерации. Повод проверить территорию — не входит в p, ущерб и план.`}
+                >
+                  Сообщения · {messageCount}
+                </button>
+              </div>
+            )}
           </div>
           {scene && panelOpen && (
             <aside className="context-panel">
@@ -741,8 +816,7 @@ export default function App() {
             </div>
           )}
         </div>
-        {!mapActive && (
-          <div className="analysis-screen">
+          <div className={`analysis-screen ${mapActive ? "analysis-hidden" : ""}`} aria-hidden={mapActive} inert={mapActive}>
             <div className="analysis-head">
               <button
                 onClick={() =>
@@ -782,15 +856,15 @@ export default function App() {
                   </div>
                   <div>
                     <span>Ожидаемый ущерб</span>
-                    <strong>{money(totalLoss)} ₽</strong>
+                    <strong>{money(shownLoss)} ₽</strong>
                   </div>
                   <div>
                     <span>План C · данные</span>
-                    <strong>{money(chosen?.data_cost_rub)} ₽</strong>
+                    <strong>{money(shownCost)} ₽</strong>
                   </div>
                   <div>
                     <span>Охват ущерба</span>
-                    <strong>{pct(chosen?.coverage_share)}</strong>
+                    <strong>{pct(shownCoverage)}</strong>
                   </div>
                   <div>
                     <span>Цена ошибки решения · сценарий</span>
@@ -1064,7 +1138,6 @@ export default function App() {
               </div>
             )}
           </div>
-        )}
       </main>
     </div>
   );

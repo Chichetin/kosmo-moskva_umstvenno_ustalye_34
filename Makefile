@@ -16,7 +16,7 @@ GPU_VENV := $(HOME)/.cache/floodvalue-gpu
 endif
 GPU_PY := $(GPU_VENV)/bin/python -m floodvalue
 
-.PHONY: setup test hooks-test check data data-qc split baseline train calibrate predict assets procure export validate app web eval-test all gpu-env release
+.PHONY: setup test hooks-test check data data-qc split baseline train calibrate predict assets procure export validate app site web eval-test all gpu-env release
 
 setup:            ## окружение строго по lockfile + git-хук стража данных
 	uv sync --frozen
@@ -32,6 +32,9 @@ hooks-test:
 	bash .claude/hooks/test-hooks.sh
 
 check: test hooks-test validate   ## полный прогон перед push
+
+site:            ## один адрес: оператор /, форма очевидца /report, СМИ /media и /api/media (#174); OUT=<комплект>
+	uv run --frozen python scripts/serve_site.py $(if $(OUT),--out $(OUT))
 
 web:             ## пересобрать React-бандл; для make app Node не требуется
 	cd web && npm ci && npm run build
