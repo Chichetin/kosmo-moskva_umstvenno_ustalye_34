@@ -291,9 +291,12 @@ def sensitivity(catalog: Mapping[str, Any], cov: Mapping[str, list[str]], eligib
     base = compute_plan(catalog, cov, eligible, loss, budget, cfg, as_of, **kw)
     rows = []
 
-    def unc_note(c):
-        return (f"остаточная неопределённость {c['uncertainty_status']} "
-                f"{'' if c['residual_uncertainty'] is None else round(c['residual_uncertainty'], 3)}"
+    def unc_note(c, ids):
+        val = '' if c['residual_uncertainty'] is None else round(c['residual_uncertainty'], 3)
+        if not ids:  # nothing bought: the residual is the initial one, as for A
+            return (f"остаточная неопределённость {val}: закупки нет — неопределённость исходная "
+                    f"(как A, baseline) (без новых наблюдений фактическое снижение не заявляется)")
+        return (f"остаточная неопределённость {c['uncertainty_status']} {val}"
                 f" (без новых наблюдений фактическое снижение не заявляется)")
 
     def row(sid, strategy, changed, res, head, tail=""):
@@ -313,7 +316,7 @@ def sensitivity(catalog: Mapping[str, Any], cov: Mapping[str, list[str]], eligib
                 f"+[{', '.join(add)}] −[{', '.join(rem)}]; {fit}; decision_cost "
                 f"{cmp_['decision_cost_rub']} руб.; уникально покрытый EL "
                 f"{cmp_['covered_expected_loss_rub']:.2f} руб. ({d_el:+.2f} к базе); "
-                f"{unc_note(cmp_)}{tail}")
+                f"{unc_note(cmp_, ids)}{tail}")
         rows.append({"scenario_id": sid, "strategy": strategy,
                      "changed_inputs_json": json.dumps(changed, ensure_ascii=False, sort_keys=True),
                      "decision_cost_rub": cmp_["decision_cost_rub"],
@@ -347,11 +350,22 @@ def sensitivity(catalog: Mapping[str, Any], cov: Mapping[str, list[str]], eligib
             res = compute_plan(catalog, cov_d, elig_d, loss, budget, cfg, as_of, **kw)
             changed = {"decision_deadline": deadline.isoformat(),
                        "deadline_hours_after_decision": int(h)}
-            head = (f"срок решения decision_at + {int(h)} ч = {deadline.isoformat()}: пригодных "
-                    f"позиций {len(elig_d)} (available_at ≤ срока"
-                    + (", как в базе)" if elig_d == set(eligible) else ")"))
+            cloudy = sum(zones.exclusion_reason(f["properties"], deadline) == zones.CLOUD_NOTE
+                         for f in catalog["features"])
+            head = (f"срок решения decision_at + {int(h)} ч = {deadline.isoformat()} (сроки "
+                    f"доступности предложений сценарные, D-038 — вывод о сроке следует из этого "
+                    f"допущения): пригодных позиций {len(elig_d)} (available_at ≤ срока"
+                    + (", как в базе" if elig_d == set(eligible) else "")
+                    + (f"; ещё {cloudy} доступны к сроку, но охвата не дают (облачность не "
+                       f"подтверждена)" if cloudy else "") + ")")
             for s in "CB":
-                row(f"deadline_+{int(h)}h", s, changed, res, head, same_map)
+                extra = ""
+                if s == "B" and not res["plans"]["B"]:
+                    wide = next((f["properties"].get("available_at") for f in catalog["features"]
+                                 if f["properties"]["candidate_id"] == "W-CHIP"), None)
+                    extra = (f"; правило B (W-CHIP) к сроку не исполнимо — W-CHIP доступна "
+                             f"{wide or 'срок не известен'}")
+                row(f"deadline_+{int(h)}h", s, changed, res, head + extra, same_map)
     social_ids = sorted(social_ids)
     if social_ids and not list(required):
         res = compute_plan(catalog, cov, eligible, loss, budget, cfg, as_of,

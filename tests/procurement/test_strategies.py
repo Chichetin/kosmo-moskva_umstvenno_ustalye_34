@@ -439,3 +439,27 @@ def test_coverage_at_only_assessed_assets():
     cov, elig = strategies.coverage_at(cat, {"A02"}, DEADLINE)
     assert cov["Z-A01"] == [] and cov["Z-A02"] == ["A02"]
     assert "Z-A01" in elig and "W-CHIP-OC" not in elig
+
+
+def test_deadline_rows_name_scenario_timing_and_why():
+    """Скептик D-047: сроки доступности — сценарные; пустая B к сроку объясняет, когда
+    доступна W-CHIP; более поздний срок называет доступную, но не дающую охвата оптику."""
+    rows = sens_rows(budgets=[], rates=[], decision_at=T0, deadline_hours=[6, 48])
+    assert len(rows) == 4
+    for r in rows:
+        assert "сроки доступности предложений сценарные" in r["interpretation"]
+    b6 = _of(rows, "deadline_+6h", "B")[0]["interpretation"]
+    assert "правило B (W-CHIP) к сроку не исполнимо — W-CHIP доступна 2017-05-30T21:00:00" in b6
+    c48 = _of(rows, "deadline_+48h", "C")[0]["interpretation"]
+    assert "ещё 12 доступны к сроку, но охвата не дают (облачность не подтверждена)" in c48
+    assert "не дают" not in _of(rows, "deadline_+6h", "C")[0]["interpretation"]
+
+
+def test_empty_plan_uncertainty_is_initial_not_scenario():
+    """Скептик D-047: у пустого плана остаточная неопределённость = исходная (как A)."""
+    rows = sens_rows(budgets=[Decimal("0"), Decimal("5000")], rates=[])
+    empty = _of(rows, "budget_0.00", "C")[0]["interpretation"]
+    assert "закупки нет — неопределённость исходная (как A, baseline)" in empty
+    assert "scenario" not in empty.split("бюджета 0.00")[1].split("(без новых")[0]
+    full = _of(rows, "budget_5000.00", "C")[0]["interpretation"]
+    assert "остаточная неопределённость scenario" in full
