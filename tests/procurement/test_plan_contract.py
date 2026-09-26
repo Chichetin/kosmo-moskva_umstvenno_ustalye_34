@@ -81,4 +81,4 @@ def test_csv_writer_leaves_non_finite_numbers_empty(tmp_path):
     run._write_csv(path, ["a", "b", "c", "d"],
                    [{"a": float("nan"), "b": float("inf"), "c": -float("inf"), "d": 1.5}])
     assert path.read_text(encoding="utf-8") == "a,b,c,d\n,,,1.5\n"
-    read_csv(path)  # the strict contract reader accepts it
+    assert read_csv(path)[2] == []  # the strict contract reader finds no errors
