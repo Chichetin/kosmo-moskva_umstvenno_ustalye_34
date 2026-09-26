@@ -10,7 +10,8 @@ narrow. Names that open raw files or serve only eval-test are further limited to
 that use them (FILES): e.g. `data.io.layer_path` could reach LabelHand around the sealed
 `load_label` (D-010, D-015), so a new caller must be a reviewed line here.
 A `python -m <module>` command run as a subprocess (CLI and file, D-005) is allowed as a
-string literal only, through CLI_ONLY; importing the same module stays a violation.
+string literal only, through CLI_ONLY; importing the same module with import syntax stays a
+violation (an `importlib.import_module` of that literal in the same file would pass: D-057).
 
 Not seen by the walk (D-057): what a caller does with a module it got from a registry through
 importlib (calibration -> `model.predict.METHODS`, bounded by D-041; model.eval_test ->

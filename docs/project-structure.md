@@ -62,7 +62,8 @@
     `cli.main`.
 - Что тест не видит (D-057): что вызывающий делает с модулем, полученным из реестра через
   `importlib` (calibration → модули методов по `METHODS` — граница D-041; `eval_test` →
-  `baseline.predict`), имена модулей, собранные f-строкой, и реэкспорт имени из `FILES`
+  `baseline.predict`), имена модулей, собранные f-строкой, `importlib.import_module` строки
+  из `CLI_ONLY` в том же файле и реэкспорт имени из `FILES`
   через другой файл своего модуля (импорт внутри своего модуля разрешён всегда). Узкие
   тесты `tests/baseline/test_baseline_imports.py`,
   `tests/calibration/test_calibration_imports.py`, `tests/context/test_firewall.py` (D-042),
