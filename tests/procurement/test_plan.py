@@ -72,6 +72,29 @@ def test_budget_change_keeps_inputs(tmp_path):
     assert hashlib.sha256((tmp_path / "candidate_orders.geojson").read_bytes()).hexdigest() == cat_hash
 
 
+def test_plan_cache_same_result_and_fast(tmp_path):
+    """Кеш контекста: тот же dict, вторая смена бюджета < 1 с, правка входа сбрасывает кеш (#105)."""
+    import os
+    import time
+    _write_run_dir(tmp_path)
+    prun._CONTEXT_CACHE.clear()
+    cold = {b: procurement.plan(tmp_path, b) for b in (1000, 20000)}
+    prun._CONTEXT_CACHE.clear()
+    procurement.plan(tmp_path, 5000)
+    t = time.perf_counter()
+    warm = procurement.plan(tmp_path, 20000)
+    assert time.perf_counter() - t < 1.0
+    assert warm == cold[20000]
+    assert procurement.plan(tmp_path, 1000) == cold[1000]
+    # changed input invalidates the cache
+    loss = tmp_path / "asset_loss.csv"
+    loss.write_text(",no_data".join(loss.read_text(encoding="utf-8").rsplit(",ok", 1)),
+                    encoding="utf-8")
+    st = loss.stat()
+    os.utime(loss, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
+    assert procurement.plan(tmp_path, 20000) != warm
+
+
 def test_cli_procure_writes_contract_files(tmp_path):
     _write_run_dir(tmp_path)
     assert main(["procure", "--budget", "5000", "--out", str(tmp_path)]) == 0

@@ -146,6 +146,19 @@ def test_late_and_context_zones_do_not_cover():
     assert "A03" in cov["Z-A03"] and "A03" in cov["Z-A03-S3"]
 
 
+def test_excluded_positions_have_empty_covers():
+    """У исключённых позиций охват пуст; объекты внутри контура — отдельным полем (#105)."""
+    cat = by_id(full_catalog())
+    for cid in ("W-CHIP-OL", "W-CHIP-AR", "W-CHIP-OC", "W-CHIP-OP", "Z-A03-O05"):
+        p = cat[cid]["properties"]
+        assert p["exclusion_reason"] is not None
+        assert p["covers_asset_ids"] == []
+        assert p["inside_geometry_asset_ids"] == cat[p["geometry_id"]]["properties"][
+            "covers_asset_ids"]
+    assert cat["W-CHIP"]["properties"]["covers_asset_ids"] == sorted(a["asset_id"] for a in ASSETS)
+    assert "inside_geometry_asset_ids" not in cat["W-CHIP"]["properties"]
+
+
 def test_el_clusters_share_and_link():
     high, clusters = zones.el_clusters(ASSETS, LOSS)
     # 5e6 + 4e6 + 3e6 = 12e6 из 12,7e6 (≥ 90 %) — три объекта высокого EL
