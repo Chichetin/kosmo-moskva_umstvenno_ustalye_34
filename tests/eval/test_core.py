@@ -41,7 +41,7 @@ def test_paired_bootstrap_needs_same_chips():
 def test_reliability_ece_brier_by_hand():
     p = np.array([0.05, 0.15, 0.95, 1.0])
     y = np.array([0, 1, 1, 1])
-    c = C.reliability_counts(p, y)
+    c = C.reliability_counts(p, y, n_bins=10)
     assert c["n"].tolist() == [1, 1, 0, 0, 0, 0, 0, 0, 0, 2]   # p = 1 in the last bin
     # (|0.05 − 0| + |0.15 − 1| + |1.95 − 2|) / 4
     assert C.ece(c) == pytest.approx(0.2375)
@@ -49,6 +49,62 @@ def test_reliability_ece_brier_by_hand():
     rows = C.reliability_table(c)
     assert rows[9]["mean_p"] == pytest.approx(0.975) and rows[9]["observed"] == 1.0
     assert math.isnan(rows[5]["mean_p"])
+    assert C.mce(c) == pytest.approx(0.85)                     # bin [0.1; 0.2): |0.15 − 1|
+
+
+def test_ece_uses_the_calibration_bins_and_matches_calibrator_ece():
+    """#150: eval-test ECE is the calibration's ECE (15 bins, `calibration.run.N_BINS`)."""
+    from floodvalue.calibration import calibrator as CAL
+    from floodvalue.calibration import run as CAL_RUN
+
+    assert C.N_BINS == CAL_RUN.N_BINS == 15
+    rng = np.random.default_rng(1)
+    p = rng.random(5000)
+    p[:7] = [0.0, 1.0, 1 / 15, 2 / 15, 14 / 15, 0.5, 0.9999999]          # edges and ends
+    y = rng.random(5000) < 0.5 + 0.45 * np.sin(20 * p)       # non-monotone miscalibration
+    c = C.reliability_counts(p, y)
+    assert len(c["n"]) == 15
+    assert C.ece(c) == pytest.approx(CAL.ece(p, y, 15), rel=1e-12, abs=1e-15)
+    assert C.log_loss(c) == pytest.approx(CAL.log_loss(p, y), rel=1e-12)
+    assert C.brier(c) == pytest.approx(CAL.brier(p, y), rel=1e-12)
+    assert C.ece(c) != pytest.approx(C.ece(C.reliability_counts(p, y, n_bins=10)), rel=1e-6)
+
+
+def test_log_loss_by_hand_clipped_and_accumulated():
+    a = C.reliability_counts(np.array([0.8, 0.3]), np.array([1, 0]))
+    assert C.log_loss(a) == pytest.approx(-(math.log(0.8) + math.log(0.7)) / 2)
+    b = C.reliability_counts(np.array([0.0]), np.array([1]))            # clipped at 1e-6
+    assert C.log_loss(b) == pytest.approx(-math.log(1e-6))
+    both = C.add_reliability(C.add_reliability(None, a), b)
+    assert C.log_loss(both) == pytest.approx(
+        -(math.log(0.8) + math.log(0.7) + math.log(1e-6)) / 3)
+    s = C.prob_summary(both)
+    assert s["n_pixels"] == 3 and s["mean_p"] == pytest.approx(1.1 / 3)
+    assert s["water_share"] == pytest.approx(2 / 3)
+    assert math.isnan(C.log_loss(C.reliability_counts(np.array([]), np.array([]))))
+    assert math.isnan(C.mce(C.reliability_counts(np.array([]), np.array([]))))
+
+
+def test_bootstrap_calibration_by_chips():
+    one = C.reliability_counts(np.array([0.2, 0.9]), np.array([0, 1]))
+    b = C.bootstrap_calibration([one], n=50, seed=3)
+    assert b["ece_ci95"] == pytest.approx([C.ece(one)] * 2)          # one chip: no spread
+    assert b["log_loss_ci95"] == pytest.approx([C.log_loss(one)] * 2)
+    assert b["n_used"] == 50 and b["n_chips"] == 1
+    good = C.reliability_counts(np.array([0.1, 0.9]), np.array([0, 1]))
+    bad = C.reliability_counts(np.array([0.9, 0.1]), np.array([0, 1]))
+    b2 = C.bootstrap_calibration([good, bad], n=400, seed=3)
+    both = C.add_reliability(C.add_reliability(None, good), bad)
+    lo, hi = b2["ece_ci95"]
+    assert lo == pytest.approx(C.ece(good)) and hi == pytest.approx(C.ece(bad))
+    assert lo <= C.ece(both) <= hi
+    lo, hi = b2["log_loss_ci95"]
+    assert lo == pytest.approx(C.log_loss(good)) and hi == pytest.approx(C.log_loss(bad))
+    assert C.bootstrap_calibration([good, bad], n=400, seed=3) == b2    # fixed seed
+    empty = C.reliability_counts(np.array([]), np.array([]))
+    e = C.bootstrap_calibration([empty], n=10, seed=3)
+    assert e["n_used"] == 0 and math.isnan(e["ece_ci95"][0])
+    assert C.bootstrap_calibration([], n=10)["n_used"] == 0
 
 
 def test_reliability_accumulates_over_chips():

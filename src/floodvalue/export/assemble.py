@@ -487,7 +487,10 @@ def run_metadata(*, run_id: str, chip_id: str, event_id: str, event_date: str, c
                        "coverage_share_denominator_rub":
                            procurement_meta.get("coverage_share_denominator_rub"),
                        "uncertainty_basis": procurement_meta.get("uncertainty"),
-                       "reasons": procurement_meta.get("reasons")},
+                       "reasons": procurement_meta.get("reasons"),
+                       # D-049 (#142): formula, assumptions and "not an actual loss reduction"
+                       # of the addressed_decision_risk_rub / decision_risk_share columns
+                       "decision_risk": procurement_meta.get("decision_risk")},
         "uncertainty": {"meaning": unc.get("rule", "не задано"),
                         "units": ("биты, 0…1" if unc.get("name") == "binary_entropy_bits"
                                   else str(unc.get("units", "не задано"))),

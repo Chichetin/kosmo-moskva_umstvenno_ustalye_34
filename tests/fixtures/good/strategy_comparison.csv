@@ -1,4 +1,4 @@
-strategy,data_cost_rub,other_cost_rub,decision_cost_rub,budget_rub,budget_feasible,covered_expected_loss_rub,coverage_share,residual_uncertainty,uncertainty_status,uncertainty_basis
-A,0.00,1500.00,1500.00,5000.00,true,0.00,0.0,0.183,baseline,средняя p(1−p) по 9 объектам ok
-B,5497.62,1500.00,6997.62,5000.00,false,4857142.92,0.244683,,not_estimated,эффект новых наблюдений не оценён
-C,2931.06,1500.00,4431.06,5000.00,true,4857142.92,0.244683,0.150,scenario,сценарий: p(1−p) обнуляется у покрытых объектов
+strategy,data_cost_rub,other_cost_rub,decision_cost_rub,budget_rub,budget_feasible,covered_expected_loss_rub,coverage_share,residual_uncertainty,uncertainty_status,uncertainty_basis,addressed_decision_risk_rub,decision_risk_share
+A,0.00,1500.00,1500.00,5000.00,true,0.00,0.0,0.183,baseline,средняя p(1−p) по 9 объектам ok,0.00,0.0
+B,5497.62,1500.00,6997.62,5000.00,false,4857142.92,0.244683,,not_estimated,эффект новых наблюдений не оценён,4761904.72,0.449304
+C,2931.06,1500.00,4431.06,5000.00,true,4857142.92,0.244683,0.150,scenario,сценарий: p(1−p) обнуляется у покрытых объектов,4761904.72,0.449304

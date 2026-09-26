@@ -162,7 +162,12 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
   decision_deadline` (допуск 0,01); `coverage_share` = covered / Σ EL `ok`-объектов (допуск
   1e-4), пусто ⇔ Σ EL = 0; `residual_uncertainty` пусто ⇔ `not_estimated`; A — `baseline`;
   у A платных зон нет, поэтому её `covered_expected_loss_rub` = 0, иное — только с
-  объяснением в `run_metadata.strategies.coverage_A`.
+  объяснением в `run_metadata.strategies.coverage_A`. Доп. столбцы (D-049, #142), если есть:
+  `addressed_decision_risk_rub` = Σ R = V·q·min(p, 1−p) `ok`-объектов, покрытых теми же
+  зонами, что `covered_expected_loss_rub` (у A — 0, иное — только с `coverage_A`); R — из EL и
+  p строки `asset_loss.csv` (EL при p ≤ 0,5, EL·(1−p)/p иначе — как в procurement, чтобы EL в
+  копейках не давал расхождения), допуск 0,01; пустое значение — ошибка; `decision_risk_share` = addressed / Σ R портфеля (допуск
+  1e-4), пусто ⇔ Σ R = 0. Отсутствие обоих столбцов (старые комплекты) — не ошибка.
 - `metrics.csv` комплекта (§7): каждая строка `method=main` (любой `split` —
   dev/validation/test — и любой `event`) имеет `threshold`, равный `run_metadata.threshold`
   (единицы p, допуск 1e-9), — метрики main посчитаны тем же порогом, что и `flood_mask.tif`;
@@ -201,7 +206,8 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
              "discount_rule", "grouping"},
  "zones": {"construction", "availability_rule", "area_method", "unknown_dates_rule"},
  "strategies": {"rule_B", "rule_C", "other_costs", "coverage_aggregation",
-                "coverage_share_note": null},
+                "coverage_share_note": null,
+                "decision_risk": {"formula", "status", "meaning", "columns", "excluded"} | null},  # необязательно; D-049, копия из procurement_metadata.json
  "uncertainty": {"meaning", "units", "method", "raster": null},
  "proxy_check": {"status": "done|planned|not_done", "test_chip", "control_points",
                  "fixed_v_q", "n_points", "error_metric", "result"},
