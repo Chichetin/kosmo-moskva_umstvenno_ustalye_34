@@ -134,6 +134,15 @@ const reducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const minimumZoom = () => (window.innerWidth < 700 ? 0.9 : 1.15);
 const overviewZoom = () => (window.innerWidth < 700 ? 1.15 : 2.05);
+const overviewPadding = () => ({
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: window.innerWidth < 700
+    ? 0
+    : Math.round(Math.min(58, Math.max(30, window.innerWidth * 0.036)) + 286),
+});
+const noPadding = () => ({ top: 0, right: 0, bottom: 0, left: 0 });
 
 export default function MapPanel(props: Props) {
   const host = useRef<HTMLDivElement>(null);
@@ -325,7 +334,8 @@ export default function MapPanel(props: Props) {
       return;
     }
     mapRef.current = map;
-    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-left");
+    map.setPadding(props.scene ? noPadding() : overviewPadding());
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
     const attribution = host.current.querySelector<HTMLDetailsElement>(
       ".maplibregl-ctrl-attrib",
     );
@@ -355,26 +365,13 @@ export default function MapPanel(props: Props) {
     const onStyle = () => {
       styleReady = true;
       map.setProjection({ type: "globe" });
-      if (map.getLayer("background"))
-        map.setPaintProperty("background", "background-color", "#2b3336");
-      // The vector style alone leaves the globe blank at overview zoom.
-      map.addSource("earth-relief-data", {
-        type: "raster",
-        tiles: [...mapProviders.map.reliefTiles],
-        tileSize: 256,
-        maxzoom: 6,
-        attribution: "OpenFreeMap · Natural Earth",
+      map.setSky({
+        "sky-color": "#06080a",
+        "horizon-color": "#0a0e10",
+        "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 0.25, 5, 0],
       });
-      map.addLayer({
-        id: "earth-relief",
-        type: "raster",
-        source: "earth-relief-data",
-        paint: {
-          "raster-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.9, 7, 0],
-          "raster-saturation": -0.55,
-          "raster-brightness-max": 0.68,
-        },
-      }, map.getLayer("water") ? "water" : undefined);
+      if (map.getLayer("background"))
+        map.setPaintProperty("background", "background-color", "#30383b");
       if (map.getLayer("water"))
         map.setPaintProperty("water", "fill-color", "#151d21");
       for (const id of [
@@ -719,6 +716,7 @@ export default function MapPanel(props: Props) {
     const observer = new ResizeObserver(() => {
       map.setMinZoom(minimumZoom());
       map.resize();
+      map.setPadding(current.current.scene ? noPadding() : overviewPadding());
     });
     observer.observe(host.current);
     return () => {
@@ -754,6 +752,7 @@ export default function MapPanel(props: Props) {
     lastScene.current = props.scene.chip_id;
     popup.current?.remove();
     map.stop();
+    map.setPadding(noPadding());
     const [west, south, east, north] = props.scene.bounds;
     map.fitBounds(
       [
@@ -824,6 +823,7 @@ export default function MapPanel(props: Props) {
         (!props.overviewRequest && !lastScene.current)) return;
     lastScene.current = null;
     map.stop();
+    map.setPadding(overviewPadding());
     map.easeTo({
       center: [39, 13],
       zoom: overviewZoom(),
