@@ -141,3 +141,28 @@ def test_finished_jobs_are_bounded(catalog):
     finished = [job for job in run._jobs.values() if job["status"] == "done"]
     assert len(finished) == run.ANALYSIS_JOBS_KEPT
     assert "old0" not in run._jobs and f"old{run.ANALYSIS_JOBS_KEPT + 4}" in run._jobs
+
+
+def _qc(catalog, rows, monkeypatch):
+    monkeypatch.setattr(run, "_raster_info", lambda path: {"bounds": None, "corners": None})
+    monkeypatch.setattr(run, "_scene_position", lambda path: None)
+    lines = ["chip_id,vv_nan_frac,vh_nan_frac,issues"] + [",".join(map(str, r)) for r in rows]
+    (catalog / "interim" / "qc.csv").write_text("\n".join(lines) + "\n")
+
+
+def test_empty_s1_is_marked_in_catalog_and_refused_before_running(catalog, monkeypatch):
+    _qc(catalog, [("Synthetic_000001", 1, 1, "S1 all NaN")], monkeypatch)
+    calls = _fake_stages(monkeypatch)
+    item = next(s for s in run.scenes() if s["chip_id"] == "Synthetic_000001")
+    assert item["analyzable"] is False and "нет валидных пикселей" in item["not_analyzable_reason"]
+    with pytest.raises(HTTPException) as err:
+        run.start_analysis("Synthetic_000001")
+    assert err.value.status_code == 422 and calls == [] and run._jobs == {}
+
+
+def test_partly_valid_or_unknown_s1_stays_analyzable(catalog, monkeypatch):
+    _qc(catalog, [("Synthetic_000001", 0.4, 0.6, "")], monkeypatch)
+    item = next(s for s in run.scenes() if s["chip_id"] == "Synthetic_000001")
+    assert item["analyzable"] is True and item["not_analyzable_reason"] is None
+    (catalog / "interim" / "qc.csv").unlink()  # no QC: nothing is claimed
+    assert next(s for s in run.scenes() if s["chip_id"] == "Synthetic_000001")["analyzable"] is True
