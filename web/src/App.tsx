@@ -550,7 +550,7 @@ export default function App() {
           <svg className="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M3.5 18.5V5.5L12 14l8.5-8.5v13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          Митрандир
+          MITHRANDIR
         </button>
         <span className="top-divider" />
         <nav className="top-nav">
