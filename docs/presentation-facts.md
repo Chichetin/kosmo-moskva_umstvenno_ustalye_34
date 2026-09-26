@@ -193,7 +193,7 @@ U-Net значимо лучше порога VH того же фолда в 4 ф
 
 | Пример | Число | Тест |
 |---|---|---|
-| EL = p·V·q, p=0,4, V=10 млн руб., q=0,25 | **EL = 1 000 000 руб.** | `tests/assets/test_portfolio.py::test_expected_loss_control_example` (строка 32) |
+| EL = p·V·q, p=0,4, V=10 млн руб., q=0,25 | **EL = 1 000 000 руб.** | `tests/assets/test_portfolio.py::test_expected_loss_control_example` (строка 31) |
 | Новая гарантированная **оптика 1 м** (не SAR), Б=788,64, О=1,2 (L2), П=1, Т=1,8, Р=1 | **1 703,46 руб./км²** | `task.md` строка 459–461; `tests/procurement/test_pricing.py::test_control_values_literal` (`sensor_type="optical"`, строка 14) |
 | Тот же контур, оперативный снимок (Т=1) | **946,37 руб./км²** | там же |
 | Тот же контур, архив старше 90 дней (Т=0,6) | **567,82 руб./км²** | там же |
@@ -272,8 +272,9 @@ U-Net значимо лучше порога VH того же фолда в 4 ф
   (`docs/limitations.md` §7).
 - **Прокси-ошибка ≠ фактические потери.** Прокси-проверка сверяет EL с EL_ref =
   y·V·q по ручной метке воды, не с обследованными потерями инфраструктуры; на
-  validation MAE 274 285,66 руб. на демо-чипе, 284 926 руб. на всех 60 чипах
-  (`docs/verification/eval-validation.md` §5). В сдаваемом `run_metadata.json`
+  validation MAE 274 285,66 руб. на демо-чипе (`docs/verification/eval-validation-summary.json`
+  → `proxy_check.result.demo_chip.mae_rub`; округлённо 274 286 в
+  `docs/verification/eval-validation.md` §5), 284 926 руб. на всех 60 чипах. В сдаваемом `run_metadata.json`
   поле `proxy_check.status` на validation остаётся `planned` (независимой считается
   только test, D-012/D-016), но с #107 (`export/assemble.py::proxy_check`) оно уже
   **несёт реальные числа** демо-чипа (`result.estimated=True`), а не пустой
