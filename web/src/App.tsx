@@ -4,6 +4,8 @@ import {
   ArrowLeft,
   BarChart3,
   ChevronDown,
+  ChevronUp,
+  Globe2,
   Layers3,
   Search,
   X,
@@ -56,6 +58,28 @@ const labels: Record<string, string> = {
   water_intake: "Водозабор",
   workshop: "Мастерская",
   clinic: "Медпункт",
+};
+// Russian names of the Sen1Floods11 event territories: the operator searches by country.
+const TERRITORY_RU: Record<string, string> = {
+  Bolivia: "Боливия",
+  Ghana: "Гана",
+  India: "Индия",
+  Mekong: "Меконг Камбоджа",
+  Nigeria: "Нигерия",
+  Pakistan: "Пакистан",
+  Paraguay: "Парагвай",
+  Somalia: "Сомали",
+  Spain: "Испания",
+  "Sri-Lanka": "Шри-Ланка Шри Ланка",
+  USA: "США Соединённые Штаты",
+};
+const countryMatches = (territory: string, query: string) => {
+  const needle = query.trim().toLocaleLowerCase("ru").replaceAll("ё", "е");
+  if (!needle) return true;
+  return `${territory} ${territory.replaceAll("-", " ")} ${TERRITORY_RU[territory] ?? ""}`
+    .toLocaleLowerCase("ru")
+    .replaceAll("ё", "е")
+    .includes(needle);
 };
 const assetName = (feature: Feature) =>
   labels[String(feature.properties.asset_class)] ??
@@ -171,6 +195,7 @@ export default function App() {
   const [readyAnalysisNotice, setReadyAnalysisNotice] = useState<{ chipId: string; territory: string } | null>(null);
   const [searchOpen, setSearchOpen] = useState(() => window.innerWidth >= 700);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [overviewRequest, setOverviewRequest] = useState(0);
   const [mapIssue, setMapIssue] = useState<string | null>(null);
   // «Сообщения» (/api/media/map): null — the layer is unavailable here (media not served,
@@ -382,6 +407,7 @@ export default function App() {
   }, [scene?.territory]);
   const selectScene = useCallback((selected: SceneSummary) => {
     setPanelOpen(true);
+    setPanelCollapsed(false);
     setSearchOpen(false);
     setAssetId(null);
     setZoneId(null);
@@ -423,11 +449,9 @@ export default function App() {
   const sliderMax = Math.min(1_000_000_000, Math.ceil(
     Math.max(activeSession?.plan_c_saturation_rub ?? 0, budget ?? 0, 5_000) * 1.1 / 1_000,
   ) * 1_000);
-  const matchingScenes = scenes.filter((item) =>
-    `${item.territory} ${item.chip_id} ${item.observation_date}`
-      .toLowerCase()
-      .includes(query.toLowerCase()),
-  );
+  // The operator knows the country, not a Sen1Floods11 chip id: search by country only,
+  // in English (as in the catalog) or Russian.
+  const matchingScenes = scenes.filter((item) => countryMatches(item.territory, query));
   const seenTerritories = new Set<string>();
   const firstByTerritory: SceneSummary[] = [];
   const remainingScenes: SceneSummary[] = [];
@@ -438,12 +462,8 @@ export default function App() {
     } else remainingScenes.push(item);
   }
   const filtered = (query ? matchingScenes : [...firstByTerritory, ...remainingScenes])
-    .slice(0, query ? 30 : 10);
-  const analysisLocations = scenes.filter((item) =>
-    `${item.territory} ${item.chip_id} ${item.observation_date ?? ""}`
-      .toLocaleLowerCase("ru")
-      .includes(analysisQuery.trim().toLocaleLowerCase("ru")),
-  );
+    .slice(0, query ? undefined : 10);
+  const analysisLocations = scenes.filter((item) => countryMatches(item.territory, analysisQuery));
   const locationGroups = [...new Set(analysisLocations.map((item) => item.territory))]
     .sort((left, right) => left.localeCompare(right, "ru"))
     .map((territory) => ({
@@ -602,11 +622,13 @@ export default function App() {
               setAssetId(id);
               setZoneId(null);
               setPanelOpen(true);
+              setPanelCollapsed(false);
             }}
             onSelectZone={(id) => {
               setZoneId(id);
               setAssetId(null);
               setPanelOpen(true);
+              setPanelCollapsed(false);
             }}
             onIssue={setMapIssue}
             onSelectMessage={setMessage}
@@ -633,7 +655,7 @@ export default function App() {
                     setQuery(event.target.value);
                     setSearchOpen(true);
                   }}
-                  placeholder="Страна или ID"
+                  placeholder="Страна"
                   aria-label="Поиск наблюдений"
                 />
                 {query && (
@@ -650,7 +672,7 @@ export default function App() {
                 <span>{query ? "Результаты поиска" : "Все сцены"}</span>
                 <span className="search-count">
                   {query
-                    ? `${filtered.length}${filtered.length === 30 ? "+" : ""}`
+                    ? `${filtered.length}`
                     : scenes.length}
                 </span>
                 <ChevronDown size={16} />
@@ -731,7 +753,7 @@ export default function App() {
             )}
           </div>
           {scene && panelOpen && (
-            <aside className="context-panel">
+            <aside className={`context-panel${panelCollapsed ? " collapsed" : ""}`}>
               <div className="context-heading">
                 <div>
                   <small>НАБЛЮДЕНИЕ · SENTINEL-1</small>
@@ -741,13 +763,28 @@ export default function App() {
                     <code>{scene.chip_id}</code>
                   </p>
                 </div>
-                <button
-                  onClick={() => setPanelOpen(false)}
-                  aria-label="Свернуть панель"
-                >
-                  <X size={17} />
-                </button>
+                <div className="context-heading-actions">
+                  <button
+                    onClick={() => setPanelCollapsed(!panelCollapsed)}
+                    aria-expanded={!panelCollapsed}
+                    aria-label={panelCollapsed ? "Развернуть панель" : "Свернуть панель"}
+                    title={panelCollapsed ? "Развернуть" : "Свернуть"}
+                  >
+                    {panelCollapsed ? <ChevronDown size={17} /> : <ChevronUp size={17} />}
+                  </button>
+                  <button
+                    onClick={() => setPanelOpen(false)}
+                    aria-label="Скрыть панель"
+                    title="Скрыть"
+                  >
+                    <X size={17} />
+                  </button>
+                </div>
               </div>
+              <button className="back-to-globe" onClick={overview}>
+                <Globe2 size={15} /> Все наблюдения
+              </button>
+              {!panelCollapsed && (<>
               {scene.preview_url && (
                 <img
                   className="scene-preview"
@@ -989,11 +1026,13 @@ export default function App() {
                   )}
                 </>
               )}
-              <p className="context-foot">
+              <details className="context-foot">
+                <summary>Пояснения к карте</summary>
                 Маркеры — места снимков, не подтверждённые зоны затопления.
                 Оптическая мозаика 2019 года — географический контекст; дата
                 отдельного пикселя неизвестна.
-              </p>
+              </details>
+              </>)}
             </aside>
           )}
           {scene && !panelOpen && (
@@ -1024,7 +1063,7 @@ export default function App() {
                   <input
                     value={analysisQuery}
                     onChange={(event) => setAnalysisQuery(event.target.value)}
-                    placeholder="Страна или ID снимка"
+                    placeholder="Страна"
                     aria-label="Поиск локации для анализа"
                   />
                 </label>
@@ -1071,6 +1110,9 @@ export default function App() {
                 }
               >
                 <ArrowLeft size={17} /> К карте
+              </button>
+              <button onClick={overview}>
+                <Globe2 size={17} /> Все наблюдения
               </button>
               <div>
                 <span>{scene ? "АНАЛИЗ СЦЕНЫ" : "АНАЛИЗ НАБЛЮДЕНИЙ"}</span>
@@ -1131,9 +1173,26 @@ export default function App() {
                     </div>
                     <details className="analysis-explain">
                       <summary>Что означает неопределённость карты?</summary>
-                      <p>{activeSession.metadata.uncertainty?.meaning ?? "Методика неопределённости не указана в комплекте."}</p>
-                      {activeSession.metadata.uncertainty?.units && <p>Единицы: {activeSession.metadata.uncertainty.units}.</p>}
-                      <p>Это показатель исходной карты в точке объекта; он не подтверждает затопление и не показывает ущерб.</p>
+                      {String(activeSession.metadata.uncertainty?.method ?? "").startsWith("entropy_p") ? (<>
+                      <p>
+                        Насколько модель сомневается, есть ли вода в точке объекта. Считается по
+                        вероятности воды p (энтропия, в битах от 0 до 1): 0 — модель уверена
+                        (p около 0 или 1), 1 — не знает (p = 50 %).
+                      </p>
+                      <p>
+                        Высокая неопределённость — повод подтвердить объект осмотром или
+                        дополнительным снимком; снимок там может изменить решение «ехать / не ехать», поэтому такие объекты чаще попадают в план съёмки C (он выбирает по цене ошибки решения).
+                      </p>
+                      <p>
+                        Диапазон вероятности по пяти моделям ансамбля (от минимума до максимума) показывает, как
+                        сильно они расходятся; если порог маски попадает внутрь диапазона, маска в
+                        точке неустойчива.
+                      </p>
+                      <p>Это свойство карты воды в точке объекта: оно не подтверждает затопление и не показывает ущерб.</p>
+                      </>) : (<>
+                        <p>{activeSession.metadata.uncertainty?.meaning ?? "Методика неопределённости не указана в комплекте."}</p>
+                        {activeSession.metadata.uncertainty?.units && <p>Единицы: {activeSession.metadata.uncertainty.units}.</p>}
+                      </>)}
                     </details>
                     <div className="table-scroll">
                       <table>
