@@ -124,13 +124,17 @@ def test_test_chip_is_refused_even_with_allow_test(catalog, monkeypatch):
 
 def test_unexpected_error_fails_the_job_and_hides_server_paths(catalog, monkeypatch):
     def boom(command, **kwargs):
-        raise RuntimeError(f"cannot read {run.output_dir()}/x and {run.REPO_ROOT}/y")
+        raise RuntimeError(f"cannot read {run.output_dir()}/x and {run.REPO_ROOT}/y"
+                           f" and {run.REPO_ROOT.as_posix()}/z")
     monkeypatch.setattr(run.subprocess, "run", boom)
     job_id = json.loads(run.start_analysis("Synthetic_000001").body)["job_id"]
     run._run_job(job_id)  # RuntimeError is not OSError: the stage loop does not catch it
     status = run.analysis_status(job_id)
     assert status["status"] == "failed"
-    assert str(run.REPO_ROOT) not in status["detail"] and "<outputs>" in status["detail"]
+    detail = status["detail"]
+    # repr() doubles Windows backslashes: check the replacement marker, not only the absence of str(path)
+    assert str(run.REPO_ROOT) not in detail and run.REPO_ROOT.as_posix() not in detail
+    assert "<outputs>" in detail and detail.count("<repo>") == 2
 
 
 def test_finished_jobs_are_bounded(catalog):

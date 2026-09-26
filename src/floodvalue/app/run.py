@@ -485,7 +485,10 @@ def _public(job: dict) -> dict:
 def _server_paths_hidden(text: str) -> str:
     """The interface may be public: stderr keeps the error, not the server's directories."""
     for path, name in ((output_dir(), "<outputs>"), (data_dir(), "<data>"), (REPO_ROOT, "<repo>")):
-        text = text.replace(str(path), name)
+        raw = str(path)
+        # repr() of an exception doubles Windows backslashes; tools may print the POSIX form
+        for variant in (raw.replace("\\", "\\\\"), raw, path.as_posix()):
+            text = text.replace(variant, name)
     return text[-600:]
 
 
