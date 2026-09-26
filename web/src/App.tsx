@@ -31,21 +31,32 @@ const pct = (value: number | null | undefined) =>
   value == null ? "—" : `${Math.round(value * 100)}%`;
 function useCountUp(value: number | null | undefined, enabled: boolean) {
   const [shown, setShown] = useState<number | null>(value ?? null);
+  const lastShown = useRef<number | null>(value ?? null);
+  const hasAnimated = useRef(false);
   useEffect(() => {
     if (value == null) {
       setShown(null);
+      lastShown.current = null;
+      hasAnimated.current = false;
       return;
     }
     if (!enabled || window.matchMedia("(prefers-reduced-motion: reduce)").matches || value === 0) {
       setShown(value);
+      lastShown.current = value;
+      if (enabled && value !== 0) hasAnimated.current = true;
       return;
     }
+    const from = hasAnimated.current ? (lastShown.current ?? 0) : 0;
+    hasAnimated.current = true;
+    if (from === value) return;
     let frame = 0;
     const start = performance.now();
-    setShown(0);
+    setShown(from);
     const tick = (now: number) => {
       const progress = Math.min((now - start) / 850, 1);
-      setShown(value * (1 - Math.pow(1 - progress, 3)));
+      const next = from + (value - from) * (1 - Math.pow(1 - progress, 3));
+      setShown(next);
+      lastShown.current = next;
       if (progress < 1) frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
@@ -341,7 +352,7 @@ export default function App() {
     (sum, item) => sum + Number(item.properties.expected_loss_rub || 0),
     0,
   );
-  const shownLoss = useCountUp(totalLoss, !mapActive && !!activeSession);
+  const shownLoss = useCountUp(activeSession ? totalLoss : null, !mapActive && !!activeSession);
   const shownCost = useCountUp(chosen?.data_cost_rub, !mapActive && !!activeSession);
   const shownCoverage = useCountUp(chosen?.coverage_share, !mapActive && !!activeSession);
   const exportUrl = activeSession
@@ -530,8 +541,7 @@ export default function App() {
                   aria-pressed={showMessages}
                   title={`События из СМИ и обращения очевидцев: ${messages.events.features.length} событий, ${messages.reports.features.length} обращений ждут модерации. Повод проверить территорию — не входит в p, ущерб и план.`}
                 >
-                  Сообщения
-                  <span className="media-count">· {messageCount}</span>
+                  Сообщения · {messageCount}
                 </button>
               </div>
             )}

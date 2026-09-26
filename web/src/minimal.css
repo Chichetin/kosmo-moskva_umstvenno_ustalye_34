@@ -197,8 +197,8 @@ input:focus-visible,
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 0;
-  border-radius: 0;
+  border: 1px solid #ffffff14;
+  border-radius: 15px;
   background: #0d1113f2;
   box-shadow: none;
   backdrop-filter: none !important;
@@ -858,7 +858,7 @@ tbody tr.selected,
   .scene-mode .search-panel {
     height: auto;
     max-height: min(345px, 43vh);
-    border-radius: 0;
+    border-radius: 15px;
   }
   .scene-library-head {
     padding: 16px 0 10px;
@@ -952,16 +952,6 @@ tbody tr.selected,
 
 .media-switch button.active::after {
   background: #e0ad64;
-}
-
-.media-count {
-  min-width: 0;
-  padding: 0;
-  border-radius: 0;
-  background: none;
-  color: inherit;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
 }
 
 .map-screen {
