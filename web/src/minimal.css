@@ -1252,6 +1252,33 @@ tbody tr.selected,
   margin: 0;
 }
 
+/* Budget asked before the run (plan C of the bundle is built for it). */
+.analysis-budget-ask {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  max-width: 420px;
+  color: #bac5c9;
+  font-size: 14px;
+}
+
+.analysis-budget-ask input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #ffffff2d;
+  border-radius: var(--radius);
+  background: #0d1012;
+  color: #edf2f3;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.analysis-budget-ask small {
+  color: #9aa7ad;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .analysis-unavailable {
   margin: 12px 0;
   color: #aebbc1;
@@ -1320,21 +1347,6 @@ tbody tr.selected,
   color: #97a7ae;
 }
 
-.source-viewer-return {
-  position: fixed;
-  top: 132px;
-  right: 412px;
-  z-index: 12;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 12px;
-  border: 1px solid #ffffff30;
-  border-radius: var(--radius);
-  background: #101619ed;
-  color: #edf2f4;
-  font-size: 14px;
-}
 
 @media (max-width: 1100px) {
   .analysis-shell {
@@ -1378,11 +1390,6 @@ tbody tr.selected,
   }
   .analysis-source-link {
     margin-left: 0;
-  }
-  .source-viewer-return {
-    top: auto;
-    bottom: 64px;
-    right: 12px;
   }
   .topbar {
     height: 54px;
@@ -1633,21 +1640,21 @@ tbody tr.selected,
 
 @media (min-width: 1100px) {
   .topbar, .map-top-left, .map-top-center, .search-panel, .search-toggle, .reopen-panel,
-  .context-panel, .basemap-switch, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
+  .context-panel, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
     zoom: 1.2;
   }
 }
 
 @media (min-width: 1800px) {
   .topbar, .map-top-left, .map-top-center, .search-panel, .search-toggle, .reopen-panel,
-  .context-panel, .basemap-switch, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
+  .context-panel, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
     zoom: 1.35;
   }
 }
 
 @media (min-width: 2300px) {
   .topbar, .map-top-left, .map-top-center, .search-panel, .search-toggle, .reopen-panel,
-  .context-panel, .basemap-switch, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
+  .context-panel, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
     zoom: 1.5;
   }
 }
@@ -1839,5 +1846,44 @@ details.context-foot summary { cursor: pointer; margin-bottom: 6px; }
   .scene-mode .map-top-center {
     left: 0;
     right: 0;
+  }
+}
+
+/* One tab style for the navigation above the globe and the switch below it: same type, height,
+   spacing and underline. .basemap-switch lives inside .map-top-center, which already carries
+   the --ui zoom step, so it is no longer zoomed a second time (it was 1.2 × 1.2). */
+.topbar-map .top-nav,
+.map-top-center,
+.basemap-switch {
+  gap: 30px;
+}
+
+.top-nav button,
+.top-nav button.active,
+.basemap-switch button,
+.basemap-switch button.active {
+  height: 34px;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 550;
+  line-height: 34px;
+}
+
+.top-nav button.active::after,
+.basemap-switch button.active::after {
+  bottom: -5px;
+}
+
+@media (max-width: 700px) {
+  .topbar-map .top-nav,
+  .map-top-center,
+  .basemap-switch {
+    gap: 22px;
+  }
+  .top-nav button,
+  .top-nav button.active,
+  .basemap-switch button,
+  .basemap-switch button.active {
+    font-size: 14px;
   }
 }

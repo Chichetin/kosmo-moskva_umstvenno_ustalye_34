@@ -803,11 +803,13 @@ export default function MapPanel(props: Props) {
     const map = mapRef.current;
     if (!map || !ready || !map.getLayer("boundary")) return;
     updateScene();
-    if (!props.scene?.bounds || lastScene.current === props.scene.chip_id)
+    // A hidden map (the analysis page) has no size: fit when it is shown, not before.
+    if (!props.active || !props.scene?.bounds || lastScene.current === props.scene.chip_id)
       return;
     lastScene.current = props.scene.chip_id;
     popup.current?.remove();
     map.stop();
+    map.resize();
     map.setPadding(noPadding());
     const [west, south, east, north] = props.scene.bounds;
     map.fitBounds(
@@ -824,7 +826,7 @@ export default function MapPanel(props: Props) {
         duration: reducedMotion() ? 0 : 850,
       },
     );
-  }, [props.scene?.chip_id, props.session?.run_id, ready]);
+  }, [props.scene?.chip_id, props.session?.run_id, props.active, ready]);
   useEffect(() => {
     const map = mapRef.current;
     (map?.getSource("media-events") as GeoJSONSource | undefined)?.setData(
