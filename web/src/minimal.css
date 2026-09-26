@@ -1668,3 +1668,34 @@ tbody tr.selected,
   .brand { font-size: 19px; }
   .brand .brand-mark { width: 20px; height: 20px; }
 }
+
+/* Search fields: a visible filled field instead of a faint underline (person: «ничего не видно»). */
+.search-box,
+.analysis-location-search {
+  height: 46px;
+  padding: 0 12px;
+  gap: 10px;
+  border: 1px solid rgba(233, 237, 239, 0.22);
+  border-radius: 10px;
+  background: rgba(233, 237, 239, 0.07);
+  color: #c3ccd0;
+}
+
+.search-box:focus-within,
+.analysis-location-search:focus-within {
+  border-color: #d5e0e4;
+  background: rgba(233, 237, 239, 0.11);
+}
+
+.search-box input,
+.analysis-location-search input {
+  font: inherit;
+  font-size: 15px;
+  color: #f2f5f6;
+}
+
+.search-box input::placeholder,
+.analysis-location-search input::placeholder {
+  color: #aab5ba;
+  opacity: 1;
+}
