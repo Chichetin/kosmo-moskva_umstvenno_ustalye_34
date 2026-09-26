@@ -100,6 +100,7 @@ type LayerFlags = {
   s1: boolean;
   probability: boolean;
   mask: boolean;
+  uncertainty: boolean;
   assets: boolean;
   zones: boolean;
 };
@@ -107,6 +108,7 @@ const defaults: LayerFlags = {
   s1: true,
   probability: false,
   mask: false,
+  uncertainty: false,
   assets: true,
   zones: true,
 };
@@ -532,7 +534,26 @@ export default function App() {
                         </small>
                       </span>
                     </label>
-                    {(layers.probability || layers.mask) && (
+                    {activeSession.layers.uncertainty && (
+                      <label className="layer-row">
+                        <input
+                          type="checkbox"
+                          checked={layers.uncertainty}
+                          onChange={() => toggle("uncertainty")}
+                        />
+                        <span>
+                          Неопределённость
+                          <small>
+                            {activeSession.metadata.uncertainty?.units ??
+                              "показатель модели"}{" "}
+                            · зелёный — уверенно, малиновый — сомнение
+                          </small>
+                        </span>
+                      </label>
+                    )}
+                    {(layers.probability ||
+                      layers.mask ||
+                      layers.uncertainty) && (
                       <label className="opacity-control">
                         Прозрачность наложения{" "}
                         <b>{Math.round(opacity * 100)}%</b>
@@ -654,12 +675,19 @@ export default function App() {
                           <p>
                             {activeZone.properties.area_km2} км² · отдельно{" "}
                             {money(activeZone.properties.solo_cost_rub)} ₽
+                            {activeZone.properties.base_rate_status ===
+                            "scenario"
+                              ? " · ставка Б сценарная"
+                              : ""}
                           </p>
                           <p>
                             Доступна{" "}
                             {date(
                               String(activeZone.properties.available_at ?? ""),
                             )}
+                            {activeZone.properties.timing_status === "scenario"
+                              ? " · срок сценарный"
+                              : ""}
                           </p>
                           <p>
                             Объекты в зоне:{" "}
@@ -850,7 +878,10 @@ export default function App() {
                               {pct(row.coverage_share)}
                             </small>
                             {row.strategy === "B" && !row.budget_feasible && (
-                              <small>Выше бюджета</small>
+                              <small>
+                                Выше бюджета — контрфактический вариант: лимит
+                                не соблюдён, только для сравнения
+                              </small>
                             )}
                             {row.strategy === "C" && (
                               <small>
@@ -863,7 +894,18 @@ export default function App() {
                       ))}
                       <div className="card-foot">
                         Охват — доля ожидаемого ущерба в зонах, а не
-                        предотвращённый ущерб.
+                        предотвращённый ущерб. Цена данных —{" "}
+                        {activeSession.metadata.pricing?.legal_edition ??
+                          "ПП РФ № 840"}
+                        ; базовая ставка Б{" "}
+                        {activeSession.metadata.pricing?.base_rate_rub_km2}{" "}
+                        ₽/км²
+                        {activeSession.metadata.pricing?.base_rate_status ===
+                        "scenario"
+                          ? " — сценарная"
+                          : ""}
+                        . Прочие затраты решения и сроки поставки снимков —
+                        сценарные оценки.
                       </div>
                     </section>
                     <section className="analysis-card">
@@ -918,6 +960,9 @@ export default function App() {
                                   {date(
                                     String(item.properties.available_at ?? ""),
                                   )}
+                                  {item.properties.timing_status === "scenario"
+                                    ? " (сценарий)"
+                                    : ""}
                                 </small>
                               </span>
                               <strong>

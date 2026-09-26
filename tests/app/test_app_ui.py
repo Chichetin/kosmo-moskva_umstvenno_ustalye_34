@@ -174,3 +174,50 @@ def test_mask_nodata_and_zero_remain_transparent(tmp_path):
     assert rgba[0, 0, 3] == 0
     assert rgba[1, 0, 3] == 0
     assert rgba[0, 1, 3] == rgba[1, 1, 3] == 157
+
+
+def test_plan_without_s1_manifest_explains_instead_of_500(tmp_path, monkeypatch):
+    """plan() raises FileNotFoundError without interim/source_manifest_s1.json (contracts §10)."""
+    monkeypatch.setenv("FLOODVALUE_APP_RUN_DIR", str(REPO_ROOT / "tests" / "fixtures" / "good"))
+    monkeypatch.setenv("FLOODVALUE_DATA_DIR", str(tmp_path / "no-data"))
+    with pytest.raises(run.HTTPException) as failed:
+        run.recalculated_plan(5000)
+    assert failed.value.status_code == 422
+    assert "make data" in failed.value.detail
+
+
+def test_incomplete_run_names_missing_required_files(tmp_path, monkeypatch):
+    target = tmp_path / "Synthetic_000001_5000_abc1234"
+    shutil.copytree(REPO_ROOT / "tests" / "fixtures" / "good", target)
+    (target / "flood_mask.tif").unlink()
+    (target / "assets.csv").unlink()
+    monkeypatch.setenv("FLOODVALUE_APP_RUN_DIR", str(target))
+    with pytest.raises(run.HTTPException) as explicit:
+        run.session()
+    assert "flood_mask.tif" in explicit.value.detail and "assets.csv" in explicit.value.detail
+    monkeypatch.delenv("FLOODVALUE_APP_RUN_DIR")
+    monkeypatch.setattr(run, "output_dir", lambda: tmp_path)
+    with pytest.raises(run.HTTPException) as scanned:
+        run.session()
+    assert scanned.value.status_code == 503
+    assert "make all" in scanned.value.detail
+    assert target.name in scanned.value.detail and "flood_mask.tif" in scanned.value.detail
+
+
+def test_make_app_refuses_incomplete_out(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr("uvicorn.run", lambda *a, **k: pytest.fail("server must not start"))
+    args = type("Args", (), {"out": str(tmp_path)})()
+    assert run.run(args) == 1
+    assert "run_metadata.json" in capsys.readouterr().out
+
+
+def test_uncertainty_layer_is_georeferenced_for_the_map(tmp_path, monkeypatch):
+    target = tmp_path / "Synthetic_000001_5000_abc1234"
+    shutil.copytree(REPO_ROOT / "tests" / "fixtures" / "good", target)
+    monkeypatch.setenv("FLOODVALUE_APP_RUN_DIR", str(target))
+    assert run.session()["layer_rasters"]["uncertainty"] is None
+    shutil.copy(target / "flood_probability.tif", target / "uncertainty.tif")
+    data = run.session()
+    assert data["layers"]["uncertainty"] is True
+    assert data["layer_rasters"]["uncertainty"]["corners"] == data["raster"]["corners"]
+    assert run.raster_layer("uncertainty").body.startswith(b"\x89PNG\r\n\x1a\n")

@@ -12,6 +12,7 @@ type LayerFlags = {
   s1: boolean;
   probability: boolean;
   mask: boolean;
+  uncertainty: boolean;
   assets: boolean;
   zones: boolean;
 };
@@ -105,6 +106,7 @@ export default function MapPanel(props: Props) {
       s1: !!scene && visibleLayers.s1,
       probability: !!scene && visibleLayers.probability,
       mask: !!scene && visibleLayers.mask,
+      uncertainty: !!scene && visibleLayers.uncertainty,
       boundary: !!scene,
       assets: !!scene && visibleLayers.assets,
       "asset-focus": !!scene && visibleLayers.assets,
@@ -140,7 +142,7 @@ export default function MapPanel(props: Props) {
       if (map.getLayer(id))
         map.setLayoutProperty(id, "visibility", scene ? "visible" : "none");
     }
-    for (const id of ["probability", "mask"])
+    for (const id of ["probability", "mask", "uncertainty"])
       if (map.getLayer(id))
         map.setPaintProperty(id, "raster-opacity", overlayOpacity);
     if (map.getLayer("asset-focus"))
@@ -161,7 +163,7 @@ export default function MapPanel(props: Props) {
     const map = mapRef.current;
     if (!map || !map.getLayer("boundary")) return;
     const { scene, session, plan } = current.current;
-    for (const id of ["s1", "probability", "mask"] as const) {
+    for (const id of ["s1", "probability", "mask", "uncertainty"] as const) {
       if (map.getLayer(id)) map.removeLayer(id);
       if (map.getSource(id)) map.removeSource(id);
       const available =
