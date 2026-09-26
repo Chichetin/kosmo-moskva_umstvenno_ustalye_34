@@ -56,6 +56,15 @@ def test_reproduce_follows_makefile_and_has_no_stale_fallback():
     assert "FLOODVALUE_METHOD" not in " ".join(legacy)
 
 
+def test_perturbed_el_is_rounded_half_up_to_the_kopeck_like_assets():
+    # #127: the scenario EL must equal what assets writes (exact decimal p*V*q, ROUND_HALF_UP);
+    # the float product 28481.58499.. would give 28481.58 and break the ΣEL match of C_fixed rows
+    assets = {"A01": {"asset_value_rub": "8000000", "vulnerability_coef": "0.2"}}
+    loss = {"A01": {"p_flood": "0.017800990625"}}
+    el = assemble.perturbed_el(assets, loss, {"p_flood": {"factor": 1.0}, "scope": "portfolio"})
+    assert el == {"A01": 28481.59}
+
+
 def test_split_hash_matches_frozen_split():
     split = json.loads((SPLITS_DIR / "split_v1.json").read_text(encoding="utf-8"))
     assert assemble.split_sha256(split) == split["sha256"]
@@ -339,7 +348,7 @@ def test_all_stages_to_valid_result_set(env):
     assert meta["proxy_check"]["status"] == "planned"
     # #127: reproducible commands without the local path, seed from configs/run.yaml
     assert f"make validate OUT=${{FLOODVALUE_OUTPUT_DIR:-outputs}}/{dest.name}" in meta["reproduce"]
-    assert str(env) not in json.dumps(meta["reproduce"])
+    assert not any(str(env) in c for c in meta["reproduce"])  # no machine-specific path
     assert meta["portfolio"]["seed_source"] == "configs/run.yaml: portfolio_seed"
     assert meta["portfolio"]["seed"] == load_run_config().portfolio_seed
     assert "not yet available" not in json.dumps(meta, ensure_ascii=False)
