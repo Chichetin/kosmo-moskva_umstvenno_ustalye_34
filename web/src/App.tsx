@@ -4,13 +4,11 @@ import {
   ArrowLeft,
   BarChart3,
   ChevronDown,
-  Globe2,
   Layers3,
   Search,
   X,
 } from "lucide-react";
 import MapPanel from "./MapPanel";
-import { AmbientShapes } from "./AmbientShapes";
 import type { Feature, Plan, SceneSummary, Session } from "./types";
 
 const money = (value: unknown) =>
@@ -147,6 +145,9 @@ export default function App() {
     return () => removeEventListener("hashchange", onHash);
   }, []);
   useEffect(() => {
+    if (route.chipId) setSearchOpen(false);
+  }, [route.chipId]);
+  useEffect(() => {
     const controller = new AbortController();
     json<SceneSummary[]>("/api/scenes", controller.signal)
       .then(setScenes)
@@ -252,12 +253,21 @@ export default function App() {
   const zones = activeSession?.candidates.features ?? [];
   const chosen = plan?.comparison.find((row) => row.strategy === "C");
   const chosenZoneIds = new Set(plan?.plans.C ?? []);
-  const filtered = scenes
-    .filter((item) =>
-      `${item.territory} ${item.chip_id} ${item.observation_date}`
-        .toLowerCase()
-        .includes(query.toLowerCase()),
-    )
+  const matchingScenes = scenes.filter((item) =>
+    `${item.territory} ${item.chip_id} ${item.observation_date}`
+      .toLowerCase()
+      .includes(query.toLowerCase()),
+  );
+  const seenTerritories = new Set<string>();
+  const firstByTerritory: SceneSummary[] = [];
+  const remainingScenes: SceneSummary[] = [];
+  for (const item of matchingScenes) {
+    if (!seenTerritories.has(item.territory)) {
+      seenTerritories.add(item.territory);
+      firstByTerritory.push(item);
+    } else remainingScenes.push(item);
+  }
+  const filtered = (query ? matchingScenes : [...firstByTerritory, ...remainingScenes])
     .slice(0, query ? 30 : 10);
   const activeAsset = assets.find(
     (item) => item.properties.asset_id === assetId,
@@ -277,12 +287,12 @@ export default function App() {
     : null;
   return (
     <div className="app">
-      <header className="topbar">
-        <button className="brand" onClick={overview}>
-          <span className="brand-mark">
-            <Globe2 size={19} />
-          </span>
-          FloodValue
+      <header className={`topbar ${mapActive ? "topbar-map" : "topbar-analysis"}`}>
+        <button className="brand" onClick={overview} aria-label="Меридиан — обзор Земли">
+          <svg className="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M3.5 18.5V5.5L12 14l8.5-8.5v13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Меридиан
         </button>
         <span className="top-divider" />
         <nav className="top-nav">
@@ -292,23 +302,17 @@ export default function App() {
               scene ? navigate("scene", scene.chip_id) : overview()
             }
           >
-            <Globe2 size={16} /> Земля
+            Земля
           </button>
           <button
             className={!mapActive ? "active" : ""}
             disabled={!activeSession}
             onClick={() => scene && navigate("analysis", scene.chip_id)}
           >
-            <BarChart3 size={16} /> Анализ
+            Анализ
           </button>
         </nav>
         <span className="top-spacer" />
-        {scene && (
-          <div className="top-scene">
-            <b>{scene.territory.replaceAll("-", " ")}</b>
-            <small>{scene.chip_id}</small>
-          </div>
-        )}
         {exportUrl && (
           <a className="top-export" href={exportUrl}>
             <ArrowDownToLine size={16} />
@@ -318,7 +322,7 @@ export default function App() {
       </header>
       <main className="workspace">
         <div
-          className={`map-screen ${mapActive ? "" : "map-hidden"} ${scene ? "scene-mode" : ""}`}
+          className={`map-screen ${mapActive ? "" : "map-hidden"} ${scene ? "scene-mode" : ""} ${baseMap === "optical" ? "optical-mode" : ""}`}
         >
           <MapPanel
             scenes={scenes}
@@ -345,12 +349,11 @@ export default function App() {
             }}
             onIssue={setMapIssue}
           />
-          {!scene && <AmbientShapes />}
           <div className="map-top-left">
-            <button className="earth-button" onClick={overview}>
-              <Globe2 size={17} /> Вся Земля
-            </button>
             <div className="search-panel">
+              <div className="scene-library-head">
+                <h1>Наблюдения</h1>
+              </div>
               <label className="search-box">
                 <Search size={17} />
                 <input
@@ -360,7 +363,7 @@ export default function App() {
                     setQuery(event.target.value);
                     setSearchOpen(true);
                   }}
-                  placeholder="Территория или ID сцены"
+                  placeholder="Страна или ID сцены"
                   aria-label="Поиск наблюдений"
                 />
                 {query && (
@@ -374,9 +377,12 @@ export default function App() {
                 onClick={() => setSearchOpen(!searchOpen)}
                 aria-expanded={searchOpen}
               >
-                {query
-                  ? `Результаты: ${filtered.length}${filtered.length === 30 ? "+" : ""}`
-                  : `${scenes.length} архивных наблюдений`}{" "}
+                <span>{query ? "Результаты поиска" : "Все сцены"}</span>
+                <span className="search-count">
+                  {query
+                    ? `${filtered.length}${filtered.length === 30 ? "+" : ""}`
+                    : scenes.length}
+                </span>
                 <ChevronDown size={16} />
               </button>
               {searchOpen && (
@@ -400,11 +406,11 @@ export default function App() {
                       aria-selected={scene?.chip_id === item.chip_id}
                       onClick={() => selectScene(item)}
                     >
-                      <span className={`scene-status ${item.status}`} />
-                      <span>
+                      <span className="scene-copy">
                         <strong>{item.territory.replaceAll("-", " ")}</strong>
                         <small>
-                          {date(item.observation_date)} · {item.chip_id}
+                          {date(item.observation_date)}
+                          <code>{item.chip_id}</code>
                         </small>
                       </span>
                       <em>
@@ -412,7 +418,7 @@ export default function App() {
                           ? "Тест"
                           : item.status === "analyzed"
                             ? "Анализ"
-                            : "S1"}
+                            : ""}
                       </em>
                     </button>
                   ))}
@@ -443,13 +449,12 @@ export default function App() {
                 Спутник
               </button>
             </div>
-            {baseMap === "optical" && <span>Оптическая мозаика · 2019</span>}
           </div>
           {scene && panelOpen && (
             <aside className="context-panel">
               <div className="context-heading">
                 <div>
-                  <small>АРХИВНОЕ НАБЛЮДЕНИЕ · SENTINEL-1</small>
+                  <small>НАБЛЮДЕНИЕ · SENTINEL-1</small>
                   <h1>{scene.territory.replaceAll("-", " ")}</h1>
                   <p>
                     {date(scene.observation_date)} ·{" "}
@@ -688,7 +693,6 @@ export default function App() {
         </div>
         {!mapActive && (
           <div className="analysis-screen">
-            <AmbientShapes analysis />
             <div className="analysis-head">
               <button
                 onClick={() =>
@@ -708,11 +712,6 @@ export default function App() {
                     : "Выберите наблюдение на Земле"}
                 </p>
               </div>
-              {exportUrl && (
-                <a href={exportUrl}>
-                  <ArrowDownToLine size={17} /> Скачать комплект
-                </a>
-              )}
             </div>
             {!activeSession && (
               <div className="analysis-empty">

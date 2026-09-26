@@ -72,7 +72,8 @@ const markers = (scenes: SceneSummary[]): FeatureCollection<Point> => ({
 });
 const reducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const minimumZoom = () => (window.innerWidth < 700 ? 1.5 : 2.2);
+const minimumZoom = () => (window.innerWidth < 700 ? 0.9 : 1.15);
+const overviewZoom = () => (window.innerWidth < 700 ? 1.15 : 2.05);
 
 export default function MapPanel(props: Props) {
   const host = useRef<HTMLDivElement>(null);
@@ -116,6 +117,28 @@ export default function MapPanel(props: Props) {
     for (const [id, visible] of Object.entries(show)) {
       if (map.getLayer(id))
         map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+    }
+    // Global view needs only the largest country names. Detailed map labels
+    // return when an observation is selected.
+    for (const id of [
+      "water_name", "road_oneway", "road_oneway_opposite",
+      "highway_name_other", "highway_name_motorway", "place_other",
+      "place_suburb", "place_village", "place_town", "place_city",
+      "place_city_large", "place_state", "place_country_other",
+      "place_country_minor",
+    ]) {
+      if (map.getLayer(id))
+        map.setLayoutProperty(id, "visibility", scene ? "visible" : "none");
+    }
+    for (const id of [
+      "waterway", "road_pier", "highway_path", "highway_minor",
+      "highway_major_casing", "highway_major_inner", "highway_major_subtle",
+      "highway_motorway_casing", "highway_motorway_inner", "highway_motorway_subtle",
+      "railway_transit", "railway_transit_dashline", "railway_minor",
+      "railway_minor_dashline", "railway", "railway_dashline", "boundary_state",
+    ]) {
+      if (map.getLayer(id))
+        map.setLayoutProperty(id, "visibility", scene ? "visible" : "none");
     }
     for (const id of ["probability", "mask"])
       if (map.getLayer(id))
@@ -220,9 +243,9 @@ export default function MapPanel(props: Props) {
         container: host.current,
         style: mapProviders.map.style,
         center: [39, 13],
-        zoom: window.innerWidth < 700 ? 1.6 : 2.6,
+        zoom: overviewZoom(),
         minZoom: minimumZoom(),
-        attributionControl: { compact: true },
+        attributionControl: false,
         cooperativeGestures: false,
         dragRotate: false,
         pitchWithRotate: false,
@@ -236,6 +259,29 @@ export default function MapPanel(props: Props) {
       return;
     }
     mapRef.current = map;
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-left");
+    const attribution = host.current.querySelector<HTMLDetailsElement>(
+      ".maplibregl-ctrl-attrib",
+    );
+    // MapLibre opens compact attribution on first load. Start with its info
+    // button collapsed, then leave user toggling entirely to MapLibre.
+    const attributionObserver = new MutationObserver(() => {
+      if (!attribution?.classList.contains("maplibregl-compact")) return;
+      attributionObserver.disconnect();
+      attribution.removeAttribute("open");
+      attribution.classList.remove("maplibregl-compact-show");
+    });
+    if (attribution) {
+      attributionObserver.observe(attribution, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+      if (attribution.classList.contains("maplibregl-compact")) {
+        attributionObserver.disconnect();
+        attribution.removeAttribute("open");
+        attribution.classList.remove("maplibregl-compact-show");
+      }
+    }
     map.addControl(
       new maplibregl.NavigationControl({ showCompass: false }),
       "bottom-right",
@@ -244,9 +290,9 @@ export default function MapPanel(props: Props) {
       styleReady = true;
       map.setProjection({ type: "globe" });
       if (map.getLayer("background"))
-        map.setPaintProperty("background", "background-color", "#20242a");
+        map.setPaintProperty("background", "background-color", "#2b3336");
       if (map.getLayer("water"))
-        map.setPaintProperty("water", "fill-color", "#111a24");
+        map.setPaintProperty("water", "fill-color", "#151d21");
       for (const id of [
         "place_country_major",
         "place_country_minor",
@@ -275,7 +321,7 @@ export default function MapPanel(props: Props) {
           current.current.scenes.filter((item) => item.status !== "analyzed"),
         ),
         cluster: true,
-        clusterRadius: 46,
+        clusterRadius: 38,
         clusterMaxZoom: 9,
       });
       map.addLayer({
@@ -284,9 +330,11 @@ export default function MapPanel(props: Props) {
         source: "observations",
         filter: ["has", "point_count"],
         paint: {
-          "circle-color": "#4D9FFF",
-          "circle-radius": 17,
-          "circle-stroke-color": "#f5f5f7",
+          "circle-color": "#e3eaed",
+          "circle-opacity": 0.92,
+          "circle-radius": 14,
+          "circle-stroke-color": "#080b0d",
+          "circle-stroke-opacity": 0.9,
           "circle-stroke-width": 2,
         },
       });
@@ -300,7 +348,7 @@ export default function MapPanel(props: Props) {
           "text-size": 12,
           "text-font": ["Noto Sans Regular"],
         },
-        paint: { "text-color": "#fff" },
+        paint: { "text-color": "#11171a" },
       });
       map.addLayer({
         id: "observation",
@@ -308,19 +356,10 @@ export default function MapPanel(props: Props) {
         source: "observations",
         filter: ["!", ["has", "point_count"]],
         paint: {
-          "circle-color": [
-            "case",
-            ["==", ["get", "status"], "analyzed"],
-            "#4D9FFF",
-            "#e5e9ee",
-          ],
-          "circle-radius": [
-            "case",
-            ["==", ["get", "status"], "analyzed"],
-            9,
-            6,
-          ],
-          "circle-stroke-color": "#111820",
+          "circle-color": "#f1f5f6",
+          "circle-opacity": 1,
+          "circle-radius": 6,
+          "circle-stroke-color": "#111719",
           "circle-stroke-width": 2,
         },
       });
@@ -335,9 +374,10 @@ export default function MapPanel(props: Props) {
         type: "circle",
         source: "analyzed-observations",
         paint: {
-          "circle-color": "#4D9FFF",
-          "circle-radius": 10,
-          "circle-stroke-color": "#f5f5f7",
+          "circle-color": "#f3f6f7",
+          "circle-opacity": 1,
+          "circle-radius": 8,
+          "circle-stroke-color": "#131a1d",
           "circle-stroke-width": 2.5,
         },
       });
@@ -489,16 +529,12 @@ export default function MapPanel(props: Props) {
       popup.current?.remove();
       const node = document.createElement("div");
       node.className = "map-preview";
-      if (scene.preview_url) {
-        const image = document.createElement("img");
-        image.src = scene.preview_url;
-        image.alt = `Радарный снимок ${scene.chip_id}`;
-        node.append(image);
-      }
       const title = document.createElement("strong");
       title.textContent = scene.territory.replaceAll("-", " ");
       const detail = document.createElement("span");
-      detail.textContent = `${scene.observation_date ?? "Дата неизвестна"} · ${scene.status === "analyzed" ? "Анализ доступен" : "Исходный снимок"}`;
+      detail.textContent = scene.observation_date
+        ? new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(scene.observation_date))
+        : "Дата неизвестна";
       node.append(title, detail);
       popup.current = new maplibregl.Popup({
         closeButton: false,
@@ -536,6 +572,7 @@ export default function MapPanel(props: Props) {
     observer.observe(host.current);
     return () => {
       window.clearTimeout(timeout);
+      attributionObserver.disconnect();
       observer.disconnect();
       popup.current?.remove();
       map.remove();
@@ -621,15 +658,16 @@ export default function MapPanel(props: Props) {
   }, [props.active]);
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready || !props.overviewRequest) return;
+    if (!map || !ready || !props.active || props.scene ||
+        (!props.overviewRequest && !lastScene.current)) return;
     lastScene.current = null;
     map.stop();
     map.easeTo({
       center: [39, 13],
-      zoom: window.innerWidth < 700 ? 1.6 : 2.6,
+      zoom: overviewZoom(),
       duration: reducedMotion() ? 0 : 600,
     });
-  }, [props.overviewRequest, ready]);
+  }, [props.overviewRequest, props.scene?.chip_id, props.active, ready]);
   return (
     <div className="map-host">
       <div

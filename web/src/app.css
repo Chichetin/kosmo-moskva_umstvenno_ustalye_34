@@ -156,7 +156,7 @@ input:focus-visible,
   content: "";
   position: absolute;
   inset: -16%;
-  z-index: 1;
+  z-index: 0;
   pointer-events: none;
   -webkit-mask-image: radial-gradient(
     ellipse 46% 61% at 50% 50%,
@@ -187,7 +187,7 @@ input:focus-visible,
 .ambient-shapes {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
@@ -221,6 +221,9 @@ input:focus-visible,
   inset: 0;
   width: 100%;
   height: 100%;
+}
+.map-host {
+  z-index: 1;
 }
 .map-unavailable {
   position: absolute;
@@ -296,7 +299,6 @@ input:focus-visible,
   border-radius: 11px;
   box-shadow: 0 18px 45px #0009;
   overflow: hidden;
-  backdrop-filter: blur(10px);
 }
 .search-box {
   height: 49px;
@@ -438,82 +440,15 @@ input:focus-visible,
   background: #35353b;
   color: #f5f5f7;
 }
-.map-top-center > span {
-  background: #171719df;
-  color: #c9c9d0;
-  border: 1px solid #37373d;
-  border-radius: 7px;
-  padding: 9px 11px;
-  font:
-    11px ui-monospace,
-    Consolas,
-    monospace;
-}
-.top-nav button.active,
-.top-export,
-.earth-button,
-.reopen-panel,
-.basemap-switch,
-.map-top-center > span {
-  border: 1px solid #ffffff20;
-  background: linear-gradient(
-      155deg,
-      #ffffff18,
-      #ffffff07 32%,
-      #ffffff02 70%
-    ),
-    #292d36b8;
-  box-shadow:
-    inset 0 1px 0 #ffffff20,
-    inset 0 -1px 0 #0000001f,
-    0 6px 18px #0006;
-  -webkit-backdrop-filter: blur(20px) saturate(1.08);
-  backdrop-filter: blur(20px) saturate(1.08);
-}
 .maplibregl-ctrl-group {
-  border: 1px solid #ffffff20 !important;
-  background: #292d36c9 !important;
-  box-shadow: inset 0 1px 0 #ffffff1b, 0 6px 18px #0006 !important;
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-}
-.top-nav button.active,
-.earth-button,
-.reopen-panel,
-.basemap-switch,
-.map-top-center > span {
-  border-radius: 12px;
-}
-.top-export,
-.maplibregl-ctrl-group {
-  border-radius: 10px;
-}
-.top-nav button.active,
-.top-export,
-.earth-button,
-.reopen-panel,
-.basemap-switch button,
-.maplibregl-ctrl-group button {
-  transition:
-    background 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease,
-    transform 180ms ease;
-}
-.top-nav button.active:hover,
-.top-export:hover,
-.earth-button:hover,
-.reopen-panel:hover {
-  border-color: #ffffff3a;
-  background: linear-gradient(155deg, #ffffff20, #ffffff08 60%), #323743d4;
-  box-shadow:
-    inset 0 1px 0 #ffffff29,
-    0 8px 20px #0007;
+  border-radius: 10px !important;
+  border: 1px solid #ffffff29 !important;
+  background: #242428e8 !important;
 }
 .basemap-switch button.active {
-  background: #ffffff1a;
+  background: #69788b75;
   color: #f5f5f7;
-  box-shadow: inset 0 1px 0 #ffffff26, 0 1px 4px #0004;
+  box-shadow: inset 0 1px 0 #ffffff33, 0 1px 4px #0004;
   border-radius: 8px;
 }
 .basemap-switch button:not(.active):hover {
@@ -532,7 +467,6 @@ input:focus-visible,
   border: 1px solid #424248;
   border-radius: 12px;
   box-shadow: 0 18px 55px #000b;
-  backdrop-filter: blur(12px);
 }
 .context-heading {
   display: flex;
@@ -1102,9 +1036,6 @@ tbody tr.selected {
     left: auto;
     right: 20px;
     transform: none;
-  }
-  .map-top-center > span {
-    display: none;
   }
   .context-panel {
     width: 330px;
