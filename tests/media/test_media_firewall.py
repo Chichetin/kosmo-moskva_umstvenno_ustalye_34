@@ -48,3 +48,13 @@ def test_media_writes_only_its_own_dir(settings, conn, tmp_path, monkeypatch):
     load_demo(conn, settings)
     assert list(out.iterdir()) == []
     assert settings.db_path.is_relative_to(tmp_path / "media")
+
+
+def test_form_parsing_dependency_is_direct():
+    """/report and /media/login parse multipart forms: python-multipart must not ride on another
+    package (it came only via streamlit, which is being removed — PR #169)."""
+    import tomllib
+    pyproject = tomllib.loads((SRC.parents[1] / "pyproject.toml").read_text(encoding="utf-8"))
+    names = [d.split(">")[0].split("<")[0].split("=")[0].strip().lower()
+             for d in pyproject["project"]["dependencies"]]
+    assert "python-multipart" in names
