@@ -16,6 +16,7 @@ import threading
 import time
 import uuid
 import zipfile
+from decimal import ROUND_HALF_UP, Decimal
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
@@ -390,15 +391,17 @@ def download(run_id: str | None = None,
         return _zip_bundle(run_dir, run_dir.name)
     if not _rebudget_lock.acquire(blocking=False):
         raise HTTPException(429, "Выгрузка под другой бюджет уже готовится, повторите через минуту")
-    work = Path(tempfile.mkdtemp(prefix="floodvalue-budget-"))
+    work: Path | None = None
+    budget_arg = str(Decimal(str(budget)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
     try:
+        work = Path(tempfile.mkdtemp(prefix="floodvalue-budget-"))
         for path in run_dir.iterdir():
             if path.is_file():
                 shutil.copy2(path, work / path.name)
         chip = ["--chip", str(metadata.get("chip_id"))]
         for step in REBUDGET_STEPS:
             command = [sys.executable, "-m", "floodvalue", step,
-                       *(chip + ["--budget", f"{budget:.2f}"] if step != "validate" else []),
+                       *(chip + ["--budget", budget_arg] if step != "validate" else []),
                        "--out", str(work)]
             done = subprocess.run(command, cwd=REPO_ROOT, capture_output=True, text=True,
                                   timeout=ANALYSIS_STEP_TIMEOUT_S)
@@ -410,8 +413,12 @@ def download(run_id: str | None = None,
         return _zip_bundle(work, str(rebudgeted.get("run_id", f"{run_dir.name}_{budget:.0f}")))
     except subprocess.TimeoutExpired as exc:
         raise HTTPException(504, "Пересчёт под бюджет не уложился во время") from exc
+    except OSError as exc:  # no temp space, no permission: a clear error, the lock is freed
+        raise HTTPException(503, "Не удалось подготовить выгрузку под бюджет: "
+                                 + _server_paths_hidden(str(exc))) from exc
     finally:
-        shutil.rmtree(work, ignore_errors=True)
+        if work is not None:
+            shutil.rmtree(work, ignore_errors=True)
         _rebudget_lock.release()
 
 

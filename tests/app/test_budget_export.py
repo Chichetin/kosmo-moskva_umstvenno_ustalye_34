@@ -102,3 +102,25 @@ def test_saturation_is_where_plan_c_stops_changing(tmp_path, monkeypatch, bundle
     unlimited = run.plan(FIXTURE, run.UNLIMITED_BUDGET_RUB)["plans"]["C"]
     assert run.plan(FIXTURE, saturation)["plans"]["C"] == unlimited
     assert run.plan(FIXTURE, saturation * 2)["plans"]["C"] == unlimited
+
+
+def test_lock_is_freed_when_the_temp_dir_cannot_be_made(bundle, monkeypatch):
+    def no_space(**kwargs):
+        raise OSError(28, "No space left on device")
+    monkeypatch.setattr(run.tempfile, "mkdtemp", no_space)
+    with pytest.raises(HTTPException) as err:
+        run.download(None, 2500.0)
+    assert err.value.status_code == 503 and not run._rebudget_lock.locked()
+
+
+def test_budget_argument_is_rounded_half_up(bundle, monkeypatch):
+    calls, _ = _fake_steps(monkeypatch)
+    run.download(None, 2500.005)
+    assert calls[0][calls[0].index("--budget") + 1] == "2500.01"
+
+
+def test_saturation_is_none_when_the_plan_cannot_be_computed(monkeypatch):
+    def broken(run_dir, budget):
+        raise ValueError("no manifest")
+    monkeypatch.setattr(run, "plan", broken)
+    assert run._plan_c_saturation(FIXTURE) is None
