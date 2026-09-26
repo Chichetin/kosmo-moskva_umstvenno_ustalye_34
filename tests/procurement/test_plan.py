@@ -319,3 +319,18 @@ def test_low_value_of_information_reason_and_risk_columns(tmp_path):
     assert float(a["addressed_decision_risk_rub"]) == 0
     meta = json.loads((tmp_path / "procurement_metadata.json").read_text(encoding="utf-8"))
     assert "min(p, 1−p)" in meta["rule_C"] and meta["decision_risk"]["status"] == "scenario"
+
+
+def test_plan_matches_bundle_files(tmp_path):
+    """#236: пересчёт для интерфейса (ползунок бюджета) при бюджете комплекта даёт те же зоны и
+    те же строки сравнения, что strategy_plans.json и strategy_comparison.csv."""
+    _write_run_dir(tmp_path)
+    prun.write_outputs(tmp_path, 5000)
+    res = procurement.plan(tmp_path, 5000)
+    plans = json.loads((tmp_path / "strategy_plans.json").read_text(encoding="utf-8"))
+    assert {s: plans[s] for s in "ABC"} == {s: res["plans"][s] for s in "ABC"}
+    with open(tmp_path / "strategy_comparison.csv", encoding="utf-8") as f:
+        comp = list(csv.DictReader(f))
+    assert [r["strategy"] for r in comp] == [r["strategy"] for r in res["comparison"]]
+    for row, got in zip(comp, res["comparison"]):
+        assert row == {k: prun._cell(got.get(k)) for k in row}, row["strategy"]
