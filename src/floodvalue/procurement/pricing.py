@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal, localcontext
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -139,11 +140,19 @@ def discount_coef(sensor_type: str, group_area_km2: Any, resolution_m: Any,
     s, r = _dec(group_area_km2), _dec(resolution_m)
     if s <= 0 or r <= 0:
         raise ValueError(f"S и r должны быть положительны: S={s} км², r={r} м")
+    value = _discount_raw(_dec(params["slope"]), _dec(params["intercept"]),
+                          _dec(params["floor"]), s, r)
+    return _quant(value, _rounding_step(cfg, "discount_coef"))
+
+
+@lru_cache(maxsize=4096)
+def _discount_raw(slope: Decimal, intercept: Decimal, floor: Decimal, s: Decimal,
+                  r: Decimal) -> Decimal:
+    # Pure; cached because C selection prices the same group areas many times (Decimal.ln).
     with localcontext() as ctx:
         ctx.prec = 40
-        raw = _dec(params["slope"]) * (s / (r * r)).ln() + _dec(params["intercept"])
-        value = min(Decimal(1), max(_dec(params["floor"]), raw))
-    return _quant(value, _rounding_step(cfg, "discount_coef"))
+        raw = slope * (s / (r * r)).ln() + intercept
+        return min(Decimal(1), max(floor, raw))
 
 
 def discount_group_id(sensor_type: str, resolution_m: Any, year: int,

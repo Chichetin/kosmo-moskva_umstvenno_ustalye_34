@@ -5,7 +5,7 @@
   ограничивает состав, при превышении ``budget_feasible=false`` (контрфактический вариант).
 * C — жадный отбор :data:`RULE_C`: на каждом шаге корзина переоценивается целиком
   (скидка Р по группе), берётся зона с наибольшим приростом уникально покрытой цены ошибки
-  решения R = V·q·min(p, 1−p) (:func:`decision_risk_rub`, D-048) на рубль прироста цены
+  решения R = V·q·min(p, 1−p) (:func:`decision_risk_rub`, D-049) на рубль прироста цены
   корзины, пока корзина ≤ бюджета; опция — социальное ограничение покрытия. Прежнее правило
   (EL на рубль, D-038) — ``rule_c="by_EL"``, строка ``C_by_EL`` чувствительности.
 
@@ -30,7 +30,7 @@ from floodvalue.procurement.pricing import basket_total, price_basket
 RULE_B = ("B: одна позиция W-CHIP (zone_kind=wide, основное предложение S1N — новая SAR 1 м) — "
           "сплошная новая съёмка всей области чипа, если она доступна к decision_deadline; "
           "состав не зависит от бюджета, EL и цены; сверх бюджета — контрфактическая")
-RULE_C = ("C (D-048): цель — ожидаемая цена ошибки решения R = V·q·min(p, 1−p) (сценарий, "
+RULE_C = ("C (D-049): цель — ожидаемая цена ошибки решения R = V·q·min(p, 1−p) (сценарий, "
           "руб.) по объектам status=ok; p — калиброванная вероятность из flood_probability.tif "
           "(EL = p·V·q, V·q = EL / p). R — ценность полной информации (EVPI) при допущениях: "
           "решение по объекту бинарное (выезд/нет); цена ошибки симметрична и равна V·q; снимок "
@@ -91,7 +91,7 @@ def other_cost(n_zones: int, other_cfg: Mapping[str, Any]) -> Decimal:
 
 
 def decision_risk_rub(p: float, value_rub: float, vulnerability: float) -> float:
-    """Ожидаемая цена ошибки решения R = V·q·min(p, 1−p), руб. (сценарий, D-048).
+    """Ожидаемая цена ошибки решения R = V·q·min(p, 1−p), руб. (сценарий, D-049).
 
     EVPI бинарного решения при симметричной цене ошибки V·q, идеальном снимке и откалиброванной
     p: 0,5·V·q при p = 0,5; 0 при p ∈ {0; 1}; симметрична по p ↔ 1−p."""
@@ -144,11 +144,14 @@ def _avail_key(item: Mapping[str, Any]) -> str:
 def _run_c(items: Mapping[str, Mapping[str, Any]], cov: Mapping[str, list[str]],
            el: Mapping[str, Mapping[str, float]], budget: Decimal, cfg: Mapping[str, Any],
            as_of: date, required: list[str], start: str | None,
-           rule_c: str = "risk") -> dict[str, Any]:
+           rule_c: str = "risk",
+           totals: dict[frozenset, Decimal] | None = None) -> dict[str, Any]:
     """Один проход отбора C: социальная фаза → (опц.) стартовая позиция ``start`` →
     жадное добавление по R (``rule_c="risk"``) или EL (``"by_EL"``) на рубль прироста цены
-    всей корзины."""
+    всей корзины. ``totals`` — общий для проходов кеш «состав корзины → цена» (цена корзины
+    не зависит от порядка позиций)."""
     by_el = rule_c == "by_EL"
+    totals = {} if totals is None else totals
     chosen: list[str] = []
     reasons: dict[str, str] = {}
     covered: set[str] = set()
@@ -164,7 +167,10 @@ def _run_c(items: Mapping[str, Mapping[str, Any]], cov: Mapping[str, list[str]],
             new = sorted(a for a in cov[cid] if a in el and a not in covered)
             if not new or (targets is not None and not set(new) & targets):
                 continue
-            new_total = basket_total(price(chosen + [cid], items, cfg, as_of))
+            basket = frozenset(chosen) | {cid}
+            if basket not in totals:
+                totals[basket] = basket_total(price(chosen + [cid], items, cfg, as_of))
+            new_total = totals[basket]
             if new_total > budget:
                 continue
             d_cost = new_total - total
@@ -228,7 +234,7 @@ def select_c(items: Mapping[str, Mapping[str, Any]], cov: Mapping[str, list[str]
              rule_c: str = "risk") -> tuple[list[str], dict[str, str], dict[str, Any]]:
     """Отбор C: чисто жадный проход и проходы «старт с каждой пригодной позиции, далее
     жадно» (частичный перебор первой позиции — защищает жадное правило от мелких дешёвых
-    шагов, закрывающих бюджет перед крупной позицией). ``rule_c="risk"`` (D-048): берётся
+    шагов, закрывающих бюджет перед крупной позицией). ``rule_c="risk"`` (D-049): берётся
     проход с наибольшей уникально покрытой ценой ошибки решения R, при равенстве — больше
     уникальный EL; ``"by_EL"`` (прежнее, D-038) — наибольший уникальный EL. Далее — дешевле,
     затем чисто жадный, затем меньший id стартовой позиции.
@@ -242,9 +248,10 @@ def select_c(items: Mapping[str, Mapping[str, Any]], cov: Mapping[str, list[str]
         raise ValueError(f"rule_c={rule_c!r}: ожидается одно из {RULES_C}")
     req = sorted(a for a in set(required) if a in el)
     pool = sorted(c for c, a in cov.items() if any(x in el for x in a))
-    runs = {"greedy": _run_c(items, cov, el, budget, cfg, as_of, req, None, rule_c)}
+    totals: dict[frozenset, Decimal] = {}
+    runs = {"greedy": _run_c(items, cov, el, budget, cfg, as_of, req, None, rule_c, totals)}
     for cid in pool:
-        r = _run_c(items, cov, el, budget, cfg, as_of, req, cid, rule_c)
+        r = _run_c(items, cov, el, budget, cfg, as_of, req, cid, rule_c, totals)
         if r["total"] is not None:
             runs[f"start:{cid}"] = r
 
@@ -304,7 +311,7 @@ def compute_plan(catalog: Mapping[str, Any], cov: Mapping[str, list[str]], eligi
                  as_of: date, *, other_cfg: Mapping[str, Any],
                  required: Iterable[str] = (), rule_c: str = "risk") -> dict[str, Any]:
     """Полный пересчёт A/B/C для бюджета: plans, plan_rows, comparison, reasons, social.
-    ``rule_c`` — правило C (D-048 ``"risk"``; ``"by_EL"`` — прежнее, для сравнения)."""
+    ``rule_c`` — правило C (D-049 ``"risk"``; ``"by_EL"`` — прежнее, для сравнения)."""
     items = catalog_items(catalog)
     el = assessed(loss)
     budget = Decimal(str(budget)).quantize(Decimal("0.01"))
@@ -406,7 +413,7 @@ def sensitivity(catalog: Mapping[str, Any], cov: Mapping[str, list[str]], eligib
     same_map = "; p, маска, порог и портфель не менялись"
     res = compute_plan(catalog, cov, eligible, loss, budget, cfg, as_of, **kw, rule_c="by_EL")
     row("C_by_EL", "C", {"rule_C": "by_EL"}, res,
-        f"прежнее правило C — max EL на рубль (D-038) вместо цены ошибки решения (D-048), "
+        f"прежнее правило C — max EL на рубль (D-038) вместо цены ошибки решения (D-049), "
         f"бюджет {budget} руб.", same_map)
     for b in budgets:
         b = Decimal(str(b)).quantize(Decimal("0.01"))

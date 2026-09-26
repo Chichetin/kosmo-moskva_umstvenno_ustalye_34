@@ -81,6 +81,34 @@ def test_budget_change_keeps_inputs(tmp_path):
     assert hashlib.sha256((tmp_path / "candidate_orders.geojson").read_bytes()).hexdigest() == cat_hash
 
 
+def test_plan_cache_same_result_and_invalidation(tmp_path, monkeypatch):
+    """Кеш контекста: тот же dict, смена бюджета не пересобирает каталог, правка входа
+    сбрасывает кеш (#105). Без порога по времени — считаются сборки контекста."""
+    import os
+    _write_run_dir(tmp_path)
+    cold = {b: prun._plan(prun._context(tmp_path), b) for b in (1000, 20000)}
+    builds = []
+    real = prun._context
+    monkeypatch.setattr(prun, "_context", lambda d: builds.append(d) or real(d))
+    prun._CONTEXT_CACHE.clear()
+    assert procurement.plan(tmp_path, 20000) == cold[20000]
+    assert procurement.plan(tmp_path, 1000) == cold[1000]
+    assert procurement.plan(tmp_path, 20000) == cold[20000]
+    assert len(builds) == 1
+    # same size, newer mtime -> rebuilt
+    loss = tmp_path / "asset_loss.csv"
+    st = loss.stat()
+    os.utime(loss, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
+    procurement.plan(tmp_path, 1000)
+    assert len(builds) == 2
+    # changed content -> rebuilt, result follows the new input
+    loss.write_text(",no_data".join(loss.read_text(encoding="utf-8").rsplit(",ok", 1)),
+                    encoding="utf-8")
+    os.utime(loss, ns=(st.st_atime_ns, st.st_mtime_ns + 2 * 10**9))
+    assert procurement.plan(tmp_path, 20000) != cold[20000]
+    assert len(builds) == 3
+
+
 def test_cli_procure_writes_contract_files(tmp_path):
     _write_run_dir(tmp_path)
     assert main(["procure", "--budget", "5000", "--out", str(tmp_path)]) == 0
@@ -130,7 +158,7 @@ def test_stale_catalog_file_is_not_used(tmp_path):
         for r, (lon, lat) in zip(rows, coords, strict=True):
             w.writerow({**r, "longitude": lon, "latitude": lat})
     res = procurement.plan(tmp_path, 2500)
-    # max R = V·q·min(p, 1−p) — у A05 (p = 0,5, D-048): зона у нового места A05 и соседей
+    # max R = V·q·min(p, 1−p) — у A05 (p = 0,5, D-049): зона у нового места A05 и соседей
     assert res["plans"]["C"][0] in ("Z-A04", "Z-A05", "Z-A06")
     c = next(r for r in res["comparison"] if r["strategy"] == "C")
     assert "A05" in c["covered_asset_ids"].split()
@@ -250,7 +278,7 @@ def test_coverage_at_base_deadline_matches_context(tmp_path):
 
 
 def test_low_value_of_information_reason_and_risk_columns(tmp_path):
-    """D-048: A01, A02 с p = 1 — R = 0: Z-A01 (покрывает только их) не покупается с причиной
+    """D-049: A01, A02 с p = 1 — R = 0: Z-A01 (покрывает только их) не покупается с причиной
     «низкая ценность информации»; strategy_comparison.csv несёт столбцы цены ошибки решения."""
     _write_run_dir(tmp_path)
     with open(tmp_path / "asset_loss.csv", encoding="utf-8") as f:

@@ -13,7 +13,7 @@ T0 = datetime(2017, 5, 30, 12, tzinfo=UTC)
 DEADLINE = datetime(2017, 5, 31, 0, tzinfo=UTC)
 ASSETS = [{"asset_id": f"A{i:02d}", "longitude": 80.0 + 0.02 * i, "latitude": 7.0}
           for i in range(1, 11)]  # 2 км между объектами — буферы не перекрываются
-# p = 0,5: цена ошибки решения R = V·q·min(p, 1−p) = EL — порядок C как по EL (D-048)
+# p = 0,5: цена ошибки решения R = V·q·min(p, 1−p) = EL — порядок C как по EL (D-049)
 LOSS = [{"asset_id": a["asset_id"], "status": "ok", "p_flood": "0.5",
          "expected_loss_rub": str(1_000_000 * (11 - i)), "uncertainty": "0.5"}
         for i, a in enumerate(ASSETS, 1)]

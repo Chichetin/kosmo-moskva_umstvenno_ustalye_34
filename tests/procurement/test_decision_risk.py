@@ -1,4 +1,4 @@
-"""C по цене ошибки решения R = V·q·min(p, 1−p) (D-048, #114; критерии 10, 15, 16)."""
+"""C по цене ошибки решения R = V·q·min(p, 1−p) (D-049, #114; критерии 10, 15, 16)."""
 import json
 from datetime import UTC, date, datetime
 from decimal import Decimal
