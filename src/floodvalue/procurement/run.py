@@ -275,7 +275,7 @@ def _cell(v: Any) -> str:
     if isinstance(v, Decimal):
         return f"{v:f}"
     if isinstance(v, float):
-        return repr(v)
+        return repr(v) if math.isfinite(v) else ""  # contract: empty, not "nan" (#235)
     return str(v)
 
 

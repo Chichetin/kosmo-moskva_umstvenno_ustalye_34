@@ -70,3 +70,15 @@ def test_missing_s1_manifest_raises(run_dir, tmp_path, monkeypatch):
     monkeypatch.setenv("FLOODVALUE_DATA_DIR", str(other))
     with pytest.raises(ValueError):
         procurement.plan(run_dir, 5000)
+
+
+def test_csv_writer_leaves_non_finite_numbers_empty(tmp_path):
+    """Contract: empty cell instead of NaN/Inf, not "nan" (validate rejects it) — #235."""
+    from floodvalue.contracts.io import read_csv
+    from floodvalue.procurement import run
+
+    path = tmp_path / "t.csv"
+    run._write_csv(path, ["a", "b", "c", "d"],
+                   [{"a": float("nan"), "b": float("inf"), "c": -float("inf"), "d": 1.5}])
+    assert path.read_text(encoding="utf-8") == "a,b,c,d\n,,,1.5\n"
+    read_csv(path)  # the strict contract reader accepts it
