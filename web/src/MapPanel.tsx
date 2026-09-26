@@ -17,7 +17,6 @@ type LayerFlags = {
   mask: boolean;
   uncertainty: boolean;
   assets: boolean;
-  zones: boolean;
 };
 type Props = {
   scenes: SceneSummary[];
@@ -172,11 +171,10 @@ export default function MapPanel(props: Props) {
       boundary: !!scene,
       assets: !!scene && visibleLayers.assets,
       "asset-focus": !!scene && visibleLayers.assets,
-      candidates: !!scene && visibleLayers.zones,
-      "candidate-hit": !!scene && visibleLayers.zones,
-      "plan-fill": !!scene && visibleLayers.zones,
-      "plan-line": !!scene && visibleLayers.zones,
-      "zone-focus": !!scene && visibleLayers.zones,
+      "plan-fill": !!scene,
+      "plan-glow": !!scene,
+      "plan-line": !!scene,
+      "zone-focus": !!scene && !!selectedZone,
       "media-area": showMessages && !!messages,
       "media-event": showMessages && !!messages,
       "media-report": showMessages && !!messages,
@@ -503,41 +501,36 @@ export default function MapPanel(props: Props) {
         },
       });
       map.addSource("candidate-data", { type: "geojson", data: empty });
-      map.addLayer({
-        id: "candidate-hit",
-        type: "fill",
-        source: "candidate-data",
-        paint: { "fill-color": "#4D9FFF", "fill-opacity": 0.01 },
-      });
-      map.addLayer({
-        id: "candidates",
-        type: "line",
-        source: "candidate-data",
-        paint: {
-          "line-color": "#d9e3ed",
-          "line-opacity": 0.7,
-          "line-width": 1.4,
-        },
-      });
       map.addSource("plan-data", { type: "geojson", data: empty });
       map.addLayer({
         id: "plan-fill",
         type: "fill",
         source: "plan-data",
-        paint: { "fill-color": "#4D9FFF", "fill-opacity": 0.19 },
+        paint: { "fill-color": "#a6df54", "fill-opacity": 0.28 },
+      });
+      map.addLayer({
+        id: "plan-glow",
+        type: "line",
+        source: "plan-data",
+        paint: {
+          "line-color": "#a8ed58",
+          "line-opacity": 0.55,
+          "line-width": 6,
+          "line-blur": 4,
+        },
       });
       map.addLayer({
         id: "plan-line",
         type: "line",
         source: "plan-data",
-        paint: { "line-color": "#8bc2ff", "line-width": 2.4 },
+        paint: { "line-color": "#c4f477", "line-width": 2.4 },
       });
       map.addLayer({
         id: "zone-focus",
         type: "line",
         source: "candidate-data",
         filter: ["==", ["get", "candidate_id"], ""],
-        paint: { "line-color": "#fff", "line-width": 3.5 },
+        paint: { "line-color": "#e0ffac", "line-width": 3.5 },
       });
       map.addSource("assets-data", { type: "geojson", data: empty });
       map.addLayer({
@@ -752,7 +745,7 @@ export default function MapPanel(props: Props) {
       const id = event.features?.[0]?.properties?.asset_id;
       if (typeof id === "string") current.current.onSelectAsset(id);
     });
-    map.on("click", "candidate-hit", (event) => {
+    map.on("click", "plan-fill", (event) => {
       if (onMessage(event.point) ||
           map.queryRenderedFeatures(event.point, { layers: ["assets"] }).length)
         return;

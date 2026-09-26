@@ -60,14 +60,14 @@
 }
 
 .pz-zone path {
-  fill: #4d9fff1f;
-  stroke: #4d9fff;
+  fill: #a6df541f;
+  stroke: #c4f477;
   stroke-width: 2;
 }
 
 .pz-zone.active path {
-  fill: #4d9fff38;
-  stroke: #cfe4ff;
+  fill: #a6df5438;
+  stroke: #e0ffac;
   stroke-width: 2.5;
 }
 
@@ -82,7 +82,7 @@
 }
 
 .pz-zone text {
-  fill: #cfe4ff;
+  fill: #e0ffac;
 }
 
 .pz-asset circle {
@@ -125,8 +125,8 @@
 }
 
 .pz-key.zone {
-  border: 2px solid #4d9fff;
-  background: #4d9fff1f;
+  border: 2px solid #c4f477;
+  background: #a6df541f;
 }
 
 .pz-key.covered,
@@ -156,7 +156,7 @@
 }
 
 .plan-zone.active {
-  outline-color: #4d9fff;
+  outline-color: #c4f477;
 }
 
 .plan-zone-picture {
@@ -176,7 +176,7 @@
   left: 6px;
   min-width: 22px;
   padding: 2px 6px;
-  background: #4d9fff;
+  background: #c4f477;
   color: #06121f;
   font-size: 12px;
   text-align: center;

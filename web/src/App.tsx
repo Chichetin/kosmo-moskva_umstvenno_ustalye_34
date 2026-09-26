@@ -47,6 +47,9 @@ const date = (value: string | null | undefined) =>
         timeZone: "UTC",
       }).format(new Date(value))
     : "Дата неизвестна";
+const ruPlural = new Intl.PluralRules("ru");
+const countLabel = (count: number, one: string, few: string, many: string) =>
+  `${count} ${ruPlural.select(count) === "one" ? one : ruPlural.select(count) === "few" ? few : many}`;
 const labels: Record<string, string> = {
   warehouse: "Склад",
   substation: "Подстанция",
@@ -129,7 +132,6 @@ type LayerFlags = {
   mask: boolean;
   uncertainty: boolean;
   assets: boolean;
-  zones: boolean;
 };
 type AnalysisJob = {
   job_id: string | null;
@@ -148,7 +150,6 @@ const defaults: LayerFlags = {
   mask: false,
   uncertainty: false,
   assets: true,
-  zones: true,
 };
 
 export default function App() {
@@ -458,8 +459,10 @@ export default function App() {
   const currentPlan = planFor && planFor.runId === activeSession?.run_id && planFor.budget === budget ? plan : null;
   const chosen = currentPlan?.comparison.find((row) => row.strategy === "C");
   const chosenZoneIds = new Set(currentPlan?.plans.C ?? []);
+  // Keep the slider scale fixed while the operator changes the budget.
   const sliderMax = Math.min(1_000_000_000, Math.ceil(
-    Math.max(activeSession?.plan_c_saturation_rub ?? 0, budget ?? 0, 5_000) * 1.1 / 1_000,
+    Math.max(activeSession?.plan_c_saturation_rub ?? 0,
+      activeSession?.metadata.budget.budget_rub ?? 0, 5_000) * 1.1 / 1_000,
   ) * 1_000);
   // The operator knows the country, not a Sen1Floods11 chip id: search by country only,
   // in English (as in the catalog) or Russian.
@@ -962,19 +965,6 @@ export default function App() {
                         Объекты<small>{assets.length} точек</small>
                       </span>
                     </label>
-                    <label className="layer-row">
-                      <input
-                        type="checkbox"
-                        checked={layers.zones}
-                        onChange={() => toggle("zones")}
-                      />
-                      <span>
-                        Зоны съёмки
-                        <small>
-                          {zones.length} кандидатов · план C выделен синим
-                        </small>
-                      </span>
-                    </label>
                   </>
                 )}
               </section>
@@ -982,6 +972,7 @@ export default function App() {
                 <>
                   <section className="context-section">
                     <h2>План дополнительной съёмки</h2>
+                    <p className="zone-map-note">Зелёным — зоны плана C. Контуры расчётные, не форма снимка.</p>
                     <label className="budget-field">
                       Бюджет данных, ₽
                       <input
@@ -1017,7 +1008,7 @@ export default function App() {
                       </p>
                     )}
                     <div className="plan-summary">
-                      <span>План C · {currentPlan?.plans.C.length ?? "—"} зон</span>
+                      <span>План C · {currentPlan ? countLabel(currentPlan.plans.C.length, "зона", "зоны", "зон") : "—"}</span>
                       <strong>{formatRub(chosen?.data_cost_rub)}</strong>
                     </div>
                     <div className="plan-summary">
@@ -1438,8 +1429,8 @@ export default function App() {
                     </section>
                     <section className="analysis-card">
                       <div className="card-title">
-                        <h2>Дополнительная съёмка</h2>
-                        <span>{zones.length} кандидатных зон</span>
+                        <h2>Зоны заказа</h2>
+                        <span>{countLabel(zones.length, "зона", "зоны", "зон")}</span>
                       </div>
                       <div className="zone-tabs">
                         <button
@@ -1455,7 +1446,7 @@ export default function App() {
                           Все зоны
                         </button>
                       </div>
-                      <div className="zone-list" aria-label={zoneView === "plan" ? "Зоны плана C" : "Все зоны съёмки"}>
+                      <div className="zone-list" aria-label={zoneView === "plan" ? "Зоны плана C" : "Все зоны заказа"}>
                         {zones
                           .filter(
                             (item) =>
@@ -1516,7 +1507,6 @@ export default function App() {
                             ] ??
                             "Причина выбора недоступна"}</span>
                           <button onClick={() => {
-                            setLayers((current) => ({ ...current, zones: true }));
                             setPanelOpen(true);
                             setSourceViewerOpen(true);
                           }}>Показать на карте</button>
