@@ -63,6 +63,8 @@ all:
 	@if $(HAS_MODEL_PREDICT); then $(PY) predict $(ALL_ARGS); else \
 	  echo "predict: floodvalue.model.predict ещё нет — временный основной метод baseline (D-009)"; \
 	  uv run --frozen python -m floodvalue.baseline.predict --chip $(ALL_CHIP) $(if $(OUT),--out $(OUT)); fi
+	@# #115: маска baseline того же S1 рядом с растрами основного метода (доп. файл §2)
+	uv run --frozen python -m floodvalue.baseline.predict --chip $(ALL_CHIP) --mask-only $(if $(OUT),--out $(OUT))
 	$(PY) assets $(ALL_ARGS)
 	$(PY) procure $(ALL_ARGS)
 	$(PY) export $(ALL_ARGS)
