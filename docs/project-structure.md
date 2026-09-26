@@ -37,14 +37,15 @@
   межмодульный импорт = строка таблицы со ссылкой на `D-…` в том же PR.
 - Записанные исключения (только чтение; каждому модулю — только то, что он использует):
   - чтение чипа `floodvalue.data.io`: `load_s1`, `load_label`, `valid_mask` (D-015) —
-    baseline, model, calibration; `layer_path`, `raw_dir`, `parse_chip_id`, `S1_LAYER`,
-    `JRC_LAYER` (D-057) — baseline, model, calibration, context; `layer_path`, `raw_dir`,
-    `JRC_LAYER` — только перечисленным в `FILES` файлам (путь к слою мимо замка
-    `load_label`);
+    baseline, model, calibration. Сверх D-015 (D-057): baseline — `layer_path`,
+    `S1_LAYER`; calibration — `layer_path`, `parse_chip_id`; model — `layer_path`,
+    `raw_dir`, `parse_chip_id`, `S1_LAYER`, `JRC_LAYER`; context — `layer_path`,
+    `raw_dir`, `parse_chip_id`. `layer_path`, `raw_dir`, `JRC_LAYER` — только
+    перечисленным в `FILES` файлам (путь к слою мимо замка `load_label`);
   - split `floodvalue.data.split`: `chip_ids` (§4 контрактов) — baseline, model,
-    calibration; `load_split`, `SealedTestError` (D-057) — baseline, model, calibration,
-    context; `SPLIT_PATH`, `event_of` — только `model/eval_test.py` (D-057);
-    `EVENT_PARTS` — app и context (D-050, D-057);
+    calibration. Сверх §4 (D-057): `load_split` — baseline, model, calibration;
+    `SealedTestError` — model, context; `SPLIT_PATH`, `event_of` — только
+    `model/eval_test.py`; `EVENT_PARTS` — app (D-050) и context (D-057);
   - общий алгоритм метрик §7 `floodvalue.model.metrics` — baseline, calibration (D-032);
   - `calibration` → `model.predict.METHODS` (D-041); `model` → `calibration.calibrator`,
     `calibration.uncertainty` ленивым импортом (D-039, D-041);
@@ -58,9 +59,11 @@
     `cli.main`.
 - Что тест не видит (D-057): что вызывающий делает с модулем, полученным из реестра через
   `importlib` (calibration → модули методов по `METHODS` — граница D-041; `eval_test` →
-  `baseline.predict`), и имена модулей, собранные f-строкой. Узкие тесты
-  `tests/baseline/test_baseline_imports.py`, `tests/calibration/test_calibration_imports.py`,
-  `tests/media/test_media_firewall.py` остаются.
+  `baseline.predict`), имена модулей, собранные f-строкой, и реэкспорт имени из `FILES`
+  через другой файл своего модуля (импорт внутри своего модуля разрешён всегда). Узкие
+  тесты `tests/baseline/test_baseline_imports.py`,
+  `tests/calibration/test_calibration_imports.py`, `tests/context/test_firewall.py` (D-042),
+  `tests/media/test_media_firewall.py` (D-051) остаются.
 
 ## Дерево
 

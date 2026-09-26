@@ -12,7 +12,9 @@ that use them (FILES): e.g. `data.io.layer_path` could reach LabelHand around th
 
 Not seen by the walk (D-057): what a caller does with a module it got from a registry through
 importlib (calibration -> `model.predict.METHODS`, bounded by D-041; model.eval_test ->
-`baseline.predict`) and module names built by f-strings. A new cross-module import fails
+`baseline.predict`), module names built by f-strings, and a FILES name re-exported through
+another file of the same module (imports inside a module are always allowed). A new
+cross-module import fails
 here until its line is added to ALLOWED (and FILES, if narrowed) with a D-… record.
 The older AST tests stay: tests/baseline/test_baseline_imports.py,
 tests/calibration/test_calibration_imports.py, tests/context/test_firewall.py (D-042),
