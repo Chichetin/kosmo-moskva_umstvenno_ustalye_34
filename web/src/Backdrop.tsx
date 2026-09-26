@@ -7,29 +7,34 @@ import "./backdrop.css";
  * WebGL canvas at ⅓ resolution and at most 20 fps, so the compositor has a single layer to update.
  * Reduced motion or a CPU rasteriser gives a still frame; a hidden tab or `paused` (the map covers
  * the screen, or the analysis screen is open) renders nothing; no WebGL leaves the static CSS gradient.
+ * `ocean` (the satellite base map) turns the graphite into the blue of the satellite ocean.
  */
-export default function Backdrop({ paused = false }: { paused?: boolean }) {
+export default function Backdrop({ paused = false, ocean = false }: { paused?: boolean; ocean?: boolean }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const pausedRef = useRef(paused);
-  const sync = useRef<() => void>(() => {});
+  const oceanRef = useRef(ocean);
+  const scene = useRef<ReturnType<typeof startScene>>(null);
 
   useEffect(() => {
-    const scene = startScene(canvas.current!, () => pausedRef.current);
-    if (!scene) return;
-    sync.current = scene.sync;
+    scene.current = startScene(canvas.current!, () => pausedRef.current, oceanRef.current);
     return () => {
-      sync.current = () => {};
-      scene.stop();
+      scene.current?.stop();
+      scene.current = null;
     };
   }, []);
 
   useEffect(() => {
     pausedRef.current = paused;
-    sync.current();
+    scene.current?.sync();
   }, [paused]);
 
+  useEffect(() => {
+    oceanRef.current = ocean;
+    scene.current?.setOcean(ocean);
+  }, [ocean]);
+
   return (
-    <div className="backdrop" aria-hidden="true">
+    <div className={`backdrop${ocean ? " is-ocean" : ""}`} aria-hidden="true">
       <canvas className="backdrop-canvas" ref={canvas} />
       <div className="backdrop-grain" />
     </div>
@@ -39,7 +44,7 @@ export default function Backdrop({ paused = false }: { paused?: boolean }) {
 const VERTEX = "attribute vec2 p;void main(){gl_Position=vec4(p,0.0,1.0);}";
 
 // Pools: the former static radials (68% 38%, 12% 92%) plus a faint upper-left one, each drifting
-// on 58–88 s cycles. Caustic: soft borders of two layers of drifting Worley cells bent by a slow
+// on 58–88 s cycles; uOcean (0…1) blends graphite into the satellite ocean (EOX tiles: #111e35). Caustic: soft borders of two layers of drifting Worley cells bent by a slow
 // two-octave warp, brighter toward the top; its terms repeat in 24–33 s. uShift is the parallax.
 const FRAGMENT = `
 #ifdef GL_FRAGMENT_PRECISION_HIGH
@@ -50,6 +55,7 @@ precision mediump float;
 uniform vec2 uRes;
 uniform float uTime;
 uniform vec2 uShift;
+uniform float uOcean;
 vec2 hash2(vec2 p) {
   p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
   return fract(sin(p) * 43758.5453);
@@ -78,13 +84,14 @@ void main() {
   vec2 px = gl_FragCoord.xy;
   vec2 uv = px / uRes;
   float t = uTime;
-  vec3 col = mix(vec3(0.020, 0.024, 0.027), vec3(0.043, 0.051, 0.063), uv.y);
+  vec3 col = mix(mix(vec3(0.020, 0.024, 0.027), vec3(0.055, 0.098, 0.176), uOcean),
+                 mix(vec3(0.043, 0.051, 0.063), vec3(0.067, 0.118, 0.208), uOcean), uv.y);
   vec2 b = vec2(0.12, 0.08) + vec2(0.07 * sin(t * 0.108), 0.05 * sin(t * 0.083 + 1.0)) + uShift * 0.5;
-  col = mix(col, vec3(0.090, 0.106, 0.122), pool(px, b, vec2(0.39, 0.30) * (1.0 + 0.05 * sin(t * 0.07))));
+  col = mix(col, mix(vec3(0.090, 0.106, 0.122), vec3(0.063, 0.125, 0.227), uOcean), pool(px, b, vec2(0.39, 0.30) * (1.0 + 0.05 * sin(t * 0.07))));
   vec2 a = vec2(0.68, 0.62) + vec2(0.06 * sin(t * 0.085), 0.04 * sin(t * 0.071 + 2.0)) + uShift;
-  col = mix(col, vec3(0.149, 0.169, 0.188), pool(px, a, vec2(0.52, 0.39) * (1.0 + 0.04 * sin(t * 0.06 + 1.0))));
+  col = mix(col, mix(vec3(0.149, 0.169, 0.188), vec3(0.086, 0.149, 0.251), uOcean), pool(px, a, vec2(0.52, 0.39) * (1.0 + 0.04 * sin(t * 0.06 + 1.0))));
   vec2 c = vec2(0.26, 0.82) + vec2(0.10 * sin(t * 0.071 + 3.0), 0.06 * sin(t * 0.058)) + uShift * 1.6;
-  col = mix(col, vec3(0.118, 0.137, 0.153), 0.72 * pool(px, c, vec2(0.30, 0.22)));
+  col = mix(col, mix(vec3(0.118, 0.137, 0.153), vec3(0.078, 0.137, 0.239), uOcean), 0.72 * pool(px, c, vec2(0.30, 0.22)));
 
   vec2 p = (px / uRes.y + uShift * 1.6) * 4.6;
   p += 0.55 * vec2(sin(p.y * 1.9 + t * 0.21), cos(p.x * 1.7 - t * 0.19));
@@ -106,7 +113,7 @@ const PARALLAX = 0.012; // share of the screen a layer shifts at the pointer's e
 // CPU rasterisers (VMs, no GPU): rendering competes with the map's tile workers, so a still frame.
 const SOFTWARE = /swiftshader|llvmpipe|softpipe|software|basic render/i;
 
-function startScene(canvas: HTMLCanvasElement, isPaused: () => boolean) {
+function startScene(canvas: HTMLCanvasElement, isPaused: () => boolean, ocean: boolean) {
   const gl = canvas.getContext("webgl", {
     alpha: false,
     antialias: false,
@@ -138,6 +145,9 @@ function startScene(canvas: HTMLCanvasElement, isPaused: () => boolean) {
   let ty = 0;
   let sx = 0;
   let sy = 0;
+  // palette: 0 graphite, 1 ocean; eased toward the target while the loop runs
+  let toneTarget = ocean ? 1 : 0;
+  let tone = toneTarget;
 
   const draw = (now: number) => {
     if (!res) return;
@@ -151,6 +161,7 @@ function startScene(canvas: HTMLCanvasElement, isPaused: () => boolean) {
     gl.uniform2f(res.uRes, w, h);
     gl.uniform1f(res.uTime, ((now - start) / 1000) % 3600);
     gl.uniform2f(res.uShift, -sx * PARALLAX, sy * PARALLAX);
+    gl.uniform1f(res.uOcean, tone);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   };
   const running = () =>
@@ -164,6 +175,7 @@ function startScene(canvas: HTMLCanvasElement, isPaused: () => boolean) {
     last = now;
     sx += (tx - sx) * 0.08;
     sy += (ty - sy) * 0.08;
+    tone += Math.abs(toneTarget - tone) < 0.005 ? toneTarget - tone : (toneTarget - tone) * 0.18;
     const t0 = performance.now();
     draw(now);
     if (measured < 30) {
@@ -225,6 +237,13 @@ function startScene(canvas: HTMLCanvasElement, isPaused: () => boolean) {
   canvas.addEventListener("webglcontextrestored", restored);
   return {
     sync,
+    setOcean(on: boolean) {
+      toneTarget = on ? 1 : 0;
+      if (!raf) {
+        tone = toneTarget; // no loop running (still, paused): switch at once
+        redraw();
+      }
+    },
     stop() {
       clearTimeout(delay);
       cancelAnimationFrame(raf);
@@ -259,6 +278,7 @@ function setup(gl: WebGLRenderingContext) {
     uRes: gl.getUniformLocation(program, "uRes"),
     uTime: gl.getUniformLocation(program, "uTime"),
     uShift: gl.getUniformLocation(program, "uShift"),
+    uOcean: gl.getUniformLocation(program, "uOcean"),
   };
 }
 

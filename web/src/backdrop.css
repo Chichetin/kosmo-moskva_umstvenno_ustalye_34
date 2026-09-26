@@ -13,6 +13,13 @@
     linear-gradient(180deg, #0b0d10 0%, #050607 100%);
 }
 
+/* Satellite base map: the same blue as the satellite ocean (fallback without WebGL). */
+.backdrop.is-ocean {
+  background:
+    radial-gradient(1200px 900px at 68% 38%, #162640 0%, transparent 62%),
+    linear-gradient(180deg, #111e35 0%, #0e192d 100%);
+}
+
 .backdrop-canvas {
   position: absolute;
   inset: 0;
