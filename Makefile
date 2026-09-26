@@ -5,7 +5,7 @@ BUDGET ?=
 OUT ?=
 GPU ?=
 TAG ?=
-STAGE_ARGS = $(if $(CHIP),--chip $(CHIP)) $(if $(BUDGET),--budget $(BUDGET)) $(if $(OUT),--out $(OUT))
+STAGE_ARGS = $(if $(CHIP),--chip $(CHIP)) $(if $(S1),--s1 $(S1)) $(if $(BUDGET),--budget $(BUDGET)) $(if $(OUT),--out $(OUT))
 
 # GPU-окружение для обучения (scripts/setup_gpu_env.sh, D-024): отдельный venv вне
 # репозитория, вне uv.lock (тот фиксирует CPU-torch для инференса у жюри, D-003).
@@ -63,6 +63,8 @@ all:
 	@if $(HAS_MODEL_PREDICT); then $(PY) predict $(ALL_ARGS); else \
 	  echo "predict: floodvalue.model.predict ещё нет — временный основной метод baseline (D-009)"; \
 	  uv run --frozen python -m floodvalue.baseline.predict --chip $(ALL_CHIP) $(if $(OUT),--out $(OUT)); fi
+	@# #115: маска baseline того же S1 рядом с растрами основного метода (доп. файл §2)
+	uv run --frozen python -m floodvalue.baseline.predict --chip $(ALL_CHIP) --mask-only $(if $(OUT),--out $(OUT))
 	$(PY) assets $(ALL_ARGS)
 	$(PY) procure $(ALL_ARGS)
 	$(PY) export $(ALL_ARGS)

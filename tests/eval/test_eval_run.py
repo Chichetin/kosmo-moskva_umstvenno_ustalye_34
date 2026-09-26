@@ -108,6 +108,50 @@ def test_part_test_with_uncommitted_config_is_refused(monkeypatch, capsys, tmp_p
     assert "uncommitted" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("confirm", [False, True])
+def test_part_test_for_non_final_method_is_refused_before_hash(monkeypatch, capsys, tmp_path,
+                                                                test_log, confirm):
+    """D-025: test opens only for the final method; a candidate is refused before any test
+    read and before the configuration hash is even computed (#111)."""
+    if confirm:
+        monkeypatch.setenv(E.CONFIRM_ENV, E.frozen_config_hash(method="pixel"))
+    forbid_test_reads(monkeypatch)
+
+    def no_hash(*a, **k):
+        raise AssertionError("config hash requested for a non-final method")
+    monkeypatch.setattr(E, "frozen_config_hash", no_hash)
+    monkeypatch.setattr(E, "uncommitted_frozen_paths", lambda *a, **k: "")
+    monkeypatch.setenv("FLOODVALUE_METHOD", "pixel")
+    before = test_log.read_text(encoding="utf-8")
+    rc = cli.main(["eval-test", "--part", "test", "--out", str(tmp_path / "o")])
+    out = capsys.readouterr().out
+    assert rc == 3 and "отказ" in out and "D-025" in out and "pixel" in out
+    assert test_log.read_text(encoding="utf-8") == before
+    assert not (tmp_path / "o").exists()
+
+
+def test_part_test_gate_accepts_final_method_named_explicitly(monkeypatch):
+    monkeypatch.setenv("FLOODVALUE_METHOD", E.main_predict.DEFAULT_METHOD)
+    monkeypatch.setattr(E, "uncommitted_frozen_paths", lambda *a, **k: "")
+    monkeypatch.setenv(E.CONFIRM_ENV, E.frozen_config_hash())
+    assert E.open_test_gate()[0] == E.frozen_config_hash()
+
+
+def test_non_test_part_keeps_candidate_method(data_root, tmp_path, monkeypatch):
+    """dev/validation still evaluate a candidate chosen by FLOODVALUE_METHOD."""
+    monkeypatch.setenv("FLOODVALUE_METHOD", "pixel")
+    seen = {}
+
+    def fake_eval(part, chips, workdir, **k):
+        seen["part"] = part
+        raise RuntimeError("stop after the gate")
+    monkeypatch.setattr(E, "chip_ids", lambda part, **k: ["Sri-Lanka_2"])
+    monkeypatch.setattr(E, "evaluate", fake_eval)
+    with pytest.raises(RuntimeError, match="stop after the gate"):
+        cli.main(["eval-test", "--part", "validation", "--out", str(tmp_path / "o")])
+    assert seen["part"] == "validation"
+
+
 def test_labels_of_test_events_stay_sealed_without_flag(data_root):
     with pytest.raises(SealedTestError):
         E.io.load_label("Spain_9")
@@ -122,7 +166,16 @@ def test_validation_run_writes_report_on_identical_pixels(data_root, tmp_path, m
     names = sorted(p.name for p in out.iterdir())
     assert names == sorted(f"eval-validation{s}" for s in (
         ".md", ".csv", "-chips.csv", "-reliability.csv", "-proxy.csv", "-summary.json",
-        "-errors.png"))
+        "-errors.png", "-qc.csv"))
+    with open(out / "eval-validation-qc.csv", newline="", encoding="utf-8") as f:
+        qc = list(csv.DictReader(f))
+    assert list(qc[0]) == C.QC_COLUMNS and [r["chip_id"] for r in qc] == sorted(chips)
+    for r in qc:                                            # write_chip: 3×3 NaN, 4 rows of −1
+        assert int(r["n_pixels_total"]) == H * W
+        assert float(r["s1_nan_share"]) == pytest.approx(9 / (H * W), abs=1e-6)
+        assert float(r["label_invalid_share"]) == pytest.approx(4 * W / (H * W), abs=1e-6)
+        assert int(r["n_s1_nan_label_01"]) == 9            # label 1 under the NaN corner
+        assert float(r["vv_gt0_share"]) == 0.0 and float(r["vh_gt0_share"]) == 0.0
     with open(out / "eval-validation.csv", newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     assert list(rows[0]) == E.M.METRIC_COLUMNS
@@ -147,6 +200,7 @@ def test_validation_run_writes_report_on_identical_pixels(data_root, tmp_path, m
     assert 0 <= s["calibration"]["ALL"]["ece"] <= 1
     md = (out / "eval-validation.md").read_text(encoding="utf-8")
     assert "не фактические потери" in md and "Test не читался" in md
+    assert "Пиксельный QC чипов части" in md and "eval-validation-qc.csv" in md
     calibrated = (E.MODELS_DIR / "unet" / "calibration.json").exists()   # #20, D-029
     assert ("Калибровка: применена в predict" in md) == calibrated
     assert ("сырая p" in md) == (not calibrated)
@@ -155,6 +209,27 @@ def test_validation_run_writes_report_on_identical_pixels(data_root, tmp_path, m
     for r in proxy:                                         # EL_ref = y·V·q on scored points
         if r["included"] == "true":
             assert float(r["el_ref"]) == pytest.approx(int(r["y"]) * float(r["V"]) * float(r["q"]))
+
+
+def test_pixel_qc_uses_the_single_read_of_each_chip(data_root, tmp_path, monkeypatch):
+    """#64: QC comes from the arrays of the evaluation loop, no second read of S1 or label."""
+    calls = {"label": 0, "s1": 0}
+    real_label, real_s1 = E.io.load_label, E.io.load_s1
+
+    def count_label(*a, **k):
+        calls["label"] += 1
+        return real_label(*a, **k)
+
+    def count_s1(*a, **k):
+        calls["s1"] += 1
+        return real_s1(*a, **k)
+
+    monkeypatch.setattr(E.io, "load_label", count_label)
+    monkeypatch.setattr(E.io, "load_s1", count_s1)
+    res = E.evaluate("validation", ["Sri-Lanka_1", "Nigeria_3"], tmp_path)
+    assert calls == {"label": 2, "s1": 2}
+    assert [q["chip_id"] for q in res["qc"]] == ["Nigeria_3", "Sri-Lanka_1"]
+    assert res["qc"][0]["event"] == "Nigeria" and res["qc"][0]["n_s1_nan_label_01"] == 9
 
 
 def test_different_valid_pixels_fail_the_run(data_root, tmp_path, monkeypatch):

@@ -1,6 +1,12 @@
-"""`python -m floodvalue predict --chip <id> [--out <dir>]`: p-raster and mask of the main method.
+"""`python -m floodvalue predict --chip <id> | --s1 <path> [--out <dir>]`: p-raster and mask.
 
-Reads only the S1 chip (no labels), runs the method's `predict_proba` (docs/contracts.md §3)
+`--chip` reads `HandLabeled/S1Hand/<id>_S1Hand.tif`; `--s1` reads any 2-band S1 GeoTIFF (VV, VH
+in dB, NaN = no data), e.g. an official `S1Weak` chip outside HandLabeled (#87): chip_id
+is the file name before `_S1`, output goes to `<FLOODVALUE_OUTPUT_DIR>/<chip_id>` and
+prediction.json gets `label_status: "no_label"` (no label is read, no metrics are computed).
+Same method, calibration and threshold in both modes — nothing is fitted here.
+
+Reads only the S1 file (no labels), runs the method's `predict_proba` (docs/contracts.md §3)
 and writes on the S1 grid (§2):
   flood_probability.tif  Float32, p in [0, 1], nodata -9999
   flood_mask.tif         UInt8, 1 <=> p >= threshold, nodata 255
@@ -39,6 +45,12 @@ MASK_NODATA = 255
 
 def s1_chip_path(chip_id: str) -> Path:
     return data_dir() / "raw" / "HandLabeled" / "S1Hand" / f"{chip_id}_S1Hand.tif"
+
+
+def chip_id_from_s1_path(path) -> str:
+    """`India_1029501_S1Weak.tif` -> `India_1029501`; a name without `_S1` -> its stem."""
+    stem = Path(path).stem
+    return stem.split("_S1")[0] if "_S1" in stem else stem
 
 
 def write_rasters(p: np.ndarray, threshold: float, profile: dict, out: Path) -> None:
@@ -103,14 +115,30 @@ def run(args) -> int:
     if method not in METHODS:
         print(f"unknown method {method!r}; known: {sorted(METHODS)}")
         return 2
-    if not args.chip:
-        print("predict needs --chip <chip_id>, e.g. --chip Sri-Lanka_713926")
+    s1_arg = getattr(args, "s1", None)
+    if args.chip and s1_arg:
+        print("predict takes either --chip <chip_id> or --s1 <path>, not both")
         return 2
-    src_path = s1_chip_path(args.chip)
-    if not src_path.exists():
-        print(f"S1 chip not found: {src_path} (FLOODVALUE_DATA_DIR={data_dir()})")
+    if not args.chip and not s1_arg:
+        print("predict needs --chip <chip_id> (HandLabeled, e.g. --chip Sri-Lanka_713926) "
+              "or --s1 <path to any 2-band S1 GeoTIFF>")
         return 2
+    if s1_arg:
+        src_path = Path(s1_arg)
+        chip_id = chip_id_from_s1_path(src_path)
+        if not src_path.exists():
+            print(f"S1 file not found: {src_path}")
+            return 2
+    else:
+        chip_id = args.chip
+        src_path = s1_chip_path(chip_id)
+        if not src_path.exists():
+            print(f"S1 chip not found: {src_path} (FLOODVALUE_DATA_DIR={data_dir()})")
+            return 2
     with rasterio.open(src_path) as src:
+        if src.count != 2:
+            print(f"{src_path}: expected 2 bands (VV, VH in dB), got {src.count}")
+            return 2
         s1 = src.read().astype(np.float32)
         profile = src.profile
     module = importlib.import_module(METHODS[method])
@@ -132,16 +160,18 @@ def run(args) -> int:
         calibration = {"file": f"models/{method}/calibration.json",
                        "sha256": calibrator.file_sha256(cal_path),
                        "kind": cal["calibrator"]["kind"]}
-    out = Path(args.out) if args.out else output_dir() / args.chip
+    out = Path(args.out) if args.out else output_dir() / chip_id
     write_rasters(p, threshold, profile, out)
     u, lo, hi, unc_meta = uncertainty_rasters(module, s1, p_raw, p, cal_fn, threshold, method,
                                               config["weights_sha256"])
     write_uncertainty(u, lo, hi, profile, out)
-    meta = {"chip_id": args.chip, "method": method, "s1_file": src_path.name,
+    meta = {"chip_id": chip_id, "method": method, "s1_file": src_path.name,
             "weights_sha256": config["weights_sha256"], "threshold": threshold,
             "threshold_status": threshold_status, "calibration": calibration,
             "uncertainty": unc_meta,
             "valid_pixels": int(np.isfinite(p).sum()), "seconds": round(seconds, 2)}
+    if s1_arg:
+        meta["label_status"] = "no_label"
     (out / "prediction.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False) + "\n",
                                          encoding="utf-8")
     print(json.dumps(meta, ensure_ascii=False))

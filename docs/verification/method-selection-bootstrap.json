@@ -1,0 +1,34 @@
+{
+ "chips": 69,
+ "valid_mask_sha256_prefix": "cf89ac0b",
+ "pooled_iou": {
+  "pixel": 0.52996,
+  "unet": 0.58447,
+  "baseline": 0.3908
+ },
+ "unet_minus_pixel": {
+  "diff": 0.0545,
+  "ci95": [
+   0.018,
+   0.1016
+  ],
+  "p_diff_le_0": 0.001
+ },
+ "unet_minus_baseline": {
+  "diff": 0.1937,
+  "ci95": [
+   0.1413,
+   0.2501
+  ],
+  "p_diff_le_0": 0.0
+ },
+ "pixel_minus_baseline": {
+  "diff": 0.1392,
+  "ci95": [
+   0.0554,
+   0.204
+  ],
+  "p_diff_le_0": 0.0
+ },
+ "source": "вывод скрипта в method-selection.md §2, значения как в выводе (округлены)"
+}

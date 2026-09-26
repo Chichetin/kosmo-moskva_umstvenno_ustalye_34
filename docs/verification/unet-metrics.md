@@ -56,6 +56,11 @@ p ≥ 0,5, до калибровки. Валидный пиксель: S1 кон
 `unet-evaluator.md`) отличается на десятки пикселей из миллионов: IoU dev 0,58447 против
 0,58448, выводы те же. Колонка `method` = `unet`; в `metrics.csv` комплекта экспорт пишет `main`.
 
+**Порог в этой таблице — сырая p ≥ 0,5, до калибровки.** Выдаваемая конфигурация — Platt и
+порог 0,37 (D-029). Её числа на validation (ALL 0,685 против baseline 0,580, Nigeria 0,778,
+Sri-Lanka 0,621) — в `docs/verification/eval-validation.md` §1
+(`python -m floodvalue eval-test --part validation`); для критерия 4 основной источник — он.
+
 **Парный бутстрэп по чипам** (2000 повторов, U-Net и baseline на одних выборках чипов;
 `python -m floodvalue.model.unet.report` → `unet-vs-baseline-bootstrap.json`):
 разность IoU U-Net − baseline на dev составляет +0,194, 95 % CI [+0,141; +0,250]. На

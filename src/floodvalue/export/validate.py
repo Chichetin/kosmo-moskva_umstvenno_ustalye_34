@@ -43,6 +43,7 @@ EL_TOL = 0.01  # EL written to the kopeck
 P_TOL = 1e-6  # p_flood vs float32 raster value
 COORD_TOL = 1e-7  # degrees, ~1 cm
 THRESHOLD_TOL = 1e-9  # main threshold in metrics.csv vs run_metadata.threshold (float noise)
+BASELINE_MASK = "baseline_mask.tif"  # optional raster, contracts §2 (#115)
 
 
 def _utc(value: datetime) -> datetime:
@@ -185,6 +186,47 @@ def _check_rasters(report: _Report, run_dir: Path, meta: RunMetadata | None):
                                            rtol=0, atol=1e-9)):
                     report.add(P, f"сетка не совпадает с S1-чипом {s1.name}")
     return p, valid, p_prof
+
+
+def _check_baseline_mask(report: _Report, run_dir: Path) -> None:
+    """Optional baseline_mask.tif (contracts §2): absent is fine; present must sit on the grid of
+    flood_probability.tif (itself checked against S1), hold only 0/1/255 and have 255 exactly
+    where p is -9999, i.e. where S1 has no data. Errors go to flood_mask.tif, its sibling."""
+    path = run_dir / BASELINE_MASK
+    if not path.is_file():
+        return
+
+    def err(message: str) -> None:
+        report.add(F.FLOOD_MASK, f"{BASELINE_MASK} (доп.): {message}")
+
+    try:
+        with rasterio.open(run_dir / F.FLOOD_PROBABILITY) as src:
+            p_prof, p = src.profile, src.read(1)
+        with rasterio.open(path) as src:
+            b_prof, b = src.profile, src.read()
+    except Exception as exc:  # noqa: BLE001 - malformed file: report, keep checking
+        err(f"не читается: {type(exc).__name__}: {exc}")
+        return
+    if b.shape[0] != 1:
+        err(f"каналов {b.shape[0]}, нужен 1")
+    if b_prof["dtype"] != F.MASK_DTYPE:
+        err(f"тип {b_prof['dtype']}, нужен UInt8")
+    if b_prof.get("nodata") != F.MASK_NODATA:
+        err(f"nodata {b_prof.get('nodata')}, нужен 255")
+    b = b[0]
+    bad = ~np.isin(b, (0, 1, F.MASK_NODATA))
+    if bad.any():
+        err(f"значения кроме 0/1/255 в {int(bad.sum())} пикселях")
+    same_grid = (b.shape == p.shape and b_prof.get("crs") == p_prof.get("crs")
+                 and np.allclose(tuple(b_prof["transform"]), tuple(p_prof["transform"]),
+                                 rtol=0, atol=1e-12))
+    if not same_grid:
+        err("сетка (CRS, transform, размер) не совпадает с flood_probability.tif / S1-чипом")
+        return
+    no_s1 = ~np.isfinite(p) | (p == F.PROBABILITY_NODATA)
+    mismatch = no_s1 != (b == F.MASK_NODATA)
+    if mismatch.any():
+        err(f"255 не ровно там, где нет данных S1 (p = -9999), в {int(mismatch.sum())} пикселях")
 
 
 def _sample(raster, lon: float, lat: float) -> tuple[bool, float | None]:
@@ -396,6 +438,8 @@ def validate_run(run_dir: Path, assets_config: Path | None = None,
             raster = _check_rasters(report, run_dir, meta)
         except Exception as exc:  # noqa: BLE001
             report.add(F.FLOOD_PROBABILITY, f"растры не читаются: {type(exc).__name__}: {exc}")
+    if F.FLOOD_PROBABILITY in present and F.FLOOD_MASK in present:
+        _check_baseline_mask(report, run_dir)
 
     # assets.geojson / assets.csv ---------------------------------------------------------------
     assets = guarded(F.ASSETS_GEOJSON, lambda: _load_features(
