@@ -259,8 +259,12 @@ def config_sources(pricing: dict, event_date: str) -> list[dict]:
 
 
 def eval_summary_file(part: str) -> str:
-    """Repo-relative path of the eval-test summary of a split part (written by eval-test)."""
-    return f"docs/verification/eval-{part}-summary.json"
+    """Repo-relative path of the eval-test summary of a split part (written by eval-test).
+
+    Same prefix as model.eval_test.prefix_of: test -> test-eval, others -> eval-<part>.
+    """
+    prefix = "test-eval" if part == "test" else f"eval-{part}"
+    return f"docs/verification/{prefix}-summary.json"
 
 
 def proxy_check(summary: dict | None, source: str, chip_id: str, part: str,

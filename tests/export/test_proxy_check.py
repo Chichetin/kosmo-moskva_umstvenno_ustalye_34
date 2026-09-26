@@ -52,7 +52,7 @@ def test_validation_summary_of_the_same_chip_gives_numbers_but_stays_planned():
 
 def test_test_summary_is_done_and_independent():
     out = _proxy(_summary(part="test", chip="Spain_7370579"), chip="Spain_7370579", part="test",
-                 source="docs/verification/eval-test-summary.json")
+                 source="docs/verification/test-eval-summary.json")
     assert out["status"] == "done" and out["result"]["independent"] is True
     assert out["result"]["demo_chip"]["n_points"] == 10
 
@@ -112,3 +112,10 @@ def test_export_reads_the_summary_of_the_chip_part(env, monkeypatch, tmp_path): 
     assert got["status"] == "planned" and got["result"]["estimated"] is True
     assert got["result"]["source"] == "docs/verification/eval-validation-summary.json"
     assert got["result"]["demo_chip"]["mae_rub"] == 274285.6582
+
+
+def test_summary_file_matches_eval_test_prefix():
+    from floodvalue.export.assemble import eval_summary_file
+    from floodvalue.model.eval_test import prefix_of
+    for part in ("dev", "validation", "test"):
+        assert eval_summary_file(part) == f"docs/verification/{prefix_of(part)}-summary.json"
