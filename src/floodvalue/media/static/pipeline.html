@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Разбор СМИ — Митрандир</title>
+<link rel="stylesheet" href="/media/static/media.css">
+<link rel="stylesheet" href="/media/static/pipeline.css">
+</head>
+<body>
+<header class="topbar">
+  <span class="brand">Митрандир <small>разбор СМИ</small></span>
+  <span class="grow"></span>
+  <a class="btn small" href="/media/analyst">Аналитик</a>
+</header>
+
+<main class="pl">
+  <section class="pl-intro">
+    <h1>Как система читает новости</h1>
+    <p class="muted">Каждая публикация проходит шесть стадий. Ниже — реальные публикации из живой базы,
+      по стадиям слева направо. Сообщения СМИ не подтверждают затопление спутником и не входят
+      в вероятность воды, ущерб и план съёмки.</p>
+    <ol class="pl-legend" aria-label="Стадии">
+      <li>Источник</li><li>Публикация</li><li>Фильтр</li><li>Извлечение</li><li>Геокодирование</li><li>Событие</li>
+    </ol>
+  </section>
+
+  <section class="panel pl-sources" aria-labelledby="src-title">
+    <div class="pl-row">
+      <h2 id="src-title">Источники</h2>
+      <span class="grow"></span>
+      <button class="btn small" id="ingest" type="button">Собрать сейчас</button>
+    </div>
+    <p class="muted small m0" id="src-note"></p>
+    <ul class="pl-srclist" id="sources"><li class="muted">Загружаем…</li></ul>
+  </section>
+
+  <div class="pl-row pl-toolbar">
+    <label class="pl-check"><input type="checkbox" id="rejected"> Показать отброшенные фильтром</label>
+    <select id="source-filter" aria-label="Источник"><option value="">Все источники</option></select>
+    <span class="grow"></span>
+    <span class="muted small" id="count"></span>
+  </div>
+
+  <ol class="pl-feed" id="feed" aria-live="polite"></ol>
+</main>
+<div class="toast hidden" id="toast" role="status"></div>
+<script src="/media/static/pipeline.js"></script>
+</body>
+</html>
