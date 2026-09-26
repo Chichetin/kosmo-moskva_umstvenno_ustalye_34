@@ -1,7 +1,7 @@
 {
  "part": "dev",
- "commit": "23e3e9215d723eeb47d30edd4b819d6dbec6aa1c",
- "config_sha256": "506ce620d041373c6b312ead25deed6221e79704fe3ce2fa60d24add0ea31c1e",
+ "commit": "7bbc1a9616edb0c8e459c8f74b0c540b7239118c",
+ "config_sha256": "e8fa3dae8067cb421e9a4d014c1ccceb90bde83999d40731b229e199ba8931c8",
  "main_method": "unet",
  "threshold": 0.37,
  "threshold_status": "calibrated (platt) and chosen on validation, D-029",
@@ -103,6 +103,48 @@
  "error_maps": [
   "USA_1010394",
   "USA_955053"
+ ],
+ "pixel_qc": [
+  {
+   "scope": "USA",
+   "n_chips": 69,
+   "vv_nan_share": 0.02389598238295403,
+   "vh_nan_share": 0.02389598238295403,
+   "s1_nan_share": 0.02389598238295403,
+   "label_invalid_share": 0.024413509645323822,
+   "label_other_share": 0.0,
+   "vv_pos_share": 0.001254371974779212,
+   "vh_pos_share": 3.809168718863225e-05,
+   "s1_nan_label_0_share": 0.00040546361950860506,
+   "s1_nan_label_1_share": 1.006195510643116e-05,
+   "s1_nan_label_invalid_share": 0.023480456808338993,
+   "chips_with_nan": 9,
+   "chips_nan_gt_half": 1,
+   "chips_nan_labelled": 5,
+   "chips_invalid_gt_half": 2,
+   "chips_vv_pos": 69,
+   "chips_label_other": 0
+  },
+  {
+   "scope": "ALL",
+   "n_chips": 69,
+   "vv_nan_share": 0.02389598238295403,
+   "vh_nan_share": 0.02389598238295403,
+   "s1_nan_share": 0.02389598238295403,
+   "label_invalid_share": 0.024413509645323822,
+   "label_other_share": 0.0,
+   "vv_pos_share": 0.001254371974779212,
+   "vh_pos_share": 3.809168718863225e-05,
+   "s1_nan_label_0_share": 0.00040546361950860506,
+   "s1_nan_label_1_share": 1.006195510643116e-05,
+   "s1_nan_label_invalid_share": 0.023480456808338993,
+   "chips_with_nan": 9,
+   "chips_nan_gt_half": 1,
+   "chips_nan_labelled": 5,
+   "chips_invalid_gt_half": 2,
+   "chips_vv_pos": 69,
+   "chips_label_other": 0
+  }
  ],
  "baseline_crosscheck": "совпадает (TP/FP/FN/TN и valid_mask_sha256)"
 }
