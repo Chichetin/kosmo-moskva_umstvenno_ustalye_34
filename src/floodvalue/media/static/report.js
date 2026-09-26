@@ -196,6 +196,7 @@
   function initMap() {
     if (typeof L === "undefined") { $("map-fallback").classList.remove("hidden"); $("minimap").classList.add("hidden"); return; }
     map = L.map("minimap", { zoomControl: true, attributionControl: true }).setView([55.75, 37.62], 4);
+    map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener noreferrer">Leaflet</a>');  // plain library credit, no flag icon
     // OSM tile policy requires a Referer; the page itself stays no-referrer (status tokens).
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 18, attribution: "© участники OpenStreetMap",

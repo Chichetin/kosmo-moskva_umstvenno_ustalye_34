@@ -120,3 +120,14 @@ th { color: var(--muted); font-weight: 500; }
 .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.6); }
 .report .done { margin-top: 16px; }
 .tip { white-space: pre-line; }
+
+/* Analyst page, less clutter: sources fold into one line at the bottom of the side column. */
+details.panel.fold > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; }
+details.panel.fold > summary::-webkit-details-marker { display: none; }
+details.panel.fold > summary h2 { margin: 0; }
+details.panel.fold > summary::after { content: "▾"; margin-left: auto; opacity: .6; }
+details.panel.fold[open] > summary::after { content: "▴"; }
+details.panel.fold[open] > summary { margin-bottom: 10px; }
+.source-item { padding: 6px 0; border-top: 1px solid rgba(255,255,255,.08); }
+.source-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.source-name { font-weight: 600; flex: 1 1 180px; }

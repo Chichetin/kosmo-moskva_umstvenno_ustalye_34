@@ -1791,3 +1791,19 @@ details.context-foot summary { cursor: pointer; margin-bottom: 6px; }
 .context-panel.collapsed { bottom: auto; height: auto; overflow: hidden; }
 }
 .analysis-head > button { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+
+/* Scene list: the list scrolls inside the panel — make that visible (thin scrollbar, soft fade
+   at the bottom edge) instead of rows cut off mid-line with no hint; a bit more air below. */
+@media (min-width: 701px) {
+  .map-top-left,
+  .scene-mode .map-top-left { bottom: 40px; }
+  .scene-results {
+    scrollbar-width: thin;
+    scrollbar-color: #ffffff4d transparent;
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  }
+  .scene-results::-webkit-scrollbar { display: block; width: 6px; }
+  .scene-results::-webkit-scrollbar-thumb { border-radius: 3px; background: #ffffff4d; }
+  .search-panel { padding-bottom: 6px; }
+}

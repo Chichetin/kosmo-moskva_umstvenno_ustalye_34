@@ -88,6 +88,7 @@
   function initMap() {
     if (typeof L === "undefined") { $("map").textContent = "Карта не загрузилась (нет доступа к CDN) — списки и карточки работают."; return; }
     map = L.map("map", { zoomAnimation: !reduced, fadeAnimation: !reduced }).setView([20, 20], 2);
+    map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener noreferrer">Leaflet</a>');  // plain library credit, no flag icon
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18, attribution: "© участники OpenStreetMap", referrerPolicy: "strict-origin-when-cross-origin" }).addTo(map);
     eventLayer = L.layerGroup().addTo(map);
     reportLayer = L.layerGroup().addTo(map);
@@ -99,15 +100,19 @@
     const data = await api("/api/media/sources");
     $("monitoring").checked = data.monitoring_enabled;
     const box = $("sources");
+    const working = data.sources.filter((s) => s.enabled && s.state === "ok").length;
+    $("sources-summary").textContent = `работают ${working} из ${data.sources.length}`;
+    // One compact row per source; timestamps go to the tooltip, only errors stay visible.
     box.replaceChildren(...data.sources.map((s) => {
       const cls = { ok: "ok", error: "bad", delayed: "warn" }[s.state] || "";
-      const lines = [h("div", {}, h("strong", { text: s.name }), " ", tag(T.origin[s.kind] || s.kind), tag(T.source_state[s.state], cls))];
-      lines.push(h("div", { class: "muted small", text: `последняя успешная проверка: ${fmt(s.last_success_at)}; новые данные: ${fmt(s.last_new_data_at)}` }));
-      if (s.state === "error") lines.push(h("div", { class: "error", text: `ошибка ${fmt(s.last_error_at)}: ${s.last_error}. Пустой список из-за ошибки — не «событий нет».` }));
-      if (s.terms_status !== "checked") lines.push(h("div", { class: "muted small", text: "условия использования не проверены — источник не включается" }));
-      else lines.push(h("button", { class: "btn small", text: s.enabled ? "Отключить" : "Включить",
+      const row = h("div", { class: "source-row", title: `последняя успешная проверка: ${fmt(s.last_success_at)}; новые данные: ${fmt(s.last_new_data_at)}` },
+        h("span", { class: "source-name", text: s.name }), tag(T.source_state[s.state], cls));
+      if (s.terms_status === "checked") row.append(h("button", { class: "btn small", text: s.enabled ? "Отключить" : "Включить",
         onclick: () => act(`/api/media/sources/${encodeURIComponent(s.source_id)}/enabled`, { enabled: !s.enabled }, "Готово") }));
-      return h("div", { class: "small", style: null }, ...lines, h("hr", { class: "m0" }));
+      const lines = [row];
+      if (s.state === "error") lines.push(h("div", { class: "error small", text: `ошибка ${fmt(s.last_error_at)}: ${s.last_error}. Пустой список из-за ошибки — не «событий нет».` }));
+      if (s.terms_status !== "checked") lines.push(h("div", { class: "muted small", text: "не включается: условия использования не проверены" }));
+      return h("div", { class: "small source-item" }, ...lines);
     }));
   }
 
