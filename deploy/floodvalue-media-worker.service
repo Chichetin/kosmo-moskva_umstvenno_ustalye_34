@@ -8,7 +8,13 @@ Wants=network-online.target
 User=floodvalue
 WorkingDirectory=/opt/floodvalue
 EnvironmentFile=/etc/floodvalue.env
-ExecStart=/usr/bin/env uv run --frozen python -m floodvalue.media worker
+# The venv from `make setup` (uv sync --frozen): no uv on systemd's PATH needed at runtime.
+ExecStart=/opt/floodvalue/.venv/bin/python -m floodvalue.media worker
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/floodvalue/outputs
 Restart=on-failure
 
 [Install]

@@ -18,8 +18,9 @@ spec.loader.exec_module(serve_site)
 TOKEN = "s3cret-token-for-tests"  # secret-scan: allow — test value
 FORM = {"category": "flooding", "description": "Вода у дома 5, звоните +7 900 000-00-00",
         "lat": "55.751234", "lon": "37.618765", "location_precision": "point",
-        "observed_precision": "unknown",
+        "observed_precision": "unknown", "place_text": "ул. Речная, 5, кв. 12",
         "idempotency_key": "b" * 24}
+PRIVATE = ("+7 900", "Вода у дома", "Речная", "37.618765", "55.751234")
 
 
 @pytest.mark.parametrize("path,media", [
@@ -93,6 +94,31 @@ def test_public_map_coarsens_reports_and_hides_moderated(settings):
     moderated = call(app, "POST", f"/api/media/reports/{rid}/moderate",
                      json_body={"decision": "accept"}, headers=auth, client=REMOTE)
     assert moderated.status == 200, moderated.body
-    after = call(app, "GET", "/api/media/map", client=LOCAL).json()
-    assert after["reports"]["features"] == []  # accepted → it is an event now
-    assert [f["id"] for f in after["events"]["features"]] == [moderated.json()["event_id"]]
+    analyst_view = call(app, "GET", "/api/media/map", client=LOCAL,
+                        headers={"Authorization": f"Bearer {TOKEN}"}).json()
+    assert analyst_view["reports"]["features"] == []  # accepted → it is an event now
+    (event,) = analyst_view["events"]["features"]
+    assert event["id"] == moderated.json()["event_id"]
+    assert event["geometry"]["coordinates"] == [37.618765, 55.751234]
+
+    # The event took the eyewitness's text, address and point on accept: the public layer must not.
+    public = call(app, "GET", "/api/media/map", client=REMOTE)
+    assert public.json()["exact_locations"] is False
+    (event,) = public.json()["events"]["features"]
+    assert event["geometry"]["coordinates"] == [37.62, 55.75]
+    assert event["properties"]["title"] == "Сообщение очевидца"
+    assert event["properties"]["place_label"] is None
+    assert event["properties"]["geo_precision"] == "coarsened"
+    for private in PRIVATE:
+        assert private not in public.body.decode()
+
+
+def test_public_map_behind_proxy_is_not_exact(settings):
+    """Behind Caddy every request comes from 127.0.0.1 with X-Forwarded-For: never «local analyst»."""
+    app = create_app(replace(settings, public_reports=True, operator_map_public=True))
+    _submit(app)
+    r = call(app, "GET", "/api/media/map", client=LOCAL,
+             headers={"X-Forwarded-For": "203.0.113.7"})
+    assert r.status == 200 and r.json()["exact_locations"] is False
+    for private in PRIVATE:
+        assert private not in r.body.decode()

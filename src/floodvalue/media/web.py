@@ -7,7 +7,8 @@ open only to loopback unless FLOODVALUE_MEDIA_PUBLIC_REPORTS=1 is set deliberate
 GET /api/media/events is the GeoJSON joint for the globe's future «Сообщения» layer.
 GET /api/media/map is the operator map's read-only layer: events plus pending eyewitness reports
 without personal data. FLOODVALUE_MEDIA_OPERATOR_MAP_PUBLIC=1 opens it without login (the operator
-UI is public for now); then report points are coarsened to MAP_PUBLIC_GRID degrees."""
+UI is public for now); then eyewitness points (reports and events holding them) are coarsened to
+MAP_PUBLIC_GRID degrees and the hour, and eyewitness-written titles and places are dropped."""
 
 from __future__ import annotations
 
@@ -231,6 +232,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         with db() as conn:
             events = _event_features(conn, None, None, None, None, None, False, include_demo)
             reports = _report_features(conn, include_demo, exact)
+        if not exact:
+            events = [_public_event(f) for f in events]
         return {"events": {"type": "FeatureCollection", "features": events},
                 "reports": {"type": "FeatureCollection", "features": reports},
                 "exact_locations": exact}
@@ -528,6 +531,34 @@ def _event_features(conn, origin, report_type, review_state, since, until, inclu
     return out
 
 
+def _coarse(lon: float, lat: float) -> list[float]:
+    return [round(round(v / MAP_PUBLIC_GRID) * MAP_PUBLIC_GRID, 6) for v in (lon, lat)]
+
+
+def _coarse_time(value: str | None) -> str | None:
+    """ISO 8601 UTC → the hour: a public map need not pin when exactly someone reported."""
+    return value[:13] + ":00:00Z" if value and len(value) >= 13 else value
+
+
+def _public_event(feature: dict) -> dict:
+    """An event that holds an eyewitness report keeps the eyewitness's words, address and point
+    (title and place come from the report on accept): the public layer shows only that there is
+    a report near here. Events from media alone are public texts and stay as they are."""
+    props = feature["properties"]
+    if "citizen" not in (props.get("source_kinds") or "").split(","):
+        return feature
+    geometry = feature["geometry"]
+    if geometry and geometry.get("type") == "Point":
+        geometry = {"type": "Point", "coordinates": _coarse(*geometry["coordinates"][:2])}
+    else:
+        geometry = None  # an area drawn from an eyewitness's place can pin it as well
+    times = {k: _coarse_time(props[k]) for k in ("event_time_start", "event_time_end",
+                                                  "first_detected_at", "updated_at")}
+    return {**feature, "geometry": geometry,
+            "properties": {**props, **times, "title": "Сообщение очевидца", "place_label": None,
+                           "geo_precision": "coarsened"}}
+
+
 def _report_features(conn, include_demo: bool, exact: bool) -> list[dict]:
     """Pending reports with a location. No description, contacts, photos or tokens: the free text
     stays in the analyst queue. Without analyst access coordinates snap to MAP_PUBLIC_GRID."""
@@ -538,18 +569,18 @@ def _report_features(conn, include_demo: bool, exact: bool) -> list[dict]:
         sql += " AND is_demo = 0"
     out = []
     for r in conn.execute(sql + " ORDER BY submitted_at DESC LIMIT 500"):
-        lon, lat = r["lon"], r["lat"]
-        if not exact:
-            lon, lat = (round(round(v / MAP_PUBLIC_GRID) * MAP_PUBLIC_GRID, 6) for v in (lon, lat))
+        lon, lat = (r["lon"], r["lat"]) if exact else _coarse(r["lon"], r["lat"])
         out.append({"type": "Feature", "id": r["report_id"],
                     "geometry": {"type": "Point", "coordinates": [lon, lat]},
                     "properties": {"report_id": r["report_id"], "category": r["category"],
                                    "category_label": CATEGORIES.get(r["category"]),
                                    "location_precision": r["location_precision"] if exact
                                    else "coarsened",
-                                   "observed_at": r["observed_at"],
+                                   "observed_at": r["observed_at"] if exact
+                                   else _coarse_time(r["observed_at"]),
                                    "observed_precision": r["observed_precision"],
-                                   "submitted_at": r["submitted_at"],
+                                   "submitted_at": r["submitted_at"] if exact
+                                   else _coarse_time(r["submitted_at"]),
                                    "moderation_status": "pending", "is_demo": r["is_demo"]}})
     return out
 
