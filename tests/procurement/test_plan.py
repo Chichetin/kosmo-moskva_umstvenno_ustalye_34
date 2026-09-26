@@ -82,6 +82,34 @@ def test_budget_change_keeps_inputs(tmp_path):
     assert hashlib.sha256((tmp_path / "candidate_orders.geojson").read_bytes()).hexdigest() == cat_hash
 
 
+def test_plan_cache_same_result_and_invalidation(tmp_path, monkeypatch):
+    """Кеш контекста: тот же dict, смена бюджета не пересобирает каталог, правка входа
+    сбрасывает кеш (#105). Без порога по времени — считаются сборки контекста."""
+    import os
+    _write_run_dir(tmp_path)
+    cold = {b: prun._plan(prun._context(tmp_path), b) for b in (1000, 20000)}
+    builds = []
+    real = prun._context
+    monkeypatch.setattr(prun, "_context", lambda d: builds.append(d) or real(d))
+    prun._CONTEXT_CACHE.clear()
+    assert procurement.plan(tmp_path, 20000) == cold[20000]
+    assert procurement.plan(tmp_path, 1000) == cold[1000]
+    assert procurement.plan(tmp_path, 20000) == cold[20000]
+    assert len(builds) == 1
+    # same size, newer mtime -> rebuilt
+    loss = tmp_path / "asset_loss.csv"
+    st = loss.stat()
+    os.utime(loss, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
+    procurement.plan(tmp_path, 1000)
+    assert len(builds) == 2
+    # changed content -> rebuilt, result follows the new input
+    loss.write_text(",no_data".join(loss.read_text(encoding="utf-8").rsplit(",ok", 1)),
+                    encoding="utf-8")
+    os.utime(loss, ns=(st.st_atime_ns, st.st_mtime_ns + 2 * 10**9))
+    assert procurement.plan(tmp_path, 20000) != cold[20000]
+    assert len(builds) == 3
+
+
 def test_cli_procure_writes_contract_files(tmp_path):
     _write_run_dir(tmp_path)
     assert main(["procure", "--budget", "5000", "--out", str(tmp_path)]) == 0
