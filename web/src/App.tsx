@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import Backdrop from "./Backdrop";
 import MapPanel from "./MapPanel";
+import { WorldLocator } from "./WorldLocator";
 import MessagePanel, { type SelectedMessage } from "./MessagePanel";
 import {
   formatExactProbability,
@@ -180,8 +181,11 @@ export default function App() {
   const cache = useRef<Record<string, Session>>({});
   const budgets = useRef<Record<string, number>>({});
   const [plan, setPlan] = useState<Plan | null>(null);
+  const [planFor, setPlanFor] = useState<{ runId: string; budget: number } | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
   const [budget, setBudget] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [baseMap, setBaseMap] = useState<"map" | "optical">("map");
   const [layers, setLayers] = useState<LayerFlags>(defaults);
   const [opacity, setOpacity] = useState(0.76);
@@ -228,6 +232,9 @@ export default function App() {
     (messages?.events.features.length ?? 0) + (messages?.reports.features.length ?? 0);
   const [zoneView, setZoneView] = useState<"plan" | "all">("plan");
   const scene = scenes.find((item) => item.chip_id === route.chipId) ?? null;
+  const locatorPosition = scene?.bounds
+    ? { lon: (scene.bounds[0] + scene.bounds[2]) / 2, lat: (scene.bounds[1] + scene.bounds[3]) / 2 }
+    : scene?.position ?? null;
   const activeSession = scene?.run_id === session?.run_id ? session : null;
   const mapActive = route.view === "map";
   const mapVisible = mapActive || sourceViewerOpen;
@@ -259,6 +266,7 @@ export default function App() {
     if (!scene?.run_id) {
       setSession(null);
       setPlan(null);
+      setPlanFor(null);
       setSessionLoading(false);
       setSessionError(null);
       return;
@@ -276,6 +284,7 @@ export default function App() {
     const controller = new AbortController();
     setSession(null);
     setPlan(null);
+    setPlanFor(null);
     setSessionLoading(true);
     setSessionError(null);
     json<Session>(
@@ -302,6 +311,8 @@ export default function App() {
     if (!activeSession || budget === null) return;
     const runId = activeSession.run_id;
     budgets.current[runId] = budget;
+    setPlanFor(null);
+    setPlanError(null);
     const controller = new AbortController();
     const timer = setTimeout(() => {
       json<Plan>(
@@ -311,6 +322,7 @@ export default function App() {
         .then((result) => {
           if (!controller.signal.aborted) {
             setPlan(result);
+            setPlanFor({ runId, budget });
             setPlanError(null);
           }
         })
@@ -323,6 +335,7 @@ export default function App() {
       controller.abort();
     };
   }, [activeSession?.run_id, budget]);
+  useEffect(() => setExportError(null), [activeSession?.run_id, budget]);
   const openFinishedAnalysis = useCallback(async (finished: AnalysisJob) => {
     const updated = await json<SceneSummary[]>("/api/scenes");
     setScenes(updated);
@@ -420,8 +433,12 @@ export default function App() {
     [activeSession],
   );
   const zones = activeSession?.candidates.features ?? [];
-  const chosen = plan?.comparison.find((row) => row.strategy === "C");
-  const chosenZoneIds = new Set(plan?.plans.C ?? []);
+  const currentPlan = planFor && planFor.runId === activeSession?.run_id && planFor.budget === budget ? plan : null;
+  const chosen = currentPlan?.comparison.find((row) => row.strategy === "C");
+  const chosenZoneIds = new Set(currentPlan?.plans.C ?? []);
+  const sliderMax = Math.min(1_000_000_000, Math.ceil(
+    Math.max(activeSession?.plan_c_saturation_rub ?? 0, budget ?? 0, 5_000) * 1.1 / 1_000,
+  ) * 1_000);
   const matchingScenes = scenes.filter((item) =>
     `${item.territory} ${item.chip_id} ${item.observation_date}`
       .toLowerCase()
@@ -498,9 +515,33 @@ export default function App() {
   const shownLoss = useCountUp(activeSession ? totalLoss : null, !mapVisible && !!activeSession);
   const shownCost = useCountUp(chosen?.data_cost_rub, !mapVisible && !!activeSession);
   const shownCoverage = useCountUp(chosen?.coverage_share, !mapVisible && !!activeSession);
-  const exportUrl = activeSession
-    ? `/api/download?run_id=${encodeURIComponent(activeSession.run_id)}`
-    : null;
+  const downloadCurrentPlan = async () => {
+    if (!activeSession || budget === null || !currentPlan || exporting) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      const query = new URLSearchParams({ run_id: activeSession.run_id, budget: String(budget) });
+      const response = await fetch(`/api/download?${query}`);
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail ?? `Ошибка выгрузки ${response.status}`);
+      }
+      const match = /filename="?([^";]+)"?/i.exec(response.headers.get("Content-Disposition") ?? "");
+      const filename = match?.[1].split(/[\\/]/).pop() || `${activeSession.metadata.chip_id}_${budget}.zip`;
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setExporting(false);
+    }
+  };
   return (
     <div className="app">
       <Backdrop paused={!mapActive || !!scene} ocean={baseMap === "optical"} />
@@ -533,22 +574,25 @@ export default function App() {
           </button>
         </nav>
         <span className="top-spacer" />
-        {exportUrl && (
-          <a
+        {activeSession && (
+          <button
             className="top-export"
-            href={exportUrl}
-            title="Выгрузить файлы текущего анализа"
+            type="button"
+            disabled={!currentPlan || exporting}
+            aria-busy={exporting}
+            onClick={() => void downloadCurrentPlan()}
+            title="Выгрузить файлы этой сцены и выбранного бюджета"
           >
             <ArrowDownToLine size={16} />
-            <span>Выгрузить комплект</span>
-            {activeSession && (
-              <small className="export-note">
-                при бюджете {money(activeSession.metadata.budget.budget_rub)} ₽
-              </small>
-            )}
-          </a>
+            <span>{exporting ? "Готовим комплект…" : "Выгрузить комплект"}</span>
+            <small className="export-note">при бюджете {formatRub(budget)}</small>
+          </button>
         )}
       </header>
+      {exportError && <div className="export-error" role="alert">
+        {exportError}
+        <button onClick={() => setExportError(null)} aria-label="Скрыть ошибку выгрузки"><X size={14} /></button>
+      </div>}
       <main className="workspace">
         <div
           className={`map-screen ${mapVisible ? "" : "map-hidden"} ${scene ? "scene-mode" : ""} ${baseMap === "optical" ? "optical-mode" : ""}`}
@@ -559,7 +603,7 @@ export default function App() {
             scenes={scenes}
             scene={scene}
             session={activeSession}
-            plan={plan}
+            plan={currentPlan}
             baseMap={baseMap}
             visibleLayers={layers}
             messages={messages}
@@ -861,10 +905,11 @@ export default function App() {
                         min="0"
                         max="1000000000"
                         step="100"
+                        disabled={exporting}
                         value={budget ?? 0}
                         onChange={(event) =>
                           setBudget(
-                            Math.max(0, Number(event.target.value) || 0),
+                            Math.min(1_000_000_000, Math.max(0, Number(event.target.value) || 0)),
                           )
                         }
                       />
@@ -873,16 +918,22 @@ export default function App() {
                       className="budget-slider"
                       type="range"
                       min="0"
-                      max="50000"
+                      max={sliderMax}
                       step="100"
-                      value={Math.min(budget ?? 0, 50000)}
+                      disabled={exporting}
+                      value={Math.min(budget ?? 0, sliderMax)}
                       onChange={(event) =>
                         setBudget(Number(event.target.value))
                       }
                       aria-label="Изменить бюджет"
                     />
+                    {activeSession.plan_c_saturation_rub != null && (
+                      <p className="budget-saturation">
+                        Свыше ≈ {formatRub(activeSession.plan_c_saturation_rub)} состав плана C не меняется.
+                      </p>
+                    )}
                     <div className="plan-summary">
-                      <span>План C · {plan?.plans.C.length ?? "—"} зон</span>
+                      <span>План C · {currentPlan?.plans.C.length ?? "—"} зон</span>
                       <strong>{formatRub(chosen?.data_cost_rub)}</strong>
                     </div>
                     <div className="plan-summary">
@@ -899,7 +950,8 @@ export default function App() {
                       ₽/км², не тариф. Срок решения —{" "}
                       {dateTimeUtc(activeSession.metadata.budget.decision_deadline)}.
                     </p>
-                    {planError && <p className="inline-error">{planError}</p>}
+                    {planError ? <p className="inline-error">{planError}</p>
+                      : !currentPlan && <p role="status">Пересчитываем план…</p>}
                     <button
                       className="analysis-link"
                       onClick={() => navigate("analysis", scene.chip_id)}
@@ -1061,6 +1113,13 @@ export default function App() {
                   <Layers3 size={16} /> Исходный снимок и слои
                 </button>
               )}
+              {scene && locatorPosition && (
+                <WorldLocator
+                  lon={locatorPosition.lon}
+                  lat={locatorPosition.lat}
+                  label={scene.territory.replaceAll("-", " ")}
+                />
+              )}
             </div>
             {!activeSession && (
               <div className="analysis-empty">
@@ -1184,10 +1243,47 @@ export default function App() {
                   <div className="analysis-stack">
                     <section className="analysis-card">
                       <div className="card-title">
-                        <h2>Стратегии A / B / C</h2>
-                        <span>Стоимость данных и охват</span>
+                        <h2>План дополнительной съёмки</h2>
+                        <span>Выбран вариант C</span>
                       </div>
-                      {(plan?.comparison ?? []).map((row) => (
+                      <div className="analysis-budget">
+                        <label>
+                          Бюджет данных
+                          <span><input
+                            type="number"
+                            min="0"
+                            max="1000000000"
+                            step="100"
+                            disabled={exporting}
+                            value={budget ?? 0}
+                            onChange={(event) => setBudget(Math.min(1_000_000_000, Math.max(0, Number(event.target.value) || 0)))}
+                          /> ₽</span>
+                        </label>
+                        <input
+                          type="range"
+                          min="0"
+                          max={sliderMax}
+                          step="100"
+                          disabled={exporting}
+                          value={Math.min(budget ?? 0, sliderMax)}
+                          onChange={(event) => setBudget(Number(event.target.value))}
+                          aria-label="Бюджет данных плана"
+                        />
+                        {activeSession.plan_c_saturation_rub != null && (
+                          <p>Свыше ≈ {formatRub(activeSession.plan_c_saturation_rub)} состав плана C не меняется.</p>
+                        )}
+                      </div>
+                      {planError ? <p className="inline-error">{planError}</p>
+                        : !currentPlan && <p className="analysis-plan-loading" role="status">Пересчитываем план…</p>}
+                      {chosen && <div className="analysis-plan-totals">
+                        <div><span>Зон в плане</span><strong>{currentPlan?.plans.C.length ?? 0}</strong></div>
+                        <div><span>Стоимость данных</span><strong>{formatRub(chosen.data_cost_rub)}</strong></div>
+                        <div><span>Расчёт и проверка зон</span><strong>{formatRub(chosen.other_cost_rub)}</strong></div>
+                        <div><span>Полная стоимость решения</span><strong>{formatRub(chosen.decision_cost_rub)}</strong></div>
+                        <div><span>Охват ожидаемого ущерба</span><strong>{pct(chosen.coverage_share)}</strong></div>
+                      </div>}
+                      <h3 className="analysis-compare-title">Сравнение A / B / C</h3>
+                      {(currentPlan?.comparison ?? []).map((row) => (
                         <div
                           key={row.strategy}
                           className={`strategy ${row.strategy === "C" ? "chosen" : ""}`}
@@ -1231,7 +1327,7 @@ export default function App() {
                         </details>
                         <details>
                           <summary>Воспроизводимость</summary>
-                          <p>Исходная выгрузка соответствует бюджету {formatRub(activeSession.metadata.budget.budget_rub)}. Метод и входные данные записаны в комплекте файлов.</p>
+                          <p>Выгрузка пересчитывает план для выбранного бюджета {formatRub(budget)}. Вероятность воды, маска и порог остаются прежними; метод и входные данные записаны в комплекте.</p>
                         </details>
                       </div>
                     </section>
@@ -1306,10 +1402,10 @@ export default function App() {
                       </div>
                       {activeZone && (
                         <div className="card-foot">
-                          {plan?.reasons.C[
+                          {currentPlan?.reasons.C[
                             String(activeZone.properties.candidate_id)
                           ] ??
-                            plan?.reasons.not_selected_C[
+                            currentPlan?.reasons.not_selected_C[
                               String(activeZone.properties.candidate_id)
                             ] ??
                             "Причина отсутствует"}
