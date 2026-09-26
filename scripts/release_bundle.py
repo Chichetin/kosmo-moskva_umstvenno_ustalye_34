@@ -83,7 +83,8 @@ def check_run(run_dir: Path) -> dict:
     if not run_dir.is_dir():
         raise ReleaseError(f"каталог комплекта не найден: {run_dir}")
     res = subprocess.run([sys.executable, "-m", "floodvalue", "validate", "--out", str(run_dir)],
-                         capture_output=True, text=True, cwd=REPO_ROOT)
+                         capture_output=True, text=True, encoding="utf-8",
+                         errors="replace", cwd=REPO_ROOT)  # floodvalue CLIs print UTF-8 (#158)
     print(res.stdout, end="")
     if res.returncode != 0 or "12/12" not in res.stdout:
         raise ReleaseError(f"валидатор не дал 12/12 для {run_dir} (код {res.returncode}); "

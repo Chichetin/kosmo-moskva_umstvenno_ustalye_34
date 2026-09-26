@@ -17,7 +17,14 @@ ReportType = Literal["occurred", "forecast", "warning", "negation", "historical"
 
 FLOOD = re.compile(
     r"\b(flood\w*|inundat\w*|submerg\w*|deluge|наводнен\w*|паводк\w*|паводок|подтоп\w*|"
-    r"затоп\w*|половод\w*|разлив\w*\s+рек\w*|ушл\w*\s+под\s+воду)", re.IGNORECASE)
+    r"затоп\w*|половод\w*|разлив\w*\s+рек\w*|ушл\w*\s+под\s+воду|"
+    # worldwide sources (GDELT, Copernicus EMS): FR, ES, PT, IT, DE, ID/MS, TR, AR, HI
+    r"inondation\w*|inond[ée]\w*|crues?\b|inundaci\w*|inundad[oa]s?\b|inund[óo]\b|riadas?\b|"
+    r"enchentes?\b|inunda[çc][ãa]o|inunda[çc][õo]es|alagamento\w*|alagad[oa]s?\b|"
+    r"alluvion\w*|esondazion\w*|[üu]berschwemm\w*|hochwasser\w*|[üu]berflut\w*|"
+    r"banjir\b|sel\s+felaketi\w*|taşkın\w*|فيضان\w*|فيضانات|سيول|बाढ़)"
+    # CJK has no word boundaries
+    r"|洪水|水灾|洪災|洪灾|大水|浸水|洪涝", re.IGNORECASE)
 METAPHOR = re.compile(r"\b(flood of (refugees|migrants|orders|calls|emails|money)|"
                       r"flooded with (calls|messages|requests|orders)|floodlight\w*|"
                       r"flood\s*gate\w* (open|of))", re.IGNORECASE)
@@ -29,10 +36,12 @@ NEGATION = re.compile(
 FORECAST = re.compile(
     r"(прогноз\w*|ожида\w*|возмож\w*|может (быть )?подтоп\w*|угроз\w*|риск\w*|"
     r"forecast\w*|expected to|could (flood|see)|may flood|likely to|risk of|threat of|"
+    r"prévision\w*|pronóstico\w*|previs[ãa]o|vorhersage\w*|prakiraan|"
     r"predict\w*)", re.IGNORECASE)
 WARNING = re.compile(
     r"(предупрежд\w*|штормов\w*|оповещ\w*|красн\w+ уров\w*|warning\w*|alert\w*|"
-    r"watch in effect|advisory|evacuation order\w*|brace\w* for)", re.IGNORECASE)
+    r"watch in effect|advisory|evacuation order\w*|brace\w* for|vigilance\w*|alerte\w*|"
+    r"alerta\w*|unwetterwarnung\w*|warnung\w*|peringatan|siaga)", re.IGNORECASE)
 HISTORICAL = re.compile(
     r"(годовщин\w*|лет назад|год назад|вспомина\w*|истори\w* паводк\w*|anniversary|"
     r"years ago|years after|remember\w*|look(ing)? back|in (19\d\d|200\d|201\d))", re.IGNORECASE)
@@ -41,11 +50,14 @@ OCCURRED = re.compile(
     r"(затопил\w*|затоплен[аоы]?\b|подтопил\w*|подтоплен[аоы]?\b|эвакуир\w*|ушл\w* под воду|"
     r"вышл\w* из берегов|flooded|floods? (hit|hits|swamp\w*|kill\w*|ravage\w*|batter\w*|"
     r"inundate\w*|displace\w*|sweep\w*|leave\w*)|submerged|evacuat\w*|stranded|"
-    r"under water|killed in flood\w*|flood\w* (death|toll)|dead in flood\w*)", re.IGNORECASE)
+    r"under water|killed in flood\w*|flood\w* (death|toll)|dead in flood\w*|"
+    r"inond[ée]e?s?\b|évacu\w*|inund[óo]\b|inundad[oa]s?\b|evacuad\w*|alagad[oa]s?\b|"
+    r"desalojad\w*|[üu]berflutet|überschwemmt|evakuiert\w*|terendam\w*|merendam\w*|dievakuasi\w*)",
+    re.IGNORECASE)
 # A capitalized place after a locative preposition; kept as a string for the geocoder.
 PLACE = re.compile(
     r"(?:\b(?:in|near|across|across the|at|hit|hits|swamp|batter)\s+|"
-    r"(?:^|\s)(?:в|во|под|на|у|близ|около)\s+)"
+    r"(?:^|\s)(?:в|во|под|на|у|близ|около|en|em|di|dans(?: le| la| les)?|à|nel|nella|bei)\s+)"
     r"((?:[A-ZА-ЯЁ][\w\-’']+)(?:[ \-](?:[A-ZА-ЯЁ][\w\-’']+)){0,3})")
 NOT_PLACES = {"The", "This", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
               "Saturday", "Sunday", "January", "February", "March", "April", "May", "June",

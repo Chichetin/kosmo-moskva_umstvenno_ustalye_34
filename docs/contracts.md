@@ -23,6 +23,10 @@ CSV/JSON с отказом на NaN/Inf). Валидатор — `floodvalue.exp
 | `flood_mask.tif` | UInt8, 1 канал | 1 вода, 0 не вода; 1 ⇔ p ≥ `threshold` из `run_metadata.json` | 255 |
 | `uncertainty.tif` (доп.) | Float32 | показатель неопределённости, смысл — `run_metadata.json` | −9999 |
 | `baseline_mask.tif` (доп.) | UInt8 | маска baseline | 255 |
+| `pre_event_water.tif` (доп., #149) | UInt8 | 1 — вода на S1 до события (VH ≤ −23 dB не менее чем в 50 % наблюдений окна архива), 0 — нет; 255 — < 5 наблюдений | 255 |
+| `new_water_probability.tif` (доп., #149) | Float32 | p × (1 − `pre_event_water`): вода относительно окна до события; не вход EL | −9999 (p нет или слой 255) |
+
+`pre_event_water.json` (доп., #149): статус `ok`/`insufficient`/`unavailable`, окно, параметры, сцены архива (id, дата, орбита, лицензия), `sources` — записи `source_manifest.json` (§9), которые export добавляет только при `ok`. Слой пишет `python -m floodvalue prewater --chip <id>`; ни один модуль p, маски, порога, EL и плана его не читает (`tests/prewater/test_prewater_firewall.py`). Без сети — предупреждение, код 0, 12 файлов не меняются.
 
 Невалидный пиксель: S1 не конечен (NaN) в любом канале. Метка −1 на растры не влияет.
 
@@ -158,7 +162,12 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
   decision_deadline` (допуск 0,01); `coverage_share` = covered / Σ EL `ok`-объектов (допуск
   1e-4), пусто ⇔ Σ EL = 0; `residual_uncertainty` пусто ⇔ `not_estimated`; A — `baseline`;
   у A платных зон нет, поэтому её `covered_expected_loss_rub` = 0, иное — только с
-  объяснением в `run_metadata.strategies.coverage_A`.
+  объяснением в `run_metadata.strategies.coverage_A`. Доп. столбцы (D-049, #142), если есть:
+  `addressed_decision_risk_rub` = Σ R = V·q·min(p, 1−p) `ok`-объектов, покрытых теми же
+  зонами, что `covered_expected_loss_rub` (у A — 0, иное — только с `coverage_A`); R — из EL и
+  p строки `asset_loss.csv` (EL при p ≤ 0,5, EL·(1−p)/p иначе — как в procurement, чтобы EL в
+  копейках не давал расхождения), допуск 0,01; пустое значение — ошибка; `decision_risk_share` = addressed / Σ R портфеля (допуск
+  1e-4), пусто ⇔ Σ R = 0. Отсутствие обоих столбцов (старые комплекты) — не ошибка.
 - `metrics.csv` комплекта (§7): каждая строка `method=main` (любой `split` —
   dev/validation/test — и любой `event`) имеет `threshold`, равный `run_metadata.threshold`
   (единицы p, допуск 1e-9), — метрики main посчитаны тем же порогом, что и `flood_mask.tif`;
@@ -197,7 +206,8 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
              "discount_rule", "grouping"},
  "zones": {"construction", "availability_rule", "area_method", "unknown_dates_rule"},
  "strategies": {"rule_B", "rule_C", "other_costs", "coverage_aggregation",
-                "coverage_share_note": null},
+                "coverage_share_note": null,
+                "decision_risk": {"formula", "status", "meaning", "columns", "excluded"} | null},  # необязательно; D-049, копия из procurement_metadata.json
  "uncertainty": {"meaning", "units", "method", "raster": null},
  "proxy_check": {"status": "done|planned|not_done", "test_chip", "control_points",
                  "fixed_v_q", "n_points", "error_metric", "result"},

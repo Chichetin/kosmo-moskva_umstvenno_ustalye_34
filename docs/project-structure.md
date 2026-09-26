@@ -37,30 +37,34 @@
   межмодульный импорт = строка таблицы со ссылкой на `D-…` в том же PR.
 - Записанные исключения (только чтение; каждому модулю — только то, что он использует):
   - чтение чипа `floodvalue.data.io`: `load_s1`, `load_label`, `valid_mask` (D-015) —
-    baseline, model, calibration. Сверх D-015 (D-057): baseline — `layer_path`,
+    baseline, model, calibration. Сверх D-015 (D-059): baseline — `layer_path`,
     `S1_LAYER`; calibration — `layer_path`, `parse_chip_id`; model — `layer_path`,
     `raw_dir`, `parse_chip_id`, `S1_LAYER`, `JRC_LAYER`; context — `layer_path`,
-    `raw_dir`, `parse_chip_id`. `layer_path`, `raw_dir`, `JRC_LAYER` — только
+    `raw_dir`, `parse_chip_id`; prewater — `layer_path`, `raw_dir`, `parse_chip_id`,
+    `load_label`, `JRC_LAYER` (D-058). `layer_path`, `raw_dir`, `JRC_LAYER` — только
     перечисленным в `FILES` файлам (путь к слою мимо замка `load_label`);
   - split `floodvalue.data.split`: `chip_ids` (§4 контрактов) — baseline, model,
-    calibration. Сверх §4 (D-057): `load_split` — baseline, model, calibration;
-    `SealedTestError` — model, context; `SPLIT_PATH`, `event_of` — только
-    `model/eval_test.py`; `EVENT_PARTS` — app (D-050) и context (D-057);
+    calibration. Сверх §4 (D-059): `load_split` — baseline, model, calibration;
+    `SealedTestError` — model, context; `SPLIT_PATH` — только `model/eval_test.py`,
+    `event_of` — только `model/eval_test.py` и `prewater/table.py`; `EVENT_PARTS` — app
+    (D-050), context и model (группы Кёппена в eval-test) (D-059); prewater — `chip_ids`,
+    `event_of`, `METADATA_NAME` (D-058);
   - общий алгоритм метрик §7 `floodvalue.model.metrics` — baseline, calibration (D-032);
   - `calibration` → `model.predict.METHODS` (D-041); `model` → `calibration.calibrator`,
-    `calibration.uncertainty` ленивым импортом (D-039, D-041);
+    `calibration.uncertainty` ленивым импортом (D-039, D-041); `model/eval/core.py` →
+    `calibration.run.N_BINS` (ECE в корзинах калибровки, D-057);
   - `model` → `baseline.predict` — только `model/predict.py` (реестр методов, §3) и
-    `model/unet/report.py` (сравнение с baseline) (D-057, пересмотреть после `eval-test`);
+    `model/unet/report.py` (сравнение с baseline) (D-059, пересмотреть после `eval-test`);
   - `model/eval_test.py` → `cli.main` (стадия assets через CLI, D-030);
   - `app` → `procurement.plan` (§10 контрактов, D-050) и `data.split.EVENT_PARTS` (D-050);
     `app/run.py` запускает `python -m floodvalue.baseline.predict --mask-only` подпроцессом
-    (D-046, D-057 — вызов CLI, не импорт; таблица `CLI_ONLY` пропускает только строку-путь
+    (D-046, D-059 — вызов CLI, не импорт; таблица `CLI_ONLY` пропускает только строку-путь
     в `app/run.py`, импорт `baseline.predict` в app — ошибка);
   - `media` — только `floodvalue.paths` (D-051); `context` никто из этапов не импортирует
     (D-042, `tests/context/test_firewall.py`);
   - `cli.py` импортирует модули этапов лениво по имени этапа (`STAGES`), `__main__` —
     `cli.main`.
-- Что тест не видит (D-057): что вызывающий делает с модулем, полученным из реестра через
+- Что тест не видит (D-059): что вызывающий делает с модулем, полученным из реестра через
   `importlib` (calibration → модули методов по `METHODS` — граница D-041; `eval_test` →
   `baseline.predict`), имена модулей, собранные f-строкой, `importlib.import_module` строки
   из `CLI_ONLY` в том же файле и реэкспорт имени из `FILES`

@@ -3,7 +3,7 @@ from floodvalue import cli
 
 def test_every_documented_stage_is_registered():
     expected = {"data", "split", "baseline", "train", "calibrate", "predict", "assets",
-                "procure", "export", "validate", "app", "eval-test"}
+                "procure", "export", "validate", "app", "eval-test", "prewater"}
     assert set(cli.STAGES) == expected
 
 

@@ -5,7 +5,10 @@ import type { FeatureCollection, Geometry, Point, Polygon } from "geojson";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { mapProviders } from "./mapProviders";
+import { POLAR_ICE } from "./polarIce";
 import type { Feature, MediaMap, Plan, SceneSummary, Session } from "./types";
+import type { SelectedMessage } from "./MessagePanel";
+import { ORIGIN, REPORT_TYPE, REVIEW_STATE, when } from "./mediaLabels";
 
 maplibregl.setWorkerUrl(workerUrl);
 type LayerFlags = {
@@ -34,6 +37,8 @@ type Props = {
   onSelectAsset: (id: string) => void;
   onSelectZone: (id: string) => void;
   onIssue: (message: string | null) => void;
+  onSelectMessage?: (message: SelectedMessage) => void;
+  focus?: { lngLat: [number, number]; zoom: number; request: number } | null;
 };
 const empty: FeatureCollection = { type: "FeatureCollection", features: [] };
 const features = (items: Feature[]): FeatureCollection => ({
@@ -82,25 +87,6 @@ const mediaFeatures = (items: Feature[]): FeatureCollection => ({
       : [],
   ),
 });
-const REPORT_TYPE: Record<string, string> = {
-  occurred: "произошло", forecast: "прогноз", warning: "предупреждение",
-  negation: "опровержение", historical: "исторический материал", unclear: "неясно",
-};
-const REVIEW_STATE: Record<string, string> = {
-  new: "новое", needs_geo: "нужно уточнить место", ready: "готово к проверке",
-  under_review: "на проверке", reviewed: "проверено",
-};
-const ORIGIN: Record<string, string> = { news: "СМИ", bulletin: "сводка", citizen: "очевидец" };
-// Time as precise as the source says: a day-level or coarsened time never looks like "00:00".
-const when = (value: unknown, precision: unknown, coarse: boolean) => {
-  if (typeof value !== "string" || !value) return "время неизвестно";
-  const byDay = precision === "day" || precision === "several_days" || precision === "unknown";
-  const text = new Intl.DateTimeFormat("ru-RU", byDay
-    ? { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }
-    : { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" },
-  ).format(new Date(value));
-  return byDay ? text : `${coarse ? "≈ " : ""}${text} UTC`;
-};
 // Text nodes only: titles come from news and eyewitnesses and are never parsed as HTML.
 const messageCard = (props: Record<string, unknown>, kind: "event" | "report") => {
   const node = document.createElement("div");
@@ -140,7 +126,7 @@ const overviewPadding = () => ({
   bottom: 0,
   left: window.innerWidth < 700
     ? 0
-    : Math.round(Math.min(58, Math.max(30, window.innerWidth * 0.036)) + 286),
+    : Math.round(Math.min(58, Math.max(30, window.innerWidth * 0.036)) + 320), // .map-top-left width
 });
 const noPadding = () => ({ top: 0, right: 0, bottom: 0, left: 0 });
 
@@ -334,6 +320,25 @@ export default function MapPanel(props: Props) {
       return;
     }
     mapRef.current = map;
+    // Trackpad: two-finger swipe pans, pinch (wheel with ctrlKey) zooms.
+    map.scrollZoom.disable();
+    map.getCanvasContainer().addEventListener(
+      "wheel",
+      (event) => {
+        event.preventDefault();
+        if (event.ctrlKey) {
+          const rect = map.getCanvasContainer().getBoundingClientRect();
+          const around = map.unproject([event.clientX - rect.left, event.clientY - rect.top]);
+          const step = event.deltaY * (event.deltaMode === 1 ? 0.16 : 0.01);
+          map.zoomTo(map.getZoom() - step, { around, duration: 0 });
+        } else {
+          // Line-mode deltas (Firefox mouse wheel) are ~3 per notch.
+          const scale = event.deltaMode === 1 ? 16 : 1;
+          map.panBy([event.deltaX * scale, event.deltaY * scale], { duration: 0 });
+        }
+      },
+      { passive: false },
+    );
     map.setPadding(props.scene ? noPadding() : overviewPadding());
     map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
     const attribution = host.current.querySelector<HTMLDetailsElement>(
@@ -371,9 +376,23 @@ export default function MapPanel(props: Props) {
         "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 0.25, 5, 0],
       });
       if (map.getLayer("background"))
-        map.setPaintProperty("background", "background-color", "#30383b");
+        map.setPaintProperty("background", "background-color", "#1c2124");
       if (map.getLayer("water"))
-        map.setPaintProperty("water", "fill-color", "#151d21");
+        map.setPaintProperty("water", "fill-color", "#0a0f12");
+      // Only polar ice is white (Arctic and Antarctic); mountain glaciers blend into land — the
+      // satellite view shows them anyway. Tile glaciers mix both, so polar ice comes from its own layer.
+      if (map.getLayer("landcover_glacier")) map.setPaintProperty("landcover_glacier", "fill-opacity", 0);
+      if (map.getLayer("landcover_ice_shelf")) {
+        map.setPaintProperty("landcover_ice_shelf", "fill-color", "#e2eaee");
+        map.setPaintProperty("landcover_ice_shelf", "fill-opacity", 0.95);
+      }
+      const styleLayers = map.getStyle().layers;
+      const glacierAt = styleLayers.findIndex((l) => l.id === "landcover_glacier");
+      map.addSource("polar-ice", { type: "geojson", data: POLAR_ICE });
+      map.addLayer(
+        { id: "polar-ice", type: "fill", source: "polar-ice", paint: { "fill-color": "#eef3f5", "fill-opacity": 0.95 } },
+        glacierAt >= 0 ? styleLayers[glacierAt + 1]?.id : undefined, // under labels and the satellite layer
+      );
       for (const id of [
         "place_country_major",
         "place_country_minor",
@@ -689,21 +708,38 @@ export default function MapPanel(props: Props) {
       map.getCanvas().style.cursor = "";
       popup.current?.remove();
     });
-    const showMessage = (kind: "event" | "report") => (event: maplibregl.MapLayerMouseEvent) => {
+    const previewMessage = (kind: "event" | "report") => (event: maplibregl.MapLayerMouseEvent) => {
       const feature = event.features?.[0];
       if (!feature) return;
+      map.getCanvas().style.cursor = "pointer";
       popup.current?.remove();
-      popup.current = new maplibregl.Popup({ closeButton: true, closeOnClick: true, offset: 12, maxWidth: "280px" })
+      popup.current = new maplibregl.Popup({ closeButton: false, closeOnClick: true, offset: 12, maxWidth: "280px" })
         .setLngLat(event.lngLat)
         .setDOMContent(messageCard(feature.properties ?? {}, kind))
         .addTo(map);
     };
-    map.on("click", "media-event", showMessage("event"));
-    map.on("click", "media-area", showMessage("event"));
-    map.on("click", "media-report", showMessage("report"));
+    const openMessage = (kind: "event" | "report") => (event: maplibregl.MapLayerMouseEvent) => {
+      const feature = event.features?.[0];
+      const props = (feature?.properties ?? {}) as Record<string, unknown>;
+      const id = kind === "event" ? props.event_id : props.report_id;
+      if (id === undefined || id === null) return;
+      popup.current?.remove();
+      const lngLat: [number, number] = feature?.geometry.type === "Point"
+        ? [feature.geometry.coordinates[0], feature.geometry.coordinates[1]]
+        : [event.lngLat.lng, event.lngLat.lat];
+      current.current.onSelectMessage?.({ kind, id: String(id), lngLat, props });
+    };
+    map.on("click", "media-event", openMessage("event"));
+    map.on("click", "media-area", openMessage("event"));
+    map.on("click", "media-report", openMessage("report"));
+    map.on("mouseenter", "media-event", previewMessage("event"));
+    map.on("mouseenter", "media-report", previewMessage("report"));
+    map.on("mouseenter", "media-area", () => (map.getCanvas().style.cursor = "pointer"));
     for (const id of ["media-event", "media-report", "media-area"]) {
-      map.on("mouseenter", id, () => (map.getCanvas().style.cursor = "pointer"));
-      map.on("mouseleave", id, () => (map.getCanvas().style.cursor = ""));
+      map.on("mouseleave", id, () => {
+        map.getCanvas().style.cursor = "";
+        popup.current?.remove();
+      });
     }
     map.on("click", "assets", (event) => {
       if (onMessage(event.point)) return;
@@ -738,6 +774,12 @@ export default function MapPanel(props: Props) {
       mapRef.current?.getSource("observations") as GeoJSONSource | undefined
     )?.setData(markers(props.scenes));
   }, [props.scenes, ready]);
+  // «Приблизить к месту» from the message panel.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !props.focus) return;
+    map.easeTo({ center: props.focus.lngLat, zoom: props.focus.zoom, duration: reducedMotion() ? 0 : 900 });
+  }, [props.focus?.request]);
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready || !map.getLayer("boundary")) return;

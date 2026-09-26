@@ -75,8 +75,8 @@ input:focus-visible,
   width: 31px;
   height: 31px;
   background: #243647;
-  border: 1px solid #36536d;
-  border-radius: 8px;
+  border: 0;
+  border-radius: var(--radius-panel);
 }
 .top-divider {
   height: 25px;
@@ -96,7 +96,7 @@ input:focus-visible,
   align-items: center;
   gap: 8px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: transparent;
   color: #a1a1a8;
   font-size: 14px;
@@ -132,7 +132,7 @@ input:focus-visible,
   align-items: center;
   gap: 8px;
   border: 1px solid #49494f;
-  border-radius: 7px;
+  border-radius: var(--radius);
   padding: 0 13px;
   font-size: 13px;
   font-weight: 600;
@@ -241,8 +241,8 @@ input:focus-visible,
 }
 .maplibregl-ctrl-group {
   background: #242428 !important;
-  border: 1px solid #4b4b52 !important;
-  box-shadow: 0 7px 25px #0008 !important;
+  border: 0 !important;
+  box-shadow: none !important;
 }
 .maplibregl-ctrl-group button {
   width: 36px;
@@ -283,11 +283,11 @@ input:focus-visible,
   background: #242428ed;
   color: #f5f5f7;
   border: 1px solid #46464c;
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 0 13px;
   font-size: 14px;
   font-weight: 600;
-  box-shadow: 0 9px 28px #0006;
+  box-shadow: none;
 }
 .earth-button:hover,
 .reopen-panel:hover {
@@ -295,9 +295,9 @@ input:focus-visible,
 }
 .search-panel {
   background: #171719f2;
-  border: 1px solid #39393e;
-  border-radius: 11px;
-  box-shadow: 0 18px 45px #0009;
+  border: 0;
+  border-radius: var(--radius-panel);
+  box-shadow: none;
   overflow: hidden;
 }
 .search-box {
@@ -388,7 +388,7 @@ input:focus-visible,
   font-style: normal;
   background: #2d4256;
   padding: 3px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius);
 }
 .scene-status {
   width: 7px;
@@ -423,10 +423,10 @@ input:focus-visible,
 .basemap-switch {
   display: flex;
   padding: 3px;
-  border: 1px solid #424248;
+  border: 0;
   background: #171719ef;
-  border-radius: 9px;
-  box-shadow: 0 9px 28px #0007;
+  border-radius: var(--radius);
+  box-shadow: none;
 }
 .basemap-switch button {
   border: 0;
@@ -434,22 +434,22 @@ input:focus-visible,
   color: #a1a1a8;
   font-size: 13px;
   padding: 8px 13px;
-  border-radius: 6px;
+  border-radius: var(--radius);
 }
 .basemap-switch button.active {
   background: #35353b;
   color: #f5f5f7;
 }
 .maplibregl-ctrl-group {
-  border-radius: 10px !important;
-  border: 1px solid #ffffff29 !important;
+  border-radius: var(--radius) !important;
+  border: 0 !important;
   background: #242428e8 !important;
 }
 .basemap-switch button.active {
   background: #69788b75;
   color: #f5f5f7;
-  box-shadow: inset 0 1px 0 #ffffff33, 0 1px 4px #0004;
-  border-radius: 8px;
+  box-shadow: none;
+  border-radius: var(--radius);
 }
 .basemap-switch button:not(.active):hover {
   color: #f5f5f7;
@@ -464,9 +464,9 @@ input:focus-visible,
   width: 360px;
   overflow: auto;
   background: #171719f4;
-  border: 1px solid #424248;
-  border-radius: 12px;
-  box-shadow: 0 18px 55px #000b;
+  border: 0;
+  border-radius: var(--radius-panel);
+  box-shadow: none;
 }
 .context-heading {
   display: flex;
@@ -503,7 +503,7 @@ input:focus-visible,
   display: grid;
   place-items: center;
   border: 1px solid #45454b;
-  border-radius: 7px;
+  border-radius: var(--radius);
   background: #242428;
   color: #ddd;
 }
@@ -517,7 +517,7 @@ input:focus-visible,
 .scene-message {
   margin: 14px 18px;
   padding: 10px 12px;
-  border-radius: 7px;
+  border-radius: var(--radius-panel);
   background: #24303b;
   color: #c7dfff;
   font-size: 12px;
@@ -588,7 +588,7 @@ input:focus-visible,
 .prob-legend i {
   flex: 1;
   height: 7px;
-  border-radius: 9px;
+  border-radius: var(--radius);
   background: linear-gradient(90deg, #0b1f2d, #277aa5, #64dcda);
 }
 .budget-field {
@@ -601,7 +601,7 @@ input:focus-visible,
   width: 100%;
   margin-top: 7px;
   padding: 11px 12px;
-  border-radius: 7px;
+  border-radius: var(--radius);
   border: 1px solid #45454b;
   background: #242428;
   color: #f5f5f7;
@@ -629,7 +629,7 @@ input:focus-visible,
   justify-content: center;
   gap: 9px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius);
   background: #4d9fff;
   color: #071727;
   font-size: 13px;
@@ -670,19 +670,19 @@ input:focus-visible,
   transform: translateX(-50%);
   max-width: 420px;
   background: #302921;
-  border: 1px solid #6b5540;
+  border: 0;
   color: #f7d3ab;
   padding: 10px 13px;
-  border-radius: 8px;
+  border-radius: var(--radius-panel);
   font-size: 12px;
 }
 .maplibregl-popup-content {
   padding: 0 !important;
-  border-radius: 9px !important;
+  border-radius: var(--radius-panel) !important;
   overflow: hidden;
   background: #242428 !important;
   color: #f5f5f7 !important;
-  box-shadow: 0 12px 35px #000b !important;
+  box-shadow: none !important;
 }
 .maplibregl-popup-tip {
   border-top-color: #242428 !important;
@@ -768,7 +768,7 @@ input:focus-visible,
   background: #242428;
   color: #f5f5f7;
   border: 1px solid #44444a;
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 10px 12px;
   font-size: 13px;
   white-space: nowrap;
@@ -804,8 +804,8 @@ input:focus-visible,
   margin: 20px auto;
   padding: 25px;
   background: #171719;
-  border: 1px solid #39393f;
-  border-radius: 10px;
+  border: 0;
+  border-radius: var(--radius-panel);
   color: #bcbcc3;
 }
 .analysis-metrics {
@@ -813,8 +813,8 @@ input:focus-visible,
   grid-template-columns: repeat(4, 1fr);
   gap: 1px;
   background: #37373c;
-  border: 1px solid #37373c;
-  border-radius: 10px;
+  border: 0;
+  border-radius: var(--radius-panel);
   overflow: hidden;
   margin-bottom: 17px;
 }
@@ -845,8 +845,8 @@ input:focus-visible,
 }
 .analysis-card {
   background: #171719;
-  border: 1px solid #39393f;
-  border-radius: 10px;
+  border: 0;
+  border-radius: var(--radius-panel);
   overflow: hidden;
 }
 .card-title {
@@ -930,7 +930,7 @@ tbody tr.selected {
   flex: none;
   background: #303039;
   color: #cdd4df;
-  border-radius: 6px;
+  border-radius: var(--radius);
   font-size: 12px;
 }
 .strategy.chosen > b {
@@ -956,7 +956,7 @@ tbody tr.selected {
   border: 1px solid #4a4a52;
   background: #242428;
   color: #bbbcc4;
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 7px 9px;
   font-size: 12px;
 }
@@ -1095,7 +1095,7 @@ tbody tr.selected {
     bottom: 10px;
     width: auto;
     max-height: 45%;
-    border-radius: 12px;
+    border-radius: var(--radius-panel);
   }
   .scene-preview {
     display: none;

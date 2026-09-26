@@ -4,6 +4,9 @@ One command per split part. For every chip of the part:
   main method   `python -m floodvalue predict` in-process -> flood_probability.tif, flood_mask.tif,
                 prediction.json (exactly the delivered rasters, incl. calibration once #20
                 wires it into predict);
+  raw p         the main method's own `predict_proba` (contracts §3, ensemble mean before the
+                calibrator), checked to give the delivered p through `calibration.json` — only
+                for the "raw -> calibrated" table (#150), nothing is chosen from it;
   baseline      its contract §3 `predict_proba` + the threshold rule (`baseline_mask`);
   labels        LabelHand (+ JRCWaterHand for the diagnostic), test only after the gate;
   portfolio     `python -m floodvalue assets` on the same rasters (placement rule and p
@@ -36,8 +39,9 @@ from pathlib import Path
 import numpy as np
 import rasterio
 
+from floodvalue.calibration import calibrator as CAL
 from floodvalue.data import io
-from floodvalue.data.split import SPLIT_PATH, chip_ids, event_of
+from floodvalue.data.split import EVENT_PARTS, SPLIT_PATH, chip_ids, event_of
 from floodvalue.model import metrics as M
 from floodvalue.model import predict as main_predict
 from floodvalue.model.eval import core as C
@@ -57,6 +61,12 @@ MAX_ERROR_MAPS = 4
 WATER_SHARE_GROUPS = ((0.0, 0.01, "< 1 %"), (0.01, 0.10, "1–10 %"), (0.10, 0.30, "10–30 %"),
                       (0.30, 1.01, "≥ 30 %"))
 PROXY_NOTE = "прокси по ручной метке воды, не фактические потери"
+# Köppen–Geiger climate class of each Sen1Floods11 event (site attribute, not a label or a
+# prediction), fixed before eval-test to group test by "climate seen in train or not" (#150).
+KOPPEN = {"Bolivia": "Am", "Ghana": "Aw", "India": "Am", "Mekong": "Am", "Nigeria": "Aw",
+          "Pakistan": "BWh", "Paraguay": "Cfa", "Somalia": "BSh", "Spain": "Csa",
+          "Sri-Lanka": "Am", "USA": "Dfa"}
+KOPPEN_SOURCE = "Ratté-Fortin et al., SSRN 6282373, табл. 2"
 
 
 def main_method() -> str:
@@ -175,6 +185,21 @@ def predict_main(chip: str, out: Path) -> tuple[np.ndarray, np.ndarray, dict]:
     return p, mask == 1, meta
 
 
+def raw_main(s1: np.ndarray, p: np.ndarray, meta: dict) -> np.ndarray:
+    """Raw p of the main method (its `predict_proba`, contracts §3: for U-Net the mean of the
+    members before the calibrator). Refuses unless raw p through the calibrator of
+    prediction.json (or unchanged, if there is none) reproduces the delivered p."""
+    method = meta["method"]
+    raw = importlib.import_module(main_predict.METHODS[method]).predict_proba(s1)
+    again = raw
+    if meta.get("calibration"):
+        cal = CAL.load(MODELS_DIR / method / "calibration.json", meta["weights_sha256"])
+        again = CAL.apply(cal["calibrator"], raw)
+    if not np.allclose(again, p, rtol=0.0, atol=1e-6, equal_nan=True):
+        raise RuntimeError(f"{meta.get('chip_id')}: raw p through the calibrator != delivered p")
+    return raw
+
+
 def predict_baseline(s1: np.ndarray) -> tuple[np.ndarray, np.ndarray, dict]:
     """Baseline threshold rule through its public module: (finite bool, mask bool, config)."""
     module = importlib.import_module(main_predict.METHODS["baseline"])
@@ -219,7 +244,7 @@ def evaluate(part: str, chips: list[str], workdir: Path, *, allow_test: bool = F
     """All numbers of the report for one part; chips in chip_id order."""
     chips = sorted(chips)
     proxy_chip = proxy_chip if proxy_chip in chips else chips[0]
-    per_chip, masks, rel, unc_hist, qc = [], {}, {}, {}, []
+    per_chip, masks, rel, rel_raw, unc_hist, qc = [], {}, {}, {}, {}, []
     jrc = {m: {"jrc_1": _zero(), "jrc_0": _zero()} for m in ("main", "baseline")}
     proxy_all, proxy_demo, main_meta, base_cfg = [], [], None, None
     edges = np.linspace(0.0, 1.0, 100_001)
@@ -246,12 +271,14 @@ def evaluate(part: str, chips: list[str], workdir: Path, *, allow_test: bool = F
                 jrc[m][k] = M.add(jrc[m][k], c)
         pv, yv = p[valid], target[valid]
         counts = C.reliability_counts(pv, yv)
+        counts_raw = C.reliability_counts(raw_main(s1, p, main_meta)[valid], yv)
         u = C.binary_entropy(pv)
         err = mask_main[valid] != yv
         h_err = np.histogram(u[err], bins=edges)[0]
         h_ok = np.histogram(u[~err], bins=edges)[0]
         for scope in (event, "ALL"):
             rel[scope] = C.add_reliability(rel.get(scope), counts)
+            rel_raw[scope] = C.add_reliability(rel_raw.get(scope), counts_raw)
             acc = unc_hist.setdefault(scope, {"err": 0, "ok": 0, "sum_err": 0.0, "sum_ok": 0.0})
             acc["err"] = acc["err"] + h_err
             acc["ok"] = acc["ok"] + h_ok
@@ -263,7 +290,7 @@ def evaluate(part: str, chips: list[str], workdir: Path, *, allow_test: bool = F
             "water_share": float(yv.mean()) if n_valid else float("nan"),
             "label_invalid_share": float((label == -1).mean()),
             "s1_nodata_share": float((~np.isfinite(s1).all(axis=0)).mean()),
-            "main": c_main, "baseline": c_base})
+            "main": c_main, "baseline": c_base, "reliability": counts})
         points = proxy_points(chip, out, label, s1_profile["transform"])
         proxy_all += points
         if chip == proxy_chip:
@@ -276,7 +303,8 @@ def evaluate(part: str, chips: list[str], workdir: Path, *, allow_test: bool = F
         h = {k: M.mask_sha256([masks[k][c] for c in scope_chips]) for k in masks}
         hashes[scope] = C.require_same_valid_pixels(h)
     return {"part": part, "chips": chips, "per_chip": per_chip, "events": events,
-            "hashes": hashes, "reliability": rel, "uncertainty": unc_hist, "edges": edges,
+            "hashes": hashes, "reliability": rel, "reliability_raw": rel_raw,
+            "uncertainty": unc_hist, "edges": edges,
             "jrc": jrc, "proxy_chip": proxy_chip, "qc": qc,
             "proxy_demo": C.proxy_rows(proxy_demo), "proxy_all": C.proxy_rows(proxy_all),
             "main_meta": main_meta, "baseline_config": base_cfg}
@@ -321,6 +349,42 @@ def uncertainty_summary(res: dict) -> dict:
                       "mean_u_correct": acc["sum_ok"] / n_ok if n_ok else float("nan"),
                       "auroc": C.auroc_from_hist(acc["err"], acc["ok"])}
     return out
+
+
+def calibration_summary(res: dict) -> dict:
+    """Per event and ALL: ECE/MCE/Brier/log-loss of the delivered p (15 bins as calibration)
+    with the chip bootstrap CI of ECE and log-loss, and the same scores of the raw p."""
+    out = {}
+    for scope in [*res["events"], "ALL"]:
+        chips = [c["reliability"] for c in res["per_chip"] if scope in ("ALL", c["event"])]
+        out[scope] = {**C.prob_summary(res["reliability"][scope]),
+                      "bootstrap": C.bootstrap_calibration(chips, n=BOOTSTRAP_N,
+                                                           seed=BOOTSTRAP_SEED),
+                      "raw": C.prob_summary(res["reliability_raw"][scope])}
+    return out
+
+
+def climate_groups(res: dict) -> list[dict]:
+    """Pooled IoU by Köppen class of the chip's event, and by "class seen in train or not"."""
+    train = {KOPPEN.get(e) for e in EVENT_PARTS["train"]}
+
+    def row(group: str, chips: list[dict], seen: bool) -> dict:
+        return {"group": group, "events": sorted({c["event"] for c in chips}),
+                "seen_in_train": seen, "n_chips": len(chips),
+                "iou_main": C.pooled_iou(c["main"] for c in chips),
+                "iou_baseline": C.pooled_iou(c["baseline"] for c in chips),
+                "fp_main": sum(c["main"]["fp"] for c in chips),
+                "fn_main": sum(c["main"]["fn"] for c in chips)}
+
+    klass = {c["chip_id"]: KOPPEN.get(c["event"], "не задан") for c in res["per_chip"]}
+    rows = []
+    for k in sorted(set(klass.values())):
+        chips = [c for c in res["per_chip"] if klass[c["chip_id"]] == k]
+        rows.append(row(f"Кёппен {k}", chips, k in train))
+    for seen, name in ((False, "климат не виден в train"), (True, "климат виден в train")):
+        chips = [c for c in res["per_chip"] if (klass[c["chip_id"]] in train) == seen]
+        rows.append(row(name, chips, seen))
+    return rows
 
 
 def transfer_groups(res: dict) -> list[dict]:
@@ -374,6 +438,12 @@ def f3(v: float) -> str:
     if v is None or not np.isfinite(v):
         return "—"
     return f"{v:.3f}".replace(".", ",").replace("-", "−")
+
+
+def f4(v: float) -> str:
+    if v is None or not np.isfinite(v):
+        return "—"
+    return f"{v:.4f}".replace(".", ",").replace("-", "−")
 
 
 def pct(v: float) -> str:
@@ -467,6 +537,7 @@ def write_report(res: dict, out_dir: Path, workdir: Path, allow_test: bool, comm
         for m in ("main", "baseline"):
             r[f"iou_{m}"] = M.scores(c[m])["iou"]
             r.update({f"{k}_{m}": c[m][k] for k in ("tp", "fp", "fn", "tn")})
+        r["koppen"] = KOPPEN.get(c["event"], "")
         chip_rows.append(r)
     write_csv(paths["chips"], list(chip_rows[0]), chip_rows)
     rel_rows = []
@@ -483,8 +554,8 @@ def write_report(res: dict, out_dir: Path, workdir: Path, allow_test: bool, comm
 
     boot = bootstraps(res)
     unc = uncertainty_summary(res)
-    cal = {s: {"ece": C.ece(res["reliability"][s]), "brier": C.brier(res["reliability"][s])}
-           for s in [*res["events"], "ALL"]}
+    cal = calibration_summary(res)
+    climate = climate_groups(res)
     demo, allp = C.proxy_summary(res["proxy_demo"]), C.proxy_summary(res["proxy_all"])
     jrc = {m: {k: M.scores(c)["iou"] for k, c in v.items()} for m, v in res["jrc"].items()}
     jrc_counts = res["jrc"]
@@ -506,18 +577,22 @@ def write_report(res: dict, out_dir: Path, workdir: Path, allow_test: bool, comm
                "main_method": meta.get("method"), "threshold": meta.get("threshold"),
                "threshold_status": meta.get("threshold_status"), "n_chips": len(res["chips"]),
                "valid_mask_sha256": res["hashes"], "bootstrap_delta_iou": boot,
-               "calibration": cal, "uncertainty": unc, "jrc_iou": jrc,
+               "calibration": cal, "calibration_bins": C.N_BINS, "uncertainty": unc,
+               "uncertainty_measure": (meta.get("uncertainty") or {}).get("measure"),
+               "climate": {"source": KOPPEN_SOURCE, "classes": KOPPEN, "groups": climate},
+               "jrc_iou": jrc,
                "proxy_check": proxy_check, "error_maps": maps,
                "pixel_qc": C.qc_summary(res["qc"]),
                "baseline_crosscheck": baseline_crosscheck(rows, part)}
     paths["json"].write_text(json.dumps(summary, ensure_ascii=False, indent=1, default=float)
                              + "\n", encoding="utf-8")
-    paths["md"].write_text(render_md(res, rows, summary, groups, jrc_counts, calibrated, paths),
+    paths["md"].write_text(render_md(res, rows, summary, groups, jrc_counts, calibrated, paths,
+                                     climate),
                            encoding="utf-8")
     return paths
 
 
-def render_md(res, rows, s, groups, jrc_counts, calibrated, paths) -> str:
+def render_md(res, rows, s, groups, jrc_counts, calibrated, paths, climate) -> str:
     part, meta = res["part"], res["main_meta"]
     by = {(r["method"], r["event"]): r for r in rows}
     L = [f"# Итоговая оценка на части `{part}`: baseline против основного метода", "",
@@ -574,20 +649,56 @@ def render_md(res, rows, s, groups, jrc_counts, calibrated, paths) -> str:
           "демо-чип части и чип с наибольшим числом ошибок основного метода в каждом событии.",
           "", f"![карты ошибок]({paths['png'].name})", "",
           "## 3. Надёжность вероятностей основного метода (критерий 9)", "",
-          "10 равных корзин p на [0; 1], по всем валидным пикселям. ECE = Σ n_b/N · "
-          "|среднее p − доля воды|; Brier = среднее (p − y)².", "",
-          "| событие | ECE | Brier |", "|---|---|---|"]
+          f"{s['calibration_bins']} равных корзин p на [0; 1] — те же, что в калибровке "
+          "(`calibration.json`, `calibration-val.md`), по всем валидным пикселям. "
+          "ECE = Σ n_b/N · |среднее p − доля воды|; MCE — максимум |среднее p − доля воды| по "
+          "непустым корзинам (чувствителен к малым корзинам, см. число пикселей ниже); "
+          "Brier = среднее (p − y)²; log-loss — среднее −ln p(y), p обрезана до [1e-6; 1 − 1e-6] "
+          f"как в калибровке. 95 % CI — бутстрэп по чипам ({BOOTSTRAP_N} повторов, seed "
+          f"{BOOTSTRAP_SEED}): чипы выбираются с возвращением, пиксели выбранных чипов "
+          "объединяются.", "",
+          "| событие | ECE | 95 % CI ECE | MCE | Brier | log-loss | 95 % CI log-loss | "
+          "среднее p | доля воды |", "|---|---|---|---|---|---|---|---|---|"]
     for scope, c in s["calibration"].items():
-        L.append(f"| {scope} | {f3(c['ece'])} | {f3(c['brier'])} |")
+        b = c["bootstrap"]
+        L.append(f"| {scope} | {f4(c['ece'])} | [{f4(b['ece_ci95'][0])}; "
+                 f"{f4(b['ece_ci95'][1])}] | {f4(c['mce'])} | {f4(c['brier'])} | "
+                 f"{f4(c['log_loss'])} | [{f4(b['log_loss_ci95'][0])}; "
+                 f"{f4(b['log_loss_ci95'][1])}] | {f3(c['mean_p'])} | {f3(c['water_share'])} |")
     L += ["", "| корзина p | пикселей | среднее p | доля воды |", "|---|---|---|---|"]
     for r in C.reliability_table(res["reliability"]["ALL"]):
         close = "]" if r["hi"] >= 1 else ")"
-        lo, hi = (f"{x:.1f}".replace(".", ",") for x in (r["lo"], r["hi"]))
+        lo, hi = (f"{x:.3f}".replace(".", ",") for x in (r["lo"], r["hi"]))
         L.append(f"| [{lo}; {hi}{close} | {r['n']} | {f3(r['mean_p'])} | "
                  f"{f3(r['observed'])} |")
+    kind = (meta.get("calibration") or {}).get("kind")
+    L += ["", "### 3a. Сырая p → калиброванная p на тех же пикселях", "",
+          "Сырая p — `predict_proba` основного метода (контракт §3; у U-Net — среднее членов "
+          "ансамбля до калибратора), калиброванная — сдаваемый `flood_probability.tif`"
+          + (f" (калибратор `{kind}` из `models/{meta.get('method')}/calibration.json`, "
+             "подобран на validation, D-029). Для каждого чипа проверено, что сырая p через "
+             "калибратор даёт сдаваемую p (|Δ| ≤ 1e-6)." if kind else
+             " (калибратор не подключён — сырая и сдаваемая p совпадают).")
+          + " Отчёт, ничего не выбирается.", "",
+          "| событие | p | ECE | MCE | Brier | log-loss | среднее p | доля воды |",
+          "|---|---|---|---|---|---|---|---|"]
+    for scope, c in s["calibration"].items():
+        for name, x in (("сырая", c["raw"]), ("калиброванная", c)):
+            L.append(f"| {scope} | {name} | {f4(x['ece'])} | {f4(x['mce'])} | "
+                     f"{f4(x['brier'])} | {f4(x['log_loss'])} | {f3(x['mean_p'])} | "
+                     f"{f3(x['water_share'])} |")
+    measure = s.get("uncertainty_measure")
+    unc_status = (meta.get("uncertainty") or {}).get("status") or "статус не записан"
+    same = ("тот же показатель, что в `uncertainty.tif` комплекта" if measure == "entropy_p"
+            else f"в `uncertainty.tif` комплекта — другой показатель (`{measure}`)")
+    indep = ("На test связь с ошибками проверяется впервые и независимо." if part == "test"
+             else f"Часть `{part}` участвовала в выборе показателя или модели (D-039, D-019), "
+                  "поэтому здесь это не независимая проверка.")
     L += ["", "## 4. Неопределённость на ошибках (критерий 10)", "",
-          "Показатель (временный, до #21) — бинарная энтропия p основного метода в битах: "
-          "нерешительность модели в пикселе, не проверенная неопределённость. Ошибка — маска "
+          "Показатель — бинарная энтропия сдаваемой (калиброванной) p основного метода в битах; "
+          f"{same}. Выбран по правилу `models/{meta.get('method')}/uncertainty.json` (D-039: "
+          "максимум AUROC худшего события validation; более простой показатель побеждает, если "
+          f"CI разности содержит 0). Статус из файла: {unc_status}. {indep} Ошибка — маска "
           "основного метода ≠ метке. AUROC — вероятность, что у случайного ошибочного пикселя "
           "энтропия выше, чем у случайного верного (0,5 — не различает; по гистограмме с шагом "
           "1e-5 бита).", "",
@@ -642,6 +753,21 @@ def render_md(res, rows, s, groups, jrc_counts, calibrated, paths) -> str:
     for g in groups:
         L.append(f"| {g['group']} | {g['n_chips']} | {f3(g['iou_main'])} | "
                  f"{f3(g['iou_baseline'])} | {g['fp_main']} | {g['fn_main']} |")
+    train_cls = ", ".join(f"{e} {KOPPEN.get(e, '?')}" for e in EVENT_PARTS["train"])
+    L += ["", "### 7a. Климат Кёппена события: виден ли он в обучении", "",
+          f"Класс Кёппена — атрибут места события, не метка и не прогноз; таблица событие → "
+          f"класс ({KOPPEN_SOURCE}) и эта группировка зафиксированы до запуска на test (#150). "
+          f"Train: {train_cls}; dev: USA {KOPPEN['USA']}; validation: Nigeria "
+          f"{KOPPEN['Nigeria']}, Sri-Lanka {KOPPEN['Sri-Lanka']}. «Виден» — класс есть среди "
+          "событий train. Столбец `koppen` — в "
+          f"`{paths['chips'].name}`.", "",
+          "| группа чипов | события | класс в train | чипов | IoU основной | IoU baseline | "
+          "FP основной | FN основной |", "|---|---|---|---|---|---|---|---|"]
+    for g in climate:
+        L.append(f"| {g['group']} | {', '.join(g['events']) or '—'} | "
+                 f"{'да' if g['seen_in_train'] else 'нет'} | {g['n_chips']} | "
+                 f"{f3(g['iou_main'])} | {f3(g['iou_baseline'])} | {g['fp_main']} | "
+                 f"{g['fn_main']} |")
     L += ["", "## 8. Пиксельный QC чипов части (критерий 1)", "",
           "Считается в том же цикле по чипам из тех же массивов S1 и LabelHand, без второго "
           f"чтения; построчно — `{paths['qc'].name}`. NaN S1 — хотя бы один канал не конечен; "

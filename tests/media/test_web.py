@@ -2,6 +2,7 @@
 invalid input, status only by token, closed attachments, operator actions need authorisation,
 moderation puts the event on the layer."""
 
+import sys
 from dataclasses import replace
 
 import pytest
@@ -192,7 +193,34 @@ def test_fonts_are_served_only_as_woff2_from_their_dir(app, tmp_path, monkeypatc
     assert r.status == 200 and r.body == b"wOF2 test"
     assert r.headers["content-type"] == "font/woff2"
     assert r.headers["x-content-type-options"] == "nosniff"
-    (fonts / "Link.woff2").symlink_to(tmp_path / "secret.woff2")  # resolves outside the dir
-    for bad in ("Face-OFL.txt", "Link.woff2", "missing.woff2"):
+    bad_names = ["Face-OFL.txt", "missing.woff2"]
+    try:
+        (fonts / "Link.woff2").symlink_to(tmp_path / "secret.woff2")  # resolves outside the dir
+        bad_names.append("Link.woff2")
+    except OSError:  # Windows without developer mode (WinError 1314): no symlink to escape with
+        if sys.platform != "win32":
+            raise
+    for bad in bad_names:
         assert call(app, "GET", f"/media/static/fonts/{bad}").status == 404
     assert "font-src 'self'" in call(app, "GET", "/report").headers["content-security-policy"]
+
+
+def test_report_detail_and_publications_are_for_the_analyst(app, settings, conn):
+    """The operator's card reads one report in full; the «Разбор СМИ» page reads what each
+    source brought and how it was understood. Both are analyst-only (#174)."""
+    from floodvalue.media.demo import load_demo
+    load_demo(conn, settings)
+    rid = call(app, "POST", "/api/media/reports", data=FORM).json()["report_id"]
+    detail = call(app, "GET", f"/api/media/reports/{rid}").json()
+    assert detail["description"] == FORM["description"] and detail["photos"] == []
+    assert "status_token_hash" not in detail and "idempotency_key" not in detail
+    assert call(app, "GET", "/api/media/reports/R-nope").status == 404
+    feed = call(app, "GET", "/api/media/publications?limit=10").json()
+    demo = [p for p in feed["publications"] if p["is_demo"]]
+    assert demo and all(p["extraction"] is not None for p in demo)
+    assert any(p["event_id"] for p in demo) and all("title_key" not in p for p in demo)
+    only = call(app, "GET", "/api/media/publications?status=irrelevant,invalid").json()
+    assert all(p["extraction_status"] in ("irrelevant", "invalid") for p in only["publications"])
+    assert call(app, "GET", "/api/media/publications?status=bogus").status == 422
+    for path in (f"/api/media/reports/{rid}", "/api/media/publications"):
+        assert call(app, "GET", path, client=REMOTE).status == 403

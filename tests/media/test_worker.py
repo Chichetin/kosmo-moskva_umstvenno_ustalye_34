@@ -32,15 +32,17 @@ def test_worker_imports_in_a_fresh_interpreter():
 
 def test_monitoring_switch_and_schedule(settings, conn, monkeypatch):
     calls = []
+    monkeypatch.setitem(pipeline.ADAPTERS, "cems", lambda f, c, cur: calls.append("cems") or ([], "c"))
     monkeypatch.setitem(pipeline.ADAPTERS, "gdacs", lambda f, c, cur: calls.append("gdacs") or ([], "c"))
     monkeypatch.setitem(pipeline.ADAPTERS, "gdelt_doc", lambda f, c, cur: calls.append("gdelt") or ([], "c"))
+    monkeypatch.setitem(pipeline.ADAPTERS, "rss", lambda f, c, cur: calls.append("rss") or ([], "c"))
     set_kv(conn, "monitoring_enabled", "0")
     assert worker.run_cycle(settings) == []
     set_kv(conn, "monitoring_enabled", "1")
     first = worker.run_cycle(settings)
-    assert sorted(r["source_id"] for r in first) == ["gdacs_floods", "gdelt_floods"]
+    assert sorted(r["source_id"] for r in first) == ["cems_floods", "gdacs_floods", "gdelt_floods", "mchs_news"]
     assert worker.run_cycle(settings) == []  # not due yet (poll_interval_s = 900)
-    assert calls == ["gdacs", "gdelt"]
+    assert sorted(calls) == ["cems", "gdacs", "gdelt", "rss"]
     manual = worker.run_cycle(settings, only="gdacs_floods", manual=True)
     assert [r["source_id"] for r in manual] == ["gdacs_floods"]
 

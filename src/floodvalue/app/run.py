@@ -8,14 +8,18 @@ import json
 import math
 import os
 import queue
+import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
 import zipfile
+from decimal import ROUND_HALF_UP, Decimal
 from functools import lru_cache
 from pathlib import Path
+from typing import Annotated
 
 import numpy as np
 import rasterio
@@ -169,14 +173,42 @@ def scenes():
             if _sealed(chip_id):
                 continue
             info = _raster_info(path)
+            empty = _s1_empty(chip_id)
             result.append({"run_id": None, "chip_id": chip_id,
                            "fixture": False,
                            "territory": source.get("event_id") or chip_id,
                            "observation_date": source.get("observation_date"),
                            "position": _scene_position(path), "bounds": info["bounds"],
                            "corners": info["corners"], "status": "observation_only",
-                           "preview_url": f"/api/observations/{chip_id}/preview.png"})
+                           "preview_url": f"/api/observations/{chip_id}/preview.png",
+                           "analyzable": not empty,
+                           "not_analyzable_reason": S1_EMPTY_REASON if empty else None})
     return sorted(result, key=lambda item: (item["status"] != "analyzed", item["territory"], item["chip_id"]))
+
+
+S1_EMPTY_REASON = "В снимке S1 нет валидных пикселей — объекты разместить негде, анализ невозможен"
+
+
+@lru_cache(maxsize=4)
+def _s1_nan_fractions(qc_path: Path, mtime_ns: int) -> dict[str, float]:
+    """chip_id → max(vv_nan_frac, vh_nan_frac) from `make data` QC; sealed test rows are empty."""
+    result = {}
+    with qc_path.open(encoding="utf-8", newline="") as source:
+        for row in csv.DictReader(source):
+            try:
+                result[row["chip_id"]] = max(float(row["vv_nan_frac"]), float(row["vh_nan_frac"]))
+            except (KeyError, TypeError, ValueError):
+                continue
+    return result
+
+
+def _s1_empty(chip_id: str) -> bool:
+    """True when QC says no pixel has both S1 bands: assets need valid S1 (portfolio placement).
+    Without qc.csv nothing is claimed — the pipeline itself reports the failure then."""
+    qc_path = data_dir() / "interim" / "qc.csv"
+    if not qc_path.is_file():
+        return False
+    return _s1_nan_fractions(qc_path, qc_path.stat().st_mtime_ns).get(chip_id, 0.0) >= 1.0
 
 
 def _observation_file(chip_id: str) -> Path:
@@ -226,7 +258,22 @@ def session(run_id: str | None = None):
         "assets": assets,
         "candidates": candidates,
         "sensitivity": _csv(run_dir / "sensitivity.csv"),
+        "plan_c_saturation_rub": _plan_c_saturation(run_dir),
     }
+
+
+UNLIMITED_BUDGET_RUB = 1_000_000_000
+
+
+def _plan_c_saturation(run_dir: Path) -> float | None:
+    """Data cost of plan C with an unlimited budget: above it the composition of C no longer
+    changes (for the budget slider). The same public procurement.plan, no contract change."""
+    try:
+        result = plan(run_dir, UNLIMITED_BUDGET_RUB)
+    except (ValueError, KeyError, OSError):
+        return None
+    row = next((item for item in result.get("comparison", []) if item.get("strategy") == "C"), None)
+    return float(row["data_cost_rub"]) if row and row.get("data_cost_rub") is not None else None
 
 
 @app.get("/api/plan")
@@ -346,16 +393,61 @@ def raster_layer(layer: str, run_id: str | None = None):
     return Response(_png(layer, path, band), media_type="image/png")
 
 
-@app.get("/api/download")
-def download(run_id: str | None = None):
-    run_dir = _run_dir(run_id)
+_rebudget_lock = threading.Lock()  # one re-budgeted export at a time (the UI may be public)
+REBUDGET_STEPS = ("procure", "export", "validate")
+
+
+def _zip_bundle(run_dir: Path, name: str) -> Response:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(run_dir.iterdir()):
             if path.is_file() and path.suffix in {".csv", ".json", ".geojson", ".tif"}:
                 archive.write(path, path.name)
     return Response(buffer.getvalue(), media_type="application/zip",
-                    headers={"Content-Disposition": f'attachment; filename="{run_dir.name}.zip"'})
+                    headers={"Content-Disposition": f'attachment; filename="{name}.zip"'})
+
+
+@app.get("/api/download")
+def download(run_id: str | None = None,
+             budget: Annotated[float | None, Query(ge=0, le=UNLIMITED_BUDGET_RUB)] = None):
+    """The bundle of the scene; with another budget, procure → export → validate are rerun on a
+    copy (as `make procure/export BUDGET=…`): p, mask and threshold stay byte for byte."""
+    run_dir = _run_dir(run_id)
+    metadata = _json(run_dir / "run_metadata.json")
+    bundle_budget = float(metadata.get("budget", {}).get("budget_rub", -1))
+    if budget is None or abs(budget - bundle_budget) < 0.005:
+        return _zip_bundle(run_dir, run_dir.name)
+    if not _rebudget_lock.acquire(blocking=False):
+        raise HTTPException(429, "Выгрузка под другой бюджет уже готовится, повторите через минуту")
+    work: Path | None = None
+    budget_arg = str(Decimal(str(budget)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+    try:
+        work = Path(tempfile.mkdtemp(prefix="floodvalue-budget-"))
+        for path in run_dir.iterdir():
+            if path.is_file():
+                shutil.copy2(path, work / path.name)
+        chip = ["--chip", str(metadata.get("chip_id"))]
+        for step in REBUDGET_STEPS:
+            command = [sys.executable, "-m", "floodvalue", step,
+                       *(chip + ["--budget", budget_arg] if step != "validate" else []),
+                       "--out", str(work)]
+            done = subprocess.run(command, cwd=REPO_ROOT, capture_output=True, text=True,
+                                  timeout=ANALYSIS_STEP_TIMEOUT_S)
+            if done.returncode != 0:
+                output = (done.stderr or done.stdout or "").strip().replace(str(work), "<bundle>")
+                detail = _server_paths_hidden(output)
+                raise HTTPException(422, f"Пересчёт под бюджет не прошёл ({step}): {detail}")
+        rebudgeted = _json(work / "run_metadata.json")
+        return _zip_bundle(work, str(rebudgeted.get("run_id", f"{run_dir.name}_{budget:.0f}")))
+    except subprocess.TimeoutExpired as exc:
+        raise HTTPException(504, "Пересчёт под бюджет не уложился во время") from exc
+    except OSError as exc:  # no temp space, no permission: a clear error, the lock is freed
+        raise HTTPException(503, "Не удалось подготовить выгрузку под бюджет: "
+                                 + _server_paths_hidden(str(exc))) from exc
+    finally:
+        if work is not None:
+            shutil.rmtree(work, ignore_errors=True)
+        _rebudget_lock.release()
 
 
 # --- Analysis of a raw observation from the catalog ------------------------------------------
@@ -393,7 +485,10 @@ def _public(job: dict) -> dict:
 def _server_paths_hidden(text: str) -> str:
     """The interface may be public: stderr keeps the error, not the server's directories."""
     for path, name in ((output_dir(), "<outputs>"), (data_dir(), "<data>"), (REPO_ROOT, "<repo>")):
-        text = text.replace(str(path), name)
+        raw = str(path)
+        # repr() of an exception doubles Windows backslashes; tools may print the POSIX form
+        for variant in (raw.replace("\\", "\\\\"), raw, path.as_posix()):
+            text = text.replace(variant, name)
     return text[-600:]
 
 
@@ -469,6 +564,8 @@ def start_analysis(chip_id: str = Query(min_length=1, max_length=120)):
         # eval-test of the frozen configuration with a line in test-log.md (D-010, D-033).
         raise HTTPException(403, "Снимок из test: анализ только через make eval-test / make all")
     _observation_file(chip_id)  # 404 when the raw observation is not available
+    if _s1_empty(chip_id):
+        raise HTTPException(422, S1_EMPTY_REASON)
     with _jobs_lock:
         _forget_old_jobs()
         active = [job for job in _jobs.values() if job["status"] in ("queued", "running")]

@@ -1,0 +1,64 @@
+.world-locator {
+  width: 220px;
+  margin: 0;
+  padding: 10px 12px 8px;
+  border: 0;
+  border-radius: var(--radius-panel);
+  background: rgba(18, 21, 24, 0.82);
+}
+
+.world-locator svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.world-locator-land {
+  fill: rgba(233, 237, 239, 0.16);
+  stroke: none;
+}
+
+.world-locator-cross {
+  stroke: rgba(233, 237, 239, 0.12);
+  stroke-width: 0.6;
+}
+
+.world-locator-dot {
+  fill: #e9edef;
+  stroke: #08090b;
+  stroke-width: 1.2;
+}
+
+.world-locator-pulse {
+  fill: none;
+  stroke: #e9edef;
+  stroke-width: 1;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: world-locator-pulse 2.4s ease-out infinite;
+}
+
+@keyframes world-locator-pulse {
+  from { transform: scale(1); opacity: 0.8; }
+  to { transform: scale(4); opacity: 0; }
+}
+
+.world-locator figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: #929da2;
+}
+
+.world-locator figcaption strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e9edef;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .world-locator-pulse { animation: none; opacity: 0; }
+}

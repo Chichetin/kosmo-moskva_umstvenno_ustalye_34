@@ -23,7 +23,7 @@ export type Session = {
       decision_deadline: string;
     };
     pricing?: { base_rate_status?: string; base_rate_rub_km2?: number };
-    uncertainty?: { meaning?: string };
+    uncertainty?: { meaning?: string; units?: string; method?: string };
     [key: string]: unknown;
   };
   raster: {
@@ -61,6 +61,7 @@ export type Session = {
   assets: FeatureCollection;
   candidates: FeatureCollection;
   sensitivity: Array<Record<string, string>>;
+  plan_c_saturation_rub: number | null;
 };
 
 export type SceneSummary = {
@@ -76,6 +77,8 @@ export type SceneSummary = {
     | null;
   status: "analyzed" | "observation_only";
   preview_url: string | null;
+  analyzable?: boolean;
+  not_analyzable_reason?: string | null;
 };
 
 export type Comparison = {

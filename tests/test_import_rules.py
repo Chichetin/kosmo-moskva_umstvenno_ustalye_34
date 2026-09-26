@@ -11,9 +11,9 @@ that use them (FILES): e.g. `data.io.layer_path` could reach LabelHand around th
 `load_label` (D-010, D-015), so a new caller must be a reviewed line here.
 A `python -m <module>` command run as a subprocess (CLI and file, D-005) is allowed as a
 string literal only, through CLI_ONLY; importing the same module with import syntax stays a
-violation (an `importlib.import_module` of that literal in the same file would pass: D-057).
+violation (an `importlib.import_module` of that literal in the same file would pass: D-059).
 
-Not seen by the walk (D-057): what a caller does with a module it got from a registry through
+Not seen by the walk (D-059): what a caller does with a module it got from a registry through
 importlib (calibration -> `model.predict.METHODS`, bounded by D-041; model.eval_test ->
 `baseline.predict`), module names built by f-strings, and a FILES name re-exported through
 another file of the same module (imports inside a module are always allowed). A new
@@ -33,10 +33,10 @@ import floodvalue
 PKG = Path(floodvalue.__file__).parent
 
 BASE = {"floodvalue.contracts", "floodvalue.paths"}  # D-005
-# Chip reader, read only (data.io). D-015: load_s1, load_label, valid_mask; D-057: path and
+# Chip reader, read only (data.io). D-015: load_s1, load_label, valid_mask; D-059: path and
 # id helpers and layer names of the same reader.
 IO = "floodvalue.data.io."
-# Split loader, read only (data.split). contracts.md §4: chip_ids; D-057: the rest.
+# Split loader, read only (data.split). contracts.md §4: chip_ids; D-059: the rest.
 SPLIT = "floodvalue.data.split."
 
 ALLOWED: dict[str, set[str]] = {
@@ -44,36 +44,39 @@ ALLOWED: dict[str, set[str]] = {
     "paths": set(),
     "contracts": {"floodvalue.paths"},  # D-005: contracts is the shared base
     "__main__": {"floodvalue.cli.main"},
-    # D-057 (project-structure.md): cli loads the stage modules lazily by name (STAGES)
+    # D-059 (project-structure.md): cli loads the stage modules lazily by name (STAGES)
     "cli": {"floodvalue.data.fetch", "floodvalue.data.split", "floodvalue.baseline.run",
             "floodvalue.model.train", "floodvalue.calibration.run", "floodvalue.model.predict",
             "floodvalue.assets.run", "floodvalue.procurement.run", "floodvalue.export.run",
-            "floodvalue.export.validate", "floodvalue.app.run", "floodvalue.model.eval_test"},
+            "floodvalue.export.validate", "floodvalue.app.run", "floodvalue.model.eval_test",
+            "floodvalue.prewater.run"},
     "data": BASE,
     "baseline": BASE | {
         IO + "load_s1", IO + "load_label", IO + "valid_mask",  # D-015
-        IO + "layer_path", IO + "S1_LAYER",  # D-057
+        IO + "layer_path", IO + "S1_LAYER",  # D-059
         SPLIT + "chip_ids",  # contracts.md §4
-        SPLIT + "load_split",  # D-057
+        SPLIT + "load_split",  # D-059
         "floodvalue.model.metrics",  # D-032
     },
     "model": BASE | {
         IO + "load_s1", IO + "load_label", IO + "valid_mask",  # D-015
-        IO + "layer_path", IO + "raw_dir", IO + "parse_chip_id",  # D-057
-        IO + "S1_LAYER", IO + "JRC_LAYER",  # D-057 (eval-test)
+        IO + "layer_path", IO + "raw_dir", IO + "parse_chip_id",  # D-059
+        IO + "S1_LAYER", IO + "JRC_LAYER",  # D-059 (eval-test)
         SPLIT + "chip_ids",  # contracts.md §4
-        SPLIT + "load_split", SPLIT + "SealedTestError",  # D-057
-        SPLIT + "SPLIT_PATH", SPLIT + "event_of",  # D-057 (eval-test)
+        SPLIT + "load_split", SPLIT + "SealedTestError",  # D-059
+        SPLIT + "SPLIT_PATH", SPLIT + "event_of",  # D-059 (eval-test)
+        SPLIT + "EVENT_PARTS",  # D-059 (eval-test: Koppen groups by event, D-057)
         "floodvalue.calibration.calibrator",  # D-041: p_raw -> p, lazy, contracts §3
         "floodvalue.calibration.uncertainty",  # D-039: uncertainty.tif, lazy
-        "floodvalue.baseline.predict",  # D-057: METHODS registry (contracts §3), unet report
+        "floodvalue.calibration.run.N_BINS",  # D-057: ECE in the calibration's bins
+        "floodvalue.baseline.predict",  # D-059: METHODS registry (contracts §3), unet report
         "floodvalue.cli.main",  # D-030: eval-test runs the assets stage through the CLI
     },
     "calibration": BASE | {
         IO + "load_s1", IO + "load_label", IO + "valid_mask",  # D-015
-        IO + "layer_path", IO + "parse_chip_id",  # D-057
+        IO + "layer_path", IO + "parse_chip_id",  # D-059
         SPLIT + "chip_ids",  # contracts.md §4
-        SPLIT + "load_split",  # D-057
+        SPLIT + "load_split",  # D-059
         "floodvalue.model.metrics",  # D-032
         "floodvalue.model.predict.METHODS",  # D-041
     },
@@ -85,31 +88,40 @@ ALLOWED: dict[str, set[str]] = {
         SPLIT + "EVENT_PARTS",  # D-050: test chips stay sealed in the catalog
     },
     "context": BASE | {
-        IO + "layer_path", IO + "raw_dir", IO + "parse_chip_id",  # D-057
-        SPLIT + "EVENT_PARTS", SPLIT + "SealedTestError",  # D-050, D-057
+        IO + "layer_path", IO + "raw_dir", IO + "parse_chip_id",  # D-059
+        SPLIT + "EVENT_PARTS", SPLIT + "SealedTestError",  # D-050, D-059
     },
     "media": {"floodvalue.paths"},  # D-051: media takes only paths
+    "prewater": BASE | {
+        IO + "layer_path", IO + "raw_dir", IO + "parse_chip_id",  # D-058
+        IO + "load_label", IO + "JRC_LAYER",  # D-058 (table: sealed test), D-059
+        SPLIT + "METADATA_NAME", SPLIT + "chip_ids", SPLIT + "event_of",  # D-058
+    },
 }
 
-# Entries of ALLOWED usable only from these files (paths relative to src/floodvalue). D-057.
+# Entries of ALLOWED usable only from these files (paths relative to src/floodvalue). D-059.
 FILES: dict[str, set[str]] = {
     IO + "layer_path": {"baseline/predict.py",  # S1 file name in metadata
                         "calibration/run.py",  # JRCWaterHand, diagnostic only
                         "model/eval_test.py",  # S1Hand, JRCWaterHand
                         "model/pixel/predict.py",  # S1 file name in metadata
-                        "context/s2.py"},  # S2Hand, S1Hand (D-042)
+                        "context/s2.py",  # S2Hand, S1Hand (D-042)
+                        "prewater/run.py",  # S1Hand grid (D-058)
+                        "prewater/table.py"},  # JRCWaterHand, diagnostic table (D-058)
     IO + "raw_dir": {"model/unet/loeo.py",  # WeaklyLabeled S1 (transfer experiment)
-                     "context/s2.py"},  # bucket manifest, metadata
-    IO + "JRC_LAYER": {"model/eval_test.py"},
+                     "context/s2.py",  # bucket manifest, metadata
+                     "prewater/run.py"},  # event dates from metadata (D-058)
+    IO + "JRC_LAYER": {"model/eval_test.py", "prewater/table.py"},
     SPLIT + "SPLIT_PATH": {"model/eval_test.py"},
-    SPLIT + "event_of": {"model/eval_test.py"},
+    "floodvalue.calibration.run.N_BINS": {"model/eval/core.py"},
+    SPLIT + "event_of": {"model/eval_test.py", "prewater/table.py"},
     "floodvalue.cli.main": {"model/eval_test.py", "__main__.py"},
     "floodvalue.baseline.predict": {"model/predict.py",  # METHODS registry, contracts §3
                                     "model/unet/report.py"},  # U-Net vs baseline report
 }
 
 # Module paths allowed only as a string literal in these files: a `python -m <module>` command
-# run as a subprocess (a CLI call that writes a file, D-005), never an import. D-057.
+# run as a subprocess (a CLI call that writes a file, D-005), never an import. D-059.
 CLI_ONLY: dict[str, set[str]] = {
     # D-046: `python -m floodvalue.baseline.predict --mask-only`, analysis queue of make all
     "floodvalue.baseline.predict": {"app/run.py"},

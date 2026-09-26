@@ -189,4 +189,78 @@ def fetch_rss(fetcher: Fetcher, config: dict, cursor: str | None, now: datetime 
     return items, iso(now)
 
 
-ADAPTERS = {"gdacs": fetch_gdacs, "gdelt_doc": fetch_gdelt, "rss": fetch_rss}
+# --- Copernicus EMS Rapid Mapping (bulletin: activations for floods, worldwide) ---------------
+
+CEMS_POINT = re.compile(r"POINT\s*\(\s*(-?[\d.]+)\s+(-?[\d.]+)\s*\)")
+
+
+def fetch_cems(fetcher: Fetcher, config: dict, cursor: str | None, now: datetime | None = None):
+    """Public activation list of the Rapid Mapping dashboard, newest first. Only `Flood`
+    activations inside `lookback_days` are kept; pages stop at the first older activation."""
+    now = now or datetime.now(UTC)
+    since = now - timedelta(days=config.get("lookback_days", 90))
+    url, params, items = config["endpoint"], {"limit": str(config.get("page_size", 100))}, []
+    for _ in range(int(config.get("max_pages", 3))):
+        try:
+            data = fetcher.get(url, params=params).json()
+            rows = data["results"]
+        except (ValueError, KeyError, TypeError) as exc:
+            raise FetchError(f"Copernicus EMS: неожиданный формат ответа ({exc})") from exc
+        old = False
+        for r in rows:
+            activated = _cems_time(r.get("activationTime"))
+            if activated and activated < iso(since):
+                old = True
+                break
+            if r.get("category") == "Flood" and r.get("code"):
+                items.append(cems_item(r))
+        if old or not data.get("next"):
+            break
+        url, params = data["next"], None
+    return items, iso(now)
+
+
+def cems_item(r: dict) -> dict:
+    m = CEMS_POINT.match(r.get("centroid") or "")
+    geom = None
+    if m:
+        lon, lat = float(m.group(1)), float(m.group(2))
+        if -180 <= lon <= 180 and -90 <= lat <= 90 and (lon, lat) != (0, 0):
+            geom = {"type": "Point", "coordinates": [lon, lat]}
+    countries = ", ".join(r.get("countries") or [])
+    code = r["code"]
+    return {
+        "external_id": code,
+        "url": f"https://rapidmapping.emergency.copernicus.eu/{code}/",
+        "title": f"{code}: {r.get('name') or 'Flood'}",
+        "text_excerpt": (f"Активация Copernicus EMS Rapid Mapping «{r.get('name')}» ({countries}). "
+                         f"Районов картирования: {r.get('n_aois', 0)}, продуктов: "
+                         f"{r.get('n_products', 0)}." + (" Активация закрыта." if r.get("closed") else "")),
+        "language": "en",
+        "source_domain": "rapidmapping.emergency.copernicus.eu",
+        "published_at": _cems_time(r.get("activationTime")),
+        "source_updated_at": _cems_time(r.get("lastUpdate")),
+        "structured": {
+            "kind": "bulletin",
+            "event_key": f"cems:{code}",
+            "report_type": "occurred",
+            "time": {"start": _cems_time(r.get("eventTime")), "end": None, "precision": "hour"},
+            "place": {"label": countries or None, "country": None, "geometry": geom,
+                      "precision": "region" if geom else "unknown",
+                      "note": "центроид активации Copernicus EMS" if geom else None},
+            "alert_level": None,
+            "provider": "Copernicus EMS",
+            "glide": None,
+            "gdacs_id": r.get("gdacsId"),
+        },
+    }
+
+
+def _cems_time(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    dt = datetime.fromisoformat(raw)
+    return iso(dt if dt.tzinfo else dt.replace(tzinfo=UTC))
+
+
+ADAPTERS = {"cems": fetch_cems, "gdacs": fetch_gdacs, "gdelt_doc": fetch_gdelt, "rss": fetch_rss}
