@@ -14,9 +14,11 @@ run fails.
 
 Test is sealed (D-010): `--part test` (the default of `make eval-test`) reads test chips only
 when FLOODVALUE_EVAL_TEST_CONFIRM equals the sha256 of the frozen configuration and the
-tracked code/configs are committed; every such run writes a row to
+tracked code/configs are committed, and only for the final method (predict.DEFAULT_METHOD;
+FLOODVALUE_METHOD naming a candidate is refused, D-025); every such run writes a row to
 docs/verification/test-log.md. Outputs: docs/verification/eval-<part>*.{md,csv,json,png}, for
-test — test-eval*.
+test — test-eval*; `<prefix>-qc.csv` is the per-chip pixel QC of the part (#64), computed from
+the same S1/label arrays of the loop — the only place test pixels get a QC (D-010, D-031).
 """
 
 from __future__ import annotations
@@ -115,7 +117,14 @@ def who() -> str:
 
 
 def open_test_gate() -> tuple[str, str]:
-    """Raise EvalGateError unless test may be read now; returns (config hash, commit)."""
+    """Raise EvalGateError unless test may be read now; returns (config hash, commit).
+    The method check comes first, before the hash: test opens only for the final method."""
+    method = main_method()
+    if method != main_predict.DEFAULT_METHOD:
+        raise C.EvalGateError(
+            f"test открывается только для итогового метода {main_predict.DEFAULT_METHOD!r}; "
+            f"FLOODVALUE_METHOD={method!r} — кандидат, его сравнение только на dev/validation "
+            "(D-025, D-040). Уберите FLOODVALUE_METHOD или задайте итоговый метод.")
     expected = frozen_config_hash()
     C.check_test_confirmation(os.environ.get(CONFIRM_ENV), expected)
     dirty = uncommitted_frozen_paths()
@@ -210,15 +219,15 @@ def evaluate(part: str, chips: list[str], workdir: Path, *, allow_test: bool = F
     """All numbers of the report for one part; chips in chip_id order."""
     chips = sorted(chips)
     proxy_chip = proxy_chip if proxy_chip in chips else chips[0]
-    per_chip, masks, rel, unc_hist = [], {}, {}, {}
+    per_chip, masks, rel, unc_hist, qc = [], {}, {}, {}, []
     jrc = {m: {"jrc_1": _zero(), "jrc_0": _zero()} for m in ("main", "baseline")}
     proxy_all, proxy_demo, main_meta, base_cfg = [], [], None, None
     edges = np.linspace(0.0, 1.0, 100_001)
     for chip in chips:
         event = event_of(chip)
-        s1, s1_profile = read_layer(chip, io.S1_LAYER)
-        s1 = s1.astype(np.float32)
+        s1, s1_profile = io.load_s1(chip)
         label, _ = io.load_label(chip, allow_test=allow_test)
+        qc.append({"chip_id": chip, "event": event, **C.pixel_qc(s1, label)})   # #64, same read
         jrc_layer, _ = read_layer(chip, io.JRC_LAYER)
         out = workdir / chip
         p, mask_main, main_meta = predict_main(chip, out)
@@ -268,7 +277,7 @@ def evaluate(part: str, chips: list[str], workdir: Path, *, allow_test: bool = F
         hashes[scope] = C.require_same_valid_pixels(h)
     return {"part": part, "chips": chips, "per_chip": per_chip, "events": events,
             "hashes": hashes, "reliability": rel, "uncertainty": unc_hist, "edges": edges,
-            "jrc": jrc, "proxy_chip": proxy_chip,
+            "jrc": jrc, "proxy_chip": proxy_chip, "qc": qc,
             "proxy_demo": C.proxy_rows(proxy_demo), "proxy_all": C.proxy_rows(proxy_all),
             "main_meta": main_meta, "baseline_config": base_cfg}
 
@@ -367,6 +376,10 @@ def f3(v: float) -> str:
     return f"{v:.3f}".replace(".", ",").replace("-", "−")
 
 
+def pct(v: float) -> str:
+    return "—" if v is None or not np.isfinite(v) else f"{100 * v:.2f}".replace(".", ",")
+
+
 def rub(v: float) -> str:
     return "—" if v is None or not np.isfinite(v) else f"{v:,.0f}".replace(",", " ")
 
@@ -444,7 +457,7 @@ def write_report(res: dict, out_dir: Path, workdir: Path, allow_test: bool, comm
     paths = {k: out_dir / f"{prefix}{suffix}" for k, suffix in (
         ("md", ".md"), ("csv", ".csv"), ("chips", "-chips.csv"),
         ("reliability", "-reliability.csv"), ("proxy", "-proxy.csv"), ("json", "-summary.json"),
-        ("png", "-errors.png"))}
+        ("png", "-errors.png"), ("qc", "-qc.csv"))}
     rows = metric_rows(res)
     write_csv(paths["csv"], M.METRIC_COLUMNS, rows)
     chip_rows = []
@@ -465,6 +478,7 @@ def write_report(res: dict, out_dir: Path, workdir: Path, allow_test: bool, comm
     proxy_fields = ["chip_id", "asset_id", "asset_class", "V", "q", "row", "col", "p", "y",
                     "el", "el_ref", "abs_error", "included", "reason"]
     write_csv(paths["proxy"], proxy_fields, res["proxy_all"])
+    write_csv(paths["qc"], C.QC_COLUMNS, res["qc"])
     maps = draw_error_maps(res, workdir, paths["png"], allow_test)
 
     boot = bootstraps(res)
@@ -494,6 +508,7 @@ def write_report(res: dict, out_dir: Path, workdir: Path, allow_test: bool, comm
                "valid_mask_sha256": res["hashes"], "bootstrap_delta_iou": boot,
                "calibration": cal, "uncertainty": unc, "jrc_iou": jrc,
                "proxy_check": proxy_check, "error_maps": maps,
+               "pixel_qc": C.qc_summary(res["qc"]),
                "baseline_crosscheck": baseline_crosscheck(rows, part)}
     paths["json"].write_text(json.dumps(summary, ensure_ascii=False, indent=1, default=float)
                              + "\n", encoding="utf-8")
@@ -509,7 +524,8 @@ def render_md(res, rows, s, groups, jrc_counts, calibrated, paths) -> str:
          f"Сгенерировано `python -m floodvalue eval-test --part {part}` "
          f"(commit `{s['commit'][:12]}`, {dt.date.today().isoformat()}), sha256 конфигурации "
          f"`{s['config_sha256']}`. Числа — из `{paths['csv'].name}`, `{paths['chips'].name}`, "
-         f"`{paths['reliability'].name}`, `{paths['proxy'].name}`, `{paths['json'].name}`.", ""]
+         f"`{paths['reliability'].name}`, `{paths['proxy'].name}`, `{paths['json'].name}`, "
+         f"`{paths['qc'].name}`.", ""]
     if part == "test":
         L += ["Test прочитан один раз замороженной конфигурацией; запуск записан в "
               "`docs/verification/test-log.md`.", ""]
@@ -626,6 +642,20 @@ def render_md(res, rows, s, groups, jrc_counts, calibrated, paths) -> str:
     for g in groups:
         L.append(f"| {g['group']} | {g['n_chips']} | {f3(g['iou_main'])} | "
                  f"{f3(g['iou_baseline'])} | {g['fp_main']} | {g['fn_main']} |")
+    L += ["", "## 8. Пиксельный QC чипов части (критерий 1)", "",
+          "Считается в том же цикле по чипам из тех же массивов S1 и LabelHand, без второго "
+          f"чтения; построчно — `{paths['qc'].name}`. NaN S1 — хотя бы один канал не конечен; "
+          "доли NaN и −1 — от всех пикселей; VV/VH > 0 dB — среди конечных пикселей канала; "
+          "«NaN S1 под 0/1» — пиксели с не конечным S1 и меткой 0 или 1 (исключаются маской "
+          "валидности). Доля воды — в метриках, не QC.", "",
+          "| событие | чипов | NaN S1, % | −1, % | VV > 0 dB, % | VH > 0 dB, % | "
+          "NaN S1 под 0/1, пикс. | чипов с NaN под 0/1 | чипов с NaN |",
+          "|---|---|---|---|---|---|---|---|---|"]
+    for scope, q in s["pixel_qc"].items():
+        L.append(f"| {scope} | {q['n_chips']} | {pct(q['s1_nan_share'])} | "
+                 f"{pct(q['label_invalid_share'])} | {pct(q['vv_gt0_share'])} | "
+                 f"{pct(q['vh_gt0_share'])} | {q['n_s1_nan_label_01']} | "
+                 f"{q['chips_s1_nan_label_01']} | {q['chips_with_nan']} |")
     L += ["", "## Воспроизведение", "", "```bash", "set -a; . ./.env; set +a",
           f"uv run --frozen python -m floodvalue eval-test --part {part}",
           "uv run --frozen pytest tests/eval", "```", ""]

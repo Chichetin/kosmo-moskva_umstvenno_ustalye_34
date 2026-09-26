@@ -40,6 +40,7 @@ STAGE_META = ("prediction.json", "assets_metadata.json", "procurement_metadata.j
               "procurement_sensitivity.csv")
 BASELINE_METRICS = "docs/verification/baseline-metrics.csv"
 MAIN_METRICS = "docs/verification/main-metrics.csv"  # written by the main method when it lands
+VERIFICATION_DIR = REPO_ROOT / "docs" / "verification"  # eval-<part>-summary.json, test: test-eval-summary.json (#107, #134)
 BASELINE_CONFIG = MODELS_DIR / "baseline" / "config.json"
 SPLIT_FILE = SPLITS_DIR / "split_v1.json"
 PACKAGES = ("numpy", "rasterio", "shapely", "pyproj", "pydantic", "pyyaml", "scikit-learn",
@@ -242,6 +243,13 @@ def export(chip_id: str, work: Path, dest: Path | None = None,
     main_cal_path = MODELS_DIR / str(prediction.get("method", "")) / "calibration.json"
     main_calibration = (_read_json(main_cal_path) if prediction.get("calibration")
                         and main_cal_path.is_file() else None)
+    # proxy_check: aggregated eval-test summary of the chip's part only, never labels (#107)
+    part = assemble.chip_split(split, chip_id)
+    summary_rel = assemble.eval_summary_file(part)
+    summary_path = VERIFICATION_DIR / summary_rel.rsplit("/", 1)[-1]
+    summary = _read_json(summary_path) if part != "none" and summary_path.is_file() else None
+    proxy = assemble.proxy_check(summary, summary_rel if part != "none" else "", chip_id, part,
+                                 prediction)
     budget_arg = assemble.budget_label(budget)
     reproduce = [
         f"git checkout {commit}",
@@ -264,7 +272,7 @@ def export(chip_id: str, work: Path, dest: Path | None = None,
         split_file=str(SPLIT_FILE.relative_to(REPO_ROOT)), run_config=run_config,
         uncertainty_raster="uncertainty.tif" if (dest / "uncertainty.tif").is_file() else None,
         metrics_files=metrics_files, reproduce=reproduce, versions=package_versions(),
-        warnings=warnings)
+        warnings=warnings, proxy=proxy)
     _write_json(dest / F.RUN_METADATA, meta)
     return dest
 
