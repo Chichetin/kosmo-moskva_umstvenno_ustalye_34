@@ -307,7 +307,8 @@ def test_all_stages_to_valid_result_set(env):
     _, short, _ = export_run.git_commit()
     dest = env / f"{CHIP}_5000_{short}"
     assert _failing(validate_run(dest)) == set()  # 12/12
-    for name in (F.FLOOD_PROBABILITY, F.FLOOD_MASK, F.ASSET_LOSS, F.STRATEGY_PLANS):
+    for name in (F.FLOOD_PROBABILITY, F.FLOOD_MASK, F.ASSET_LOSS, F.STRATEGY_PLANS,
+                 "baseline_mask.tif"):
         assert hashlib.sha256((dest / name).read_bytes()).digest() == \
             hashlib.sha256((work / name).read_bytes()).digest()  # copied, not recomputed
     meta = json.loads((dest / F.RUN_METADATA).read_text(encoding="utf-8"))
@@ -463,3 +464,21 @@ def test_in_place_export_when_stages_used_out(env):
     assert assets_run.run(args) == 0 and procure_run.run(args) == 0
     assert export_run.run(args) == 0
     assert _failing(validate_run(work)) == set()
+
+
+def test_set_without_baseline_mask_is_valid_but_warns(env):
+    """#115: baseline_mask.tif is optional — absent in the work dir -> absent in the set, 12/12,
+    a warning names the command that writes it; a stale copy from an earlier export is removed."""
+    work, args = _stages(env)
+    assert export_run.run(args) == 0
+    _, short, _ = export_run.git_commit()
+    dest = env / f"{CHIP}_5000_{short}"
+    assert (dest / "baseline_mask.tif").is_file()
+    meta = json.loads((dest / F.RUN_METADATA).read_text(encoding="utf-8"))
+    assert not [w for w in meta["warnings"] if "baseline_mask" in w]
+    (work / "baseline_mask.tif").unlink()
+    assert export_run.run(args) == 0
+    assert not (dest / "baseline_mask.tif").exists()
+    assert _failing(validate_run(dest)) == set()
+    meta = json.loads((dest / F.RUN_METADATA).read_text(encoding="utf-8"))
+    assert [w for w in meta["warnings"] if "baseline_mask.tif" in w and "--mask-only" in w]
