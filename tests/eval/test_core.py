@@ -169,3 +169,54 @@ def test_log_row_is_one_markdown_row():
                     "IoU 0,6\nok")
     assert row.startswith("| 2026-09-26") and row.endswith(" |") and "\n" not in row
     assert row.count("|") == 7 and "`abc`" in row
+
+
+def test_pixel_qc_counts_nan_invalid_positive_db_and_nan_under_label():
+    """#64: per-chip pixel QC of eval-test; shares over all pixels, dB > 0 over finite ones."""
+    nan = np.nan
+    vv = np.array([[nan, 1.0, -5.0, 2.0],
+                   [-3.0, -4.0, 0.0, -1.0]], np.float32)       # 0 dB is not > 0
+    vh = np.array([[nan, -20.0, nan, 3.0],
+                   [-25.0, -22.0, -21.0, -19.0]], np.float32)  # NaN only in VH at [0, 2]
+    label = np.array([[1, 0, 0, -1],
+                      [-1, 0, 1, 0]], np.int16)
+    q = C.pixel_qc(np.stack([vv, vh]), label)
+    assert q["n_pixels_total"] == 8
+    assert q["s1_nan_share"] == pytest.approx(2 / 8)            # any band non-finite
+    assert q["label_invalid_share"] == pytest.approx(2 / 8)
+    assert q["vv_gt0_share"] == pytest.approx(2 / 7)            # 1.0, 2.0 of 7 finite VV
+    assert q["vh_gt0_share"] == pytest.approx(1 / 6)            # 3.0 of 6 finite VH
+    assert q["n_s1_nan_label_01"] == 2                          # [0,0] label 1, [0,2] label 0
+    assert q["n_s1_nan"] == 2 and q["n_label_invalid"] == 2
+    assert "water_share" not in q
+
+
+def test_pixel_qc_all_nan_band_gives_nan_share_not_zero():
+    s1 = np.full((2, 3, 3), np.nan, np.float32)
+    label = np.full((3, 3), -1, np.int16)
+    q = C.pixel_qc(s1, label)
+    assert q["s1_nan_share"] == 1.0 and q["label_invalid_share"] == 1.0
+    assert math.isnan(q["vv_gt0_share"]) and math.isnan(q["vh_gt0_share"])
+    assert q["n_s1_nan_label_01"] == 0
+
+
+def test_qc_summary_pools_pixels_per_event_and_all():
+    rows = [{"event": "A", "n_pixels_total": 10, "n_s1_nan": 1, "n_label_invalid": 5,
+             "n_vv_finite": 9, "n_vv_gt0": 3, "n_vh_finite": 9, "n_vh_gt0": 0,
+             "n_s1_nan_label_01": 1},
+            {"event": "A", "n_pixels_total": 30, "n_s1_nan": 0, "n_label_invalid": 0,
+             "n_vv_finite": 30, "n_vv_gt0": 0, "n_vh_finite": 30, "n_vh_gt0": 0,
+             "n_s1_nan_label_01": 0},
+            {"event": "B", "n_pixels_total": 10, "n_s1_nan": 10, "n_label_invalid": 10,
+             "n_vv_finite": 0, "n_vv_gt0": 0, "n_vh_finite": 0, "n_vh_gt0": 0,
+             "n_s1_nan_label_01": 0}]
+    s = C.qc_summary(rows)
+    assert list(s) == ["A", "B", "ALL"]
+    a = s["A"]
+    assert a["n_chips"] == 2 and a["s1_nan_share"] == pytest.approx(1 / 40)
+    assert a["label_invalid_share"] == pytest.approx(5 / 40)
+    assert a["vv_gt0_share"] == pytest.approx(3 / 39) and a["vh_gt0_share"] == 0
+    assert a["n_s1_nan_label_01"] == 1 and a["chips_s1_nan_label_01"] == 1
+    assert a["chips_with_nan"] == 1
+    assert math.isnan(s["B"]["vv_gt0_share"])
+    assert s["ALL"]["n_chips"] == 3 and s["ALL"]["s1_nan_share"] == pytest.approx(11 / 50)
