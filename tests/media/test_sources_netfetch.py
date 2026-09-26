@@ -173,3 +173,26 @@ def test_cems_stops_at_activations_older_than_lookback(public_dns, monkeypatch):
     items, _ = fetch_cems(f, {"endpoint": "https://rapidmapping.emergency.copernicus.eu/x/",
                               "lookback_days": 1}, None, now=datetime(2026, 9, 26, tzinfo=UTC))
     assert items == []
+
+
+def test_gdelt_config_bounds_timeouts_and_retries(settings, public_dns, monkeypatch):
+    """GDELT answers slowly: its own read timeout, two attempts (each one spends the cycle
+    budget), at least 5 s between requests to its host, and a worldwide multilingual query."""
+    from floodvalue.media.config import load_sources
+    from floodvalue.media.pipeline import make_fetcher
+    cfg = next(s for s in load_sources() if s["source_id"] == "gdelt_floods")["config"]
+    f = make_fetcher({"config_json": json.dumps(cfg)}, settings, Budget(20))
+    assert f.timeout[1] >= 30 and f.attempts == 2
+    assert f.min_interval_s["api.gdeltproject.org"] >= 5
+    for word in ("flood", "наводнение", "inondation", "inundación", "Hochwasser", "banjir"):
+        assert word in cfg["query"]
+    calls = []
+
+    def slow(*a, **k):
+        calls.append(k["timeout"])
+        raise requests.ReadTimeout("slow")
+    monkeypatch.setattr(netfetch.requests, "get", slow)
+    f.sleep = lambda s: None
+    with pytest.raises(FetchError, match="сеть"):
+        f.get("https://api.gdeltproject.org/api/v2/doc/doc")
+    assert len(calls) == 2 and f.budget.used == 2 and calls[0][1] >= 30
