@@ -564,8 +564,10 @@ def validate_run(run_dir: Path, assets_config: Path | None = None,
             if r.status == "ok":
                 el_by_id[r.asset_id] = r.expected_loss_rub
                 risk_by_id[r.asset_id] = decision_risk_from_el(r.expected_loss_rub, r.p_flood)
-                expected = r.p_flood * a.asset_value_rub * a.vulnerability_coef
-                if abs(expected - r.expected_loss_rub) > EL_TOL + 1e-9 * expected:
+                # exact decimal product, ROUND_HALF_UP to the kopeck, as assets writes it
+                expected = product_half_up([r.p_flood, a.asset_value_rub, a.vulnerability_coef],
+                                           "0.01")
+                if abs(expected - r.expected_loss_rub) > MONEY_TOL:
                     report.add(name, f"{r.asset_id}: EL={r.expected_loss_rub} ≠ p·V·q={expected:.2f}")
                 if raster is not None:
                     if p_pix is None:

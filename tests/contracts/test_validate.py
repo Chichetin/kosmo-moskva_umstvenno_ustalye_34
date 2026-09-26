@@ -287,6 +287,14 @@ def test_el_not_p_v_q_fails(run_dir):
     assert "p·V·q" in only(failing(run_dir), F.ASSET_LOSS)
 
 
+@pytest.mark.parametrize("el", ["3809523.83", "3809523.81"])
+def test_el_off_by_one_kopeck_fails(run_dir, el):
+    """a02: p·V·q = 3809523.8209… → ROUND_HALF_UP 3809523.82; ±1 коп. — ошибка округления."""
+    edit_csv(run_dir / F.ASSET_LOSS, lambda rows: row(rows, asset_id="a02").update(
+        expected_loss_rub=el))
+    assert "p·V·q" in " ".join(failing(run_dir).get(F.ASSET_LOSS, []))
+
+
 def test_p_not_from_raster_fails(run_dir):
     # p taken from the mask (0/1) instead of the probability raster
     def from_mask(rows):
