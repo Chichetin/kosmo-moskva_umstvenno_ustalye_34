@@ -1023,6 +1023,38 @@ tbody tr.selected,
   overflow-wrap: anywhere;
 }
 
+.analysis-ready-notice {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100vw - 48px);
+  padding: 12px 14px;
+  border: 1px solid #ffffff2a;
+  border-radius: 10px;
+  background: #11191df2;
+  box-shadow: 0 12px 28px #0007;
+  color: #edf3f5;
+  font-size: 12px;
+}
+
+.analysis-ready-notice button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #b9d8e7;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.analysis-ready-notice .analysis-ready-dismiss {
+  display: flex;
+  color: #97a7ae;
+}
+
 .source-viewer-return {
   position: fixed;
   top: 132px;

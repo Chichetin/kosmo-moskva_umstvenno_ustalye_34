@@ -138,9 +138,15 @@ async function json<T>(url: string, signal?: AbortSignal, options?: RequestInit)
   const response = await fetch(url, { ...options, signal });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.detail ?? `Ошибка ${response.status}`);
+    throw new ApiError(body.detail ?? `Ошибка ${response.status}`, response.status);
   }
   return response.json() as Promise<T>;
+}
+class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "ApiError";
+  }
 }
 type LayerFlags = {
   s1: boolean;
@@ -195,6 +201,7 @@ export default function App() {
   const [analysisJob, setAnalysisJob] = useState<AnalysisJob | null>(null);
   const [analysisStarting, setAnalysisStarting] = useState<string | null>(null);
   const [analysisJobError, setAnalysisJobError] = useState<string | null>(null);
+  const [readyAnalysisNotice, setReadyAnalysisNotice] = useState<{ chipId: string; territory: string } | null>(null);
   const [searchOpen, setSearchOpen] = useState(() => window.innerWidth >= 700);
   const [panelOpen, setPanelOpen] = useState(true);
   const [overviewRequest, setOverviewRequest] = useState(0);
@@ -321,10 +328,16 @@ export default function App() {
   const openFinishedAnalysis = useCallback(async (finished: AnalysisJob) => {
     const updated = await json<SceneSummary[]>("/api/scenes");
     setScenes(updated);
-    if (!updated.some((item) => item.chip_id === finished.chip_id && item.run_id)) {
+    const target = updated.find((item) => item.chip_id === finished.chip_id && item.run_id);
+    if (!target) {
       throw new Error("Расчёт завершён, но результат ещё не появился в каталоге. Обновите его повторно.");
     }
-    navigate("analysis", finished.chip_id);
+    if (parseRoute().chipId === finished.chip_id) {
+      setReadyAnalysisNotice(null);
+      navigate("analysis", finished.chip_id);
+    } else {
+      setReadyAnalysisNotice({ chipId: finished.chip_id, territory: target.territory.replaceAll("-", " ") });
+    }
   }, []);
   const startAnalysis = useCallback(async (target: SceneSummary) => {
     setAnalysisStarting(target.chip_id);
@@ -364,6 +377,13 @@ export default function App() {
         }
       } catch (error) {
         if (stopped) return;
+        if (error instanceof ApiError && error.status === 404) {
+          setAnalysisJob((current) => current?.job_id === analysisJob.job_id
+            ? { ...current, status: "failed", error: "Задача потеряна после перезапуска сервера" }
+            : current);
+          setAnalysisJobError(null);
+          return;
+        }
         setAnalysisJobError(error instanceof Error ? error.message : String(error));
         timer = window.setTimeout(poll, 3000);
       }
@@ -437,8 +457,13 @@ export default function App() {
     }
     const current = analysisJob?.chip_id === target.chip_id ? analysisJob : null;
     const running = current?.status === "queued" || current?.status === "running";
+    const errorText = analysisJobError && scene?.chip_id === target.chip_id
+      ? analysisJobError : current?.status === "failed" ? current.error : null;
+    const statusText = errorText ?? (current?.status === "queued" ? "В очереди · ожидает запуска"
+      : current?.status === "running" ? `Шаг ${current.step} из ${current.steps} · ${current.step_label}`
+      : null);
     return (
-      <div className="analysis-job" role="status" aria-live="polite">
+      <div className="analysis-job">
         <button
           className="analysis-start"
           disabled={running || analysisStarting === target.chip_id}
@@ -447,11 +472,7 @@ export default function App() {
           {running ? "Анализ выполняется" : analysisStarting === target.chip_id
             ? "Отправляем запрос…" : current?.status === "failed" ? "Повторить анализ" : "Запустить анализ"}
         </button>
-        {current?.status === "queued" && <p>В очереди · ожидает запуска</p>}
-        {current?.status === "running" && (
-          <p>Шаг {current.step} из {current.steps} · {current.step_label}</p>
-        )}
-        {current?.status === "failed" && <p className="inline-error">{current.error}</p>}
+        {statusText && <p className={errorText ? "inline-error" : undefined} role="status" aria-live="polite">{statusText}</p>}
         {current?.status === "failed" && current.detail && (
           <details><summary>Подробности ошибки</summary><pre>{current.detail}</pre></details>
         )}
@@ -459,9 +480,6 @@ export default function App() {
           <button className="analysis-refresh" onClick={() => void openFinishedAnalysis(current).catch((error) => setAnalysisJobError(String(error)))}>
             Обновить результат
           </button>
-        )}
-        {analysisJobError && scene?.chip_id === target.chip_id && (
-          <p className="inline-error">{analysisJobError}</p>
         )}
       </div>
     );
@@ -708,7 +726,7 @@ export default function App() {
                     ? "Результаты модели доступны"
                     : "Исходный снимок есть; анализ не выполнен"}
               </div>
-              {scene.status === "observation_only" && !scene.fixture && renderAnalysisAction(scene)}
+              {scene.status === "observation_only" && renderAnalysisAction(scene)}
               {!scene.bounds && (
                 <p className="inline-error">
                   Геопривязка отсутствует. Снимок нельзя разместить на карте.
@@ -1044,7 +1062,7 @@ export default function App() {
                     : "Для этой сцены есть исходный S1, но расчёт объектов и плана не выполнен."
                     : "Выберите локацию слева, чтобы открыть результат или запустить расчёт."
                 )}
-                {scene?.status === "observation_only" && !scene.fixture && renderAnalysisAction(scene)}
+                {scene?.status === "observation_only" && renderAnalysisAction(scene)}
               </div>
             )}
             {activeSession && (
@@ -1341,6 +1359,20 @@ export default function App() {
             </div>
           </div>
       </main>
+      {readyAnalysisNotice && (
+        <div className="analysis-ready-notice">
+          <span role="status" aria-live="polite">Анализ {readyAnalysisNotice.territory} готов</span>
+          <button onClick={() => {
+            navigate("analysis", readyAnalysisNotice.chipId);
+            setReadyAnalysisNotice(null);
+          }}>Открыть</button>
+          <button
+            className="analysis-ready-dismiss"
+            aria-label="Закрыть уведомление"
+            onClick={() => setReadyAnalysisNotice(null)}
+          ><X size={15} /></button>
+        </div>
+      )}
     </div>
   );
 }
