@@ -85,6 +85,7 @@ ALLOWED: dict[str, set[str]] = {
     "export": BASE,
     "app": BASE | {
         "floodvalue.procurement.plan",  # contracts.md §10, D-005, D-050
+        "floodvalue.procurement.priority_plan",  # D-013: read-only scenario preview
         SPLIT + "EVENT_PARTS",  # D-050: test chips stay sealed in the catalog
     },
     "context": BASE | {

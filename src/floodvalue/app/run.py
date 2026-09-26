@@ -33,7 +33,7 @@ from PIL import Image
 
 from floodvalue.data.split import EVENT_PARTS  # exception (D-050): test sealing, as floodvalue.context
 from floodvalue.paths import REPO_ROOT, data_dir, output_dir
-from floodvalue.procurement import plan  # public contract §10
+from floodvalue.procurement import plan, priority_plan  # public contract §10
 
 STATIC_DIR = Path(__file__).parent / "static"
 REQUIRED = (
@@ -277,9 +277,14 @@ def _plan_c_saturation(run_dir: Path) -> float | None:
 
 
 @app.get("/api/plan")
-def recalculated_plan(budget: float = Query(ge=0, le=1_000_000_000), run_id: str | None = None):
+def recalculated_plan(budget: float = Query(ge=0, le=1_000_000_000), run_id: str | None = None,
+                      priority_asset_id: Annotated[list[str] | None, Query()] = None):
+    # Annotated + None: a direct call (tests) gets None, not a truthy Query object
     try:
-        return JSONResponse(jsonable_encoder(plan(_run_dir(run_id), budget)))
+        run_dir = _run_dir(run_id)
+        result = (priority_plan(run_dir, budget, priority_asset_id)
+                  if priority_asset_id else plan(run_dir, budget))
+        return JSONResponse(jsonable_encoder(result))
     except (ValueError, KeyError) as exc:
         raise HTTPException(422, str(exc)) from exc
 

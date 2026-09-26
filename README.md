@@ -262,6 +262,7 @@ make validate OUT=outputs/<chip_id>_<руб>_<commit>
 
 Метрики — `docs/verification/`. Решения — `docs/decisions.md`. Соответствие критериям —
 `docs/tz-compliance.md`.
+Обзор статей организатора и их связь с решением — `docs/research/literature.md`.
 Оригиналы условий организатора (PDF, текст, выжимка) — `docs/task/`.
 
 ### A/B/C при бюджете 5 000 руб.: что это значит для оператора

@@ -14,6 +14,7 @@ from __future__ import annotations
 import csv
 import json
 import math
+from collections.abc import Iterable
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -240,8 +241,10 @@ def _not_selected_reason(cid: str, ctx: dict[str, Any], res: dict[str, Any]) -> 
             "помещается в остаток бюджета при пересчёте всей корзины")
 
 
-def _plan(ctx: dict[str, Any], budget_rub: float, social: bool | None = None) -> dict[str, Any]:
+def _plan(ctx: dict[str, Any], budget_rub: float, social: bool | None = None,
+          priority_asset_ids: Iterable[str] = ()) -> dict[str, Any]:
     required = ctx["required"] if social is None else (ctx["social_ids"] if social else [])
+    required = sorted(set(required) | set(priority_asset_ids))
     res = strategies.compute_plan(ctx["catalog"], ctx["cov"], ctx["eligible"], ctx["loss"],
                                   Decimal(str(budget_rub)), ctx["pricing"], ctx["as_of"],
                                   other_cfg=ctx["rc"]["other_cost"], required=required)
@@ -266,6 +269,32 @@ def plan(run_dir: Path, budget_rub: float, social: bool | None = None) -> dict[s
     повторная смена бюджета не пересобирает каталог, результат тот же (#105).
     """
     return _plan(_cached_context(Path(run_dir)), budget_rub, social)
+
+
+def priority_plan(run_dir: Path, budget_rub: float, asset_ids: Iterable[str]) -> dict[str, Any]:
+    """Preview plan C with selected assets covered first; leave bundle files untouched."""
+    ctx = _cached_context(Path(run_dir))
+    assessed_ids = strategies.assessed(ctx["loss"])
+    selected_ids = sorted(set(asset_ids))
+    invalid_ids = sorted(set(selected_ids) - set(assessed_ids))
+    if invalid_ids:
+        raise ValueError(f"Объекты не найдены среди оценённых: {', '.join(invalid_ids)}")
+    baseline = _plan(ctx, budget_rub)
+    result = _plan(ctx, budget_rub, priority_asset_ids=selected_ids)
+    covered_ids = {aid for cid in result["plans"]["C"] for aid in ctx["cov"].get(cid, ())}
+    available_ids = {aid for cid in ctx["eligible"] for aid in ctx["cov"].get(cid, ())}
+    baseline_c = next(row for row in baseline["comparison"] if row["strategy"] == "C")
+    result["priority"] = {
+        "asset_ids": selected_ids,
+        "covered_asset_ids": sorted(set(selected_ids) & covered_ids),
+        "reasons": {aid: ("В зоне плана C" if aid in covered_ids else
+                          "Нет доступной к сроку зоны" if aid not in available_ids else
+                          "Не вошёл в план при этом бюджете") for aid in selected_ids},
+        "baseline_candidate_ids": baseline["plans"]["C"],
+        "baseline_data_cost_rub": baseline_c["data_cost_rub"],
+        "baseline_coverage_share": baseline_c["coverage_share"],
+    }
+    return result
 
 
 def _cell(v: Any) -> str:
@@ -445,4 +474,3 @@ def run(args) -> int:
               f"зоны {res['plans'][r['strategy']]}")
     print(f"procure: файлы в {out}")
     return 0
-

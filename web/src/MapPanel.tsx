@@ -29,6 +29,7 @@ type Props = {
   showMessages: boolean;
   overlayOpacity: number;
   selectedAsset: string | null;
+  priorityAssetIds: string[];
   selectedZone: string | null;
   active: boolean;
   overviewRequest: number;
@@ -163,6 +164,7 @@ export default function MapPanel(props: Props) {
       visibleLayers,
       overlayOpacity,
       selectedAsset,
+      priorityAssetIds,
       selectedZone,
       messages,
       showMessages,
@@ -179,6 +181,7 @@ export default function MapPanel(props: Props) {
       uncertainty: !!scene && visibleLayers.uncertainty,
       boundary: !!scene,
       assets: !!scene && visibleLayers.assets,
+      "asset-priority": !!scene && visibleLayers.assets,
       "asset-focus": !!scene && visibleLayers.assets,
       "plan-fill": !!scene,
       "plan-glow": !!scene,
@@ -225,6 +228,13 @@ export default function MapPanel(props: Props) {
         ["get", "asset_id"],
         selectedAsset ?? "",
       ]);
+    if (map.getLayer("asset-priority"))
+      map.setFilter("asset-priority", ["in", ["get", "asset_id"], ["literal", priorityAssetIds]]);
+    if (map.getLayer("asset-focus")) {
+      const focusColor = selectedAsset && priorityAssetIds.includes(selectedAsset) ? "#c4f477" : "#4D9FFF";
+      map.setPaintProperty("asset-focus", "circle-color", focusColor);
+      map.setPaintProperty("asset-focus", "circle-stroke-color", focusColor);
+    }
     if (map.getLayer("zone-focus"))
       map.setFilter("zone-focus", [
         "==",
@@ -556,6 +566,19 @@ export default function MapPanel(props: Props) {
         },
       });
       map.addLayer({
+        id: "asset-priority",
+        type: "circle",
+        source: "assets-data",
+        filter: ["==", ["get", "asset_id"], ""],
+        paint: {
+          "circle-radius": 11,
+          "circle-color": "#c4f477",
+          "circle-opacity": 0.15,
+          "circle-stroke-color": "#c4f477",
+          "circle-stroke-width": 2.5,
+        },
+      });
+      map.addLayer({
         id: "asset-focus",
         type: "circle",
         source: "assets-data",
@@ -883,6 +906,7 @@ export default function MapPanel(props: Props) {
     props.visibleLayers,
     props.overlayOpacity,
     props.selectedAsset,
+    props.priorityAssetIds,
     props.selectedZone,
     props.scene?.chip_id,
     ready,
