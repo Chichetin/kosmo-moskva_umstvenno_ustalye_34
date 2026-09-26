@@ -36,7 +36,9 @@ from floodvalue.paths import CONFIGS_DIR, MODELS_DIR, REPO_ROOT, SPLITS_DIR, dat
 COPIED = (F.FLOOD_PROBABILITY, F.FLOOD_MASK, F.ASSETS_GEOJSON, F.ASSETS_CSV, F.ASSET_LOSS,
           F.CANDIDATE_ORDERS, F.PROCUREMENT_PLAN, F.STRATEGY_PLANS, F.STRATEGY_COMPARISON)
 OPTIONAL = ("baseline_mask.tif", "uncertainty.tif", "prediction.json", "assets_metadata.json",
-            "procurement_metadata.json", "procurement_sensitivity.csv", "assets_sensitivity.csv")
+            "procurement_metadata.json", "procurement_sensitivity.csv", "assets_sensitivity.csv",
+            "pre_event_water.tif", "pre_event_water.json", "new_water_probability.tif")
+PREWATER_META = "pre_event_water.json"  # #149: written by `prewater`, read here as a file only
 STAGE_META = ("prediction.json", "assets_metadata.json", "procurement_metadata.json",
               "procurement_sensitivity.csv")
 BASELINE_METRICS = "docs/verification/baseline-metrics.csv"
@@ -251,6 +253,13 @@ def export(chip_id: str, work: Path, dest: Path | None = None,
     if not event_date:
         raise ValueError(f"в source_manifest_s1.json у {chip_id} нет observation_date (дата события)")
     manifest["sources"] += assemble.config_sources(pricing, str(event_date))
+    if (work / PREWATER_META).is_file():  # optional layer (#149): its archive scenes are inputs too
+        prewater = _read_json(work / PREWATER_META)
+        if prewater.get("status") == "ok":
+            manifest["sources"] += prewater.get("sources", [])
+        else:
+            warnings.append(f"{PREWATER_META}: слой «вода до события» не построен "
+                            f"({prewater.get('status')}): {prewater.get('warning')}")
     _write_json(dest / F.SOURCE_MANIFEST, manifest)
 
     # metrics.csv -------------------------------------------------------------------------------
