@@ -45,9 +45,9 @@
 | Сборка комплекта | `make export` | `run_metadata.json`, `sensitivity.csv` | ✅ критерий 12 (12/12 на реальном комплекте) |
 | Валидатор | `make validate` | код 0 при 12/12 | ✅ критерий 12 |
 | Перенос до заморозки (4 официальных чипа dev/validation) | `make all CHIP=<chip> BUDGET=5000` | `docs/verification/transfer-val.md` | ✅ критерии 7, 11 (12/12 на всех 4 чипах) |
-| Итоговая независимая оценка | `make eval-test --part test` | `docs/verification/test-eval.md`, `docs/verification/test-log.md` | ⬜ ещё не запускался (заморозка не наступила) |
+| Итоговая независимая оценка | `python -m floodvalue eval-test --part test` (или `make eval-test` — `--part test` по умолчанию) | `docs/verification/test-eval.md`, `docs/verification/test-log.md` | ⬜ ещё не запускался (заморозка не наступила) |
 | Интерфейс оператора | `make app` | `src/floodvalue/app/` | ⬜ критерий 19 — на этом commit только `src/floodvalue/app/__init__.py`, `python -m floodvalue app` отвечает «stage 'app' not implemented yet» (issue #83 открыт) |
-| Сквозной путь целиком | `make all CHIP=… BUDGET=…` | весь комплект `outputs/<chip>_<budget>_<commit>/` | ✅ критерий 11 (чистый клон GitVerse `6fe66f0`, `docs/verification/clean-clone-gitverse.md`) |
+| Сквозной путь целиком | `make all CHIP=… BUDGET=…` | весь комплект `outputs/<chip>_<budget>_<commit>/` | ✅ критерий 11 (чистый клон GitVerse `6d8e99d`, прогон 3, действующий статус — `docs/verification/clean-clone-gitverse.md`) |
 
 ## 3. Данные и split
 
@@ -62,9 +62,10 @@
 | test | Spain, Mekong, Bolivia | 75 | не читалась (запечатана) | одна независимая оценка, `eval-test` | D-010, D-016 |
 | excluded | 5 чипов Ghana целиком −1 | 5 | — | не используются | D-016 |
 
-- Split заморожен один раз: `splits/split_v1.json`, sha256
-  `0098346e0f87297501409a1a8522afab6209e35f56e8cf1b68996909c8b63c75`
-  (`docs/decisions.md` D-016, `docs/limitations.md` §1).
+- Split заморожен один раз: `splits/split_v1.json`, sha256 канонического JSON
+  четырёх списков (не `sha256sum` самого файла) —
+  `0098346e0f87297501409a1a8522afab6209e35f56e8cf1b68996909c8b63c75`, проверяется
+  командой `make split` (`docs/decisions.md` D-016, `docs/limitations.md` §1).
 - QC формата и md5: 446/446 чипов; пиксельный QC (доли −1/0/1, NaN, VV > 0 дБ,
   NaN × метка) — только у 371 открытых чипов (train/dev/validation/excluded); у 75
   test-чипов проверены только заголовки, sha256/md5 (`docs/verification/data-qc.md`,
@@ -102,7 +103,12 @@
 дают разброс для неопределённости (p_low/p_high, EL-размах, D-039), которого у A
 нет (`docs/decisions.md` D-040). **Кандидат A не отброшен полностью**: остаётся
 доступным через `FLOODVALUE_METHOD=pixel` как контролируемый эксперимент/сравнение
-(D-025), но не входит в сдаваемые 12 файлов по умолчанию.
+(D-025), но не входит в сдаваемые 12 файлов по умолчанию. **На validation (справочно,
+не довод выбора)** направление B ≥ A подтверждается (0,600 против 0,445 при p≥0,5),
+но у A на validation превосходство над baseline не подтверждено и даже наоборот:
+A хуже baseline (0,445 против 0,580, ΔIoU −0,135 [−0,260; −0,021]) — сеть A теряет
+recall на событии с большей долей воды сильнее, чем B
+(`docs/verification/method-selection.md` §5, `docs/verification/pixel-val.md`).
 
 ### 4.2 Baseline vs выдаваемый метод (калиброванный U-Net) на validation
 
@@ -110,7 +116,7 @@
 |---|---|---|---|
 | Baseline (порог VH ≤ −23,0 dB) | 0,391 | 0,580 | `docs/verification/baseline-val.md` |
 | U-Net-ансамбль, сырой p≥0,5 (до калибровки) | 0,584 | 0,600 [0,412; 0,722] (разница с baseline не значима, CI [−0,070; +0,078]) | `docs/verification/unet-metrics.md` |
-| **U-Net, выдаваемая конфигурация: Platt + порог 0,37** | 0,467 (калибровка на dev *ухудшает*, D-029) | **0,685** [0,050; 0,153] к baseline (значимо) | `docs/verification/calibration-val.md`, `docs/verification/eval-validation.md` §1 |
+| **U-Net, выдаваемая конфигурация: Platt + порог 0,37** | 0,467 (калибровка на dev *ухудшает*, D-029) | **0,685**; ΔIoU к baseline +0,105, 95 % CI [+0,050; +0,153] (значимо, CI разности, не самого IoU) | `docs/verification/calibration-val.md`, `docs/verification/eval-validation.md` §1 |
 
 **Официальный источник числа критерия 4 — `eval-validation.md` §1** (сравнение
 идентичной конфигурации, которая пишется в сдаваемые файлы): ALL baseline 0,580,
@@ -187,8 +193,8 @@ U-Net значимо лучше порога VH того же фолда в 4 ф
 
 | Пример | Число | Тест |
 |---|---|---|
-| EL = p·V·q, p=0,4, V=10 млн руб., q=0,25 | **EL = 1 000 000 руб.** | `tests/assets/test_portfolio.py::test_expected_loss` (строка 32) |
-| Новая гарантированная SAR 1 м, Б=788,64, О=1,2 (L2), П=1, Т=1,8, Р=1 | **1 703,46 руб./км²** | `task.md` строка 461; `tests/procurement/test_pricing.py::test_control_values_literal` |
+| EL = p·V·q, p=0,4, V=10 млн руб., q=0,25 | **EL = 1 000 000 руб.** | `tests/assets/test_portfolio.py::test_expected_loss_control_example` (строка 32) |
+| Новая гарантированная **оптика 1 м** (не SAR), Б=788,64, О=1,2 (L2), П=1, Т=1,8, Р=1 | **1 703,46 руб./км²** | `task.md` строка 459–461; `tests/procurement/test_pricing.py::test_control_values_literal` (`sensor_type="optical"`, строка 14) |
 | Тот же контур, оперативный снимок (Т=1) | **946,37 руб./км²** | там же |
 | Тот же контур, архив старше 90 дней (Т=0,6) | **567,82 руб./км²** | там же |
 | Площадь контура 0,9996 км² | **отклонён до округления** (не становится 1,000 км²) | `tests/procurement/test_geometry.py::test_09996_rejected_before_rounding` |
@@ -208,7 +214,12 @@ U-Net значимо лучше порога VH того же фолда в 4 ф
 | 2 500 | 0,00 руб., охват 0 | W-CHIP, 42 465,93 руб. — **сверх бюджета, контрфактическая** (`budget_feasible=false`) | Z-A02, `data_cost` 2 452,98 руб. (в бюджете), охват EL 46,46 % |
 | 5 000 | 0,00 руб., охват 0 | W-CHIP, 42 465,93 руб. — сверх бюджета | Z-A02 + Z-A10, `data_cost` 4 905,96 руб. (в бюджете), охват 74,87 % |
 | 20 000 | 0,00 руб., охват 0 | W-CHIP, 42 465,93 руб. — сверх бюджета | E-1, E-2, Z-A03, Z-A06, Z-A07, U-3 — **`data_cost` 15 939,51 руб., охват EL 100 %** |
-| 50 000 | 0,00 руб., охват 0 | W-CHIP, 42 465,93 руб. — теперь помещается, `budget_feasible=true` | тот же состав, что при 20 000 — план не переоткрывается, когда весь EL уже покрыт |
+| 50 000 | 0,00 руб., охват 0 | W-CHIP, 42 465,93 руб. — теперь помещается, `budget_feasible=true`* | тот же состав, что при 20 000 — план не переоткрывается, когда весь EL уже покрыт |
+
+\* Строка 50 000 не взята из `docs/verification/procurement-catalog.md` §3 (там
+приведены только 2 500/5 000/20 000/50 000 для C, а для B — правило, а не таблица
+по бюджетам): выведена из кода `strategies.py:217` (`budget_feasible = data_cost_rub
+<= budget`), где 42 465,93 ≤ 50 000 = True.
 
 **Важная честная деталь (замечание reviewer PR #102, `docs/verification/procurement-pr69-before-after.md`).**
 Бюджет по правилу ограничивает только `data_cost_rub` (цену самих зон). Отдельно
@@ -241,7 +252,7 @@ U-Net значимо лучше порога VH того же фолда в 4 ф
 - **«Карта воды», не «временное затопление»** (D-007). `LabelHand` — вся вода;
   JRCWaterHand набора, вероятно, построен по данным до 2018+ и для событий 2016–2018
   может включать «информацию из будущего» — используется только как диагностика
-  (IoU внутри/вне JRC=1 — 0,951, вне — 0,535 на validation после калибровки,
+  (IoU внутри JRC=1 — 0,951, вне — 0,535 на validation после калибровки,
   `docs/verification/calibration-val.md`), не как вход модели.
 - **Сценарная ставка, не тариф.** Б = 788,64 руб./км² — `base_rate_status=scenario`;
   редакция ПП № 840/1297 и её действующие пункты проверены по двум первоисточникам
@@ -391,10 +402,11 @@ commit `8a7ee46`, коротко и честно.
 
 ### (5) A/B/C, контрфактическая B, неопределённость
 
-10. **B стоит в 8,5 раза больше бюджета — зачем её показывать?**
+10. **B стоит 42 465,93 руб. при бюджете 5 000 руб. (≈8,5×, не число из файла —
+    отношение) — зачем её показывать?**
     Как объявленная заранее контрфактическая верхняя граница «купить всё», не план
     к исполнению — `budget_feasible=false` прямо в файле, не скрыто
-    (`docs/decisions.md` D-023, D-038).
+    (`docs/decisions.md` D-023, D-038, `docs/verification/procurement-catalog.md` §3).
 11. **У B/C `residual_uncertainty` = `scenario`, не число снижения — по какому
     критерию, кроме EL, C лучше A?**
     По другому критерию, кроме рублей, формально C не оценивается — это признанный
