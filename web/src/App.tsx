@@ -1140,6 +1140,9 @@ export default function App() {
                     </p>
                     {planError ? <p className="inline-error">{planError}</p>
                       : !currentPlan && <p role="status">Пересчитываем план…</p>}
+                    {currentPlan?.configuration_warning && (
+                      <p className="inline-error" role="status">{currentPlan.configuration_warning}</p>
+                    )}
                     <button
                       className="analysis-link"
                       onClick={() => {
@@ -1489,6 +1492,9 @@ export default function App() {
                       {renderPriorityList()}
                       {planError ? <p className="inline-error">{planError}</p>
                         : !currentPlan && <p className="analysis-plan-loading" role="status">Пересчитываем план…</p>}
+                      {currentPlan?.configuration_warning && (
+                        <p className="inline-error" role="status">{currentPlan.configuration_warning}</p>
+                      )}
                       {chosen && <div className="analysis-plan-totals">
                         <div><span>Расчёт и проверка зон</span><strong>{formatRub(chosen.other_cost_rub)}</strong></div>
                         <div><span>Полная стоимость решения</span><strong>{formatRub(chosen.decision_cost_rub)}</strong></div>
