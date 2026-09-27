@@ -1,4 +1,4 @@
-import { formatRub, formatScenarioLabel } from "./format";
+import { formatScenarioLabel } from "./format";
 import type { Session } from "./types";
 
 type Row = Session["sensitivity"][number];
@@ -44,9 +44,8 @@ const portfolioScenario = (row: Row) => row.strategy === "A" && /^[pVq]_portfoli
 const scenarioResult = (row: Row) => row.strategy === "A"
   ? scenarioInputs(row).portfolio_expected_loss_rub : row.covered_expected_loss_rub;
 
-export default function SensitivityPanel({ rows, baseBudget, baseLoss }: {
+export default function SensitivityPanel({ rows, baseLoss }: {
   rows: Session["sensitivity"];
-  baseBudget: number;
   baseLoss: number | null;
 }) {
   const planRows = rows.filter(planScenario);
@@ -57,9 +56,6 @@ export default function SensitivityPanel({ rows, baseBudget, baseLoss }: {
         <h2>Проверка устойчивости</h2>
         <span>Готовые сценарии комплекта</span>
       </div>
-      <p className="sensitivity-intro">
-        Отправная точка расчётов — исходный бюджет {formatRub(baseBudget)}. Строки бюджета показывают его отдельные варианты; ввод бюджета в панели плана не меняет сохранённые сценарии.
-      </p>
       <div className="sensitivity-section">
         <h3>Бюджет и ставка съёмки → план C</h3>
         <p>Охваченный ущерб — сумма оценок объектов в выбранных зонах, не предотвращённый ущерб. Полная стоимость включает данные, расчёт и проверку зон.</p>

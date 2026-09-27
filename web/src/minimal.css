@@ -1717,10 +1717,8 @@ html {
 .search-toggle > span:first-child { white-space: nowrap; }
 .search-panel li, .search-panel button { white-space: nowrap; }
 
-.sensitivity-panel .sensitivity-intro,
 .sensitivity-panel .sensitivity-section,
 .sensitivity-panel .sensitivity-all { padding: 1.125rem 1.375rem; }
-.sensitivity-panel .sensitivity-intro { margin: 0; color: #afbbc0; font-size: 0.875rem; line-height: 1.5; }
 .sensitivity-panel .sensitivity-section,
 .sensitivity-panel .sensitivity-all { border-top: 1px solid #ffffff18; }
 .sensitivity-panel .sensitivity-section h3 { margin: 0 0 0.375rem; color: #edf3f5; font-size: 1.0625rem; font-weight: 620; }
@@ -1745,7 +1743,6 @@ html {
 .sensitivity-panel .sensitivity-empty { color: #aab8be; }
 
 @media (max-width: 700px) {
-  .sensitivity-panel .sensitivity-intro,
   .sensitivity-panel .sensitivity-section,
   .sensitivity-panel .sensitivity-all { padding: 1rem 0.875rem; }
 }

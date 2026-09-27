@@ -75,8 +75,7 @@
   padding: 0 1.375rem 0.875rem;
 }
 
-.mp-actions button,
-.mp-actions a {
+.mp-actions button {
   display: inline-flex;
   align-items: center;
   gap: 0.4375rem;
@@ -93,8 +92,7 @@
   cursor: pointer;
 }
 
-.mp-actions button:hover,
-.mp-actions a:hover {
+.mp-actions button:hover {
   border-color: #ffffff44;
 }
 

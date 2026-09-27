@@ -15,6 +15,8 @@ export default function RiskMatrix({ assets, selected, onSelect, name, entropy }
   const missing = assets.filter(a => !riskAsset(a));
   const max = Math.max(1, ...points.map(a => a.loss));
   const focus = points.find(p => p.id === (hovered ?? selected));
+  const focusX = focus ? 72 + focus.probability * 548 : 0;
+  const focusY = focus ? 274 - focus.loss / max * 232 : 0;
   return <section className="risk-matrix" aria-labelledby="risk-matrix-title">
     <div className="card-title"><h2 id="risk-matrix-title">Карта рисков объектов</h2></div>
     <p className="risk-intro">Вероятность воды и потери при её наличии. Выберите объект, чтобы связать оценку с таблицей и картой.</p>
@@ -39,14 +41,19 @@ export default function RiskMatrix({ assets, selected, onSelect, name, entropy }
             onClick={() => onSelect(a.id)} onMouseEnter={() => setHovered(a.id)} onMouseLeave={() => setHovered(null)}
             onFocus={() => setHovered(a.id)} onBlur={() => setHovered(null)}
             onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(a.id); } }}>
-            <title>{label}</title><circle r="16" className="risk-point-hit" /><circle r="7" fill={color} />
-            {(selected === a.id || hovered === a.id) && <text x={a.probability > .85 ? -12 : 12} y="-10" textAnchor={a.probability > .85 ? "end" : "start"}>{a.id}</text>}
+            <circle r="16" className="risk-point-hit" /><circle r="7" fill={color} />
           </g>;
         })}
+        {focus && <text className="risk-point-label" aria-hidden="true"
+          x={focusX + (focus.probability > .75 ? -12 : 12)}
+          y={focusY + (focusY < 68 ? 27 : -14)}
+          textAnchor={focus.probability > .75 ? "end" : "start"}>
+          {name(focus.feature)} · {focus.id}
+        </text>}
       </svg>
       <div className="risk-legend">{entropy ? <><i />Неопределённость карты: от 0 до 1 бита · серый — нет оценки</> : "Цвет нейтральный: показатель не является энтропией в битах."}</div>
       <div className="risk-object-list" aria-label="Выбрать объект на диаграмме">{points.map(a => <button key={a.id} aria-pressed={selected === a.id} onClick={() => onSelect(a.id)}>{a.id} · {name(a.feature)}</button>)}</div>
-      <p className="risk-readout" aria-live="polite">{focus ? <><strong>{name(focus.feature)} · {focus.id}</strong> · p {formatProbability(focus.probability)} · V × q {formatRub(focus.loss)} · ожидаемый ущерб {formatRub(focus.feature.properties.expected_loss_rub)} · неопределённость {finiteNumber(focus.feature.properties.uncertainty) == null ? "не оценена" : formatNumber(focus.feature.properties.uncertainty, 3)}</> : "Потери при наличии воды отличаются от ожидаемого ущерба: последний учитывает вероятность."}</p>
+      {focus && <p className="risk-readout" aria-live="polite"><strong>{name(focus.feature)} · {focus.id}</strong> · p {formatProbability(focus.probability)} · V × q {formatRub(focus.loss)} · ожидаемый ущерб {formatRub(focus.feature.properties.expected_loss_rub)} · неопределённость {finiteNumber(focus.feature.properties.uncertainty) == null ? "не оценена" : formatNumber(focus.feature.properties.uncertainty, 3)}</p>}
     </> : <p className="risk-intro">Нет оценённых объектов для диаграммы.</p>}
     {missing.length > 0 && <div className="risk-missing"><strong>Вне диаграммы: недостаточно данных</strong><div>{missing.map(a => <button key={String(a.properties.asset_id)} onClick={() => onSelect(String(a.properties.asset_id))}>{name(a)} · {String(a.properties.asset_id)}</button>)}</div></div>}
   </section>;
