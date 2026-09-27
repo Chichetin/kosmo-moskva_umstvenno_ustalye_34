@@ -36,10 +36,12 @@ check: test hooks-test validate   ## полный прогон перед push
 site:            ## один адрес: оператор /, форма очевидца /report, СМИ /media и /api/media (#174); OUT=<комплект>
 	uv run --frozen python scripts/serve_site.py $(if $(OUT),--out $(OUT))
 
+app: site        ## локальный запуск демо со всеми модулями
+
 web:             ## пересобрать React-бандл; для make app Node не требуется
 	cd web && npm ci && npm run build
 
-data split baseline calibrate predict assets procure export validate app eval-test:
+data split baseline calibrate predict assets procure export validate eval-test:
 	$(PY) $@ $(STAGE_ARGS)
 
 release:            ## архивы комплекта OUT и models/ + SHA256SUMS для релиза GitVerse (#85); TAG=<тег> — загрузить

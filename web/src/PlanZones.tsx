@@ -154,13 +154,16 @@ export default function PlanZones(props: Props) {
         </figure>
         {chosen.length > 0 && (
           <div className="plan-zones-grid">
-            {chosen.map((zone) => {
+            {chosen.map((zone, index) => {
               const id = String(zone.properties.candidate_id);
               const inside = props.assets
                 .filter((asset) => pointInZone(asset, zone))
                 .sort((a, b) => Number(b.properties.expected_loss_rub || 0) - Number(a.properties.expected_loss_rub || 0));
               const loss = inside.reduce((sum, asset) => sum + Number(asset.properties.expected_loss_rub || 0), 0);
-              const reason = plan?.reasons.C[id];
+              const earlier = new Set(chosen.slice(0, index).flatMap((previous) =>
+                props.assets.filter((asset) => pointInZone(asset, previous)).map((asset) => String(asset.properties.asset_id))));
+              const added = inside.filter((asset) => !earlier.has(String(asset.properties.asset_id)));
+              const addedLoss = added.reduce((sum, asset) => sum + Number(asset.properties.expected_loss_rub || 0), 0);
               return (
                 <article key={id} className={`plan-zone ${props.selectedZone === id ? "active" : ""}`}>
                   <button className="plan-zone-picture" onClick={() => props.onSelectZone(id)} aria-label={`Выбрать зону ${id}`}>
@@ -177,12 +180,14 @@ export default function PlanZones(props: Props) {
                       {zone.properties.resolution_m != null && ` ${formatNumber(zone.properties.resolution_m, 1)} м`}
                     </small>
                     {inside.length ? (
-                      <ul>
+                      <ul className="plan-zone-assets">
                         {inside.map((asset) => (
                           <li key={String(asset.properties.asset_id)}>
-                            <span>{props.assetName(asset)} <em>{String(asset.properties.asset_id)}</em></span>
-                            <span>p {formatProbability(asset.properties.p_flood)}</span>
-                            <span>{formatRub(asset.properties.expected_loss_rub)}</span>
+                            <strong>{props.assetName(asset)} <em>{String(asset.properties.asset_id)}</em></strong>
+                            <div className="plan-zone-asset-facts">
+                              <span><small>Вероятность воды</small><b>{formatProbability(asset.properties.p_flood)}</b></span>
+                              <span><small>Ожидаемый ущерб</small><b>{formatRub(asset.properties.expected_loss_rub)}</b></span>
+                            </div>
                           </li>
                         ))}
                       </ul>
@@ -190,12 +195,15 @@ export default function PlanZones(props: Props) {
                       <small>Объектов портфеля в зоне нет</small>
                     )}
                     {inside.length > 1 && (
-                      <small className="plan-zone-sum">Ожидаемый ущерб в зоне {formatRub(loss)}</small>
+                      <div className="plan-zone-sum"><span>Ожидаемый ущерб в зоне</span><strong>{formatRub(loss)}</strong></div>
                     )}
-                    {reason && (
-                      <details>
+                    {added.length > 0 && (
+                      <details className="plan-zone-details">
                         <summary>Почему в плане</summary>
-                        <p>{reason}</p>
+                        <div className="plan-zone-reason">
+                          <p>На шаге {index + 1} зона добавляет к плану {added.map((asset) => String(asset.properties.asset_id)).join(", ")}.</p>
+                          <p>Ожидаемый ущерб этих объектов — {formatRub(addedLoss)}. Зона укладывается в бюджет и доступна к сроку решения.</p>
+                        </div>
                       </details>
                     )}
                   </div>

@@ -141,12 +141,10 @@ export default function NewsPanel({
       fetch("/api/media/news?limit=200", { credentials: "same-origin" })
         .then(async (response) => {
           if (response.status === 404) {
-            throw new Error("Модуль сообщений СМИ не запущен. Запустите интерфейс командой make site "
-              + "(оператор, форма очевидца и сообщения на одном адресе).");
+            throw new Error("Новости сейчас недоступны. Попробуйте обновить страницу позже.");
           }
           if (response.status === 401 || response.status === 403) {
-            throw new Error("Список новостей закрыт на этом сервере: войдите на странице "
-              + "/media/analyst или откройте интерфейс локально.");
+            throw new Error("Новости сейчас недоступны. Обратитесь к администратору.");
           }
           if (!response.ok) throw new Error(`Не удалось загрузить новости (${response.status}).`);
           return response.json() as Promise<Feed>;
@@ -245,10 +243,7 @@ export default function NewsPanel({
         {error && <p className="news-note">{error}</p>}
         {!error && !items && <p className="news-note">Загружаем новости…</p>}
         {items && !items.length && (
-          <p className="news-note">
-            Сообщений пока нет: источники ещё не опрашивались. Сбор — python -m floodvalue.media ingest,
-            демо-набор — python -m floodvalue.media demo.
-          </p>
+          <p className="news-note">Сообщений пока нет.</p>
         )}
         {items && items.length > 0 && !shown.length && <p className="news-note">В этом фильтре сообщений нет.</p>}
         {shown.map((item) => {
@@ -328,8 +323,7 @@ export default function NewsPanel({
       </div>
 
       <p className="news-foot">
-        Сообщения — повод проверить территорию. В вероятность воды, ущерб и план съёмки не входят.{" "}
-        <a href="/media/pipeline" target="_blank" rel="noopener noreferrer">Как модуль читает СМИ</a>
+        Сообщения — повод проверить территорию. В вероятность воды, ущерб и план съёмки не входят.
       </p>
     </aside>
   );

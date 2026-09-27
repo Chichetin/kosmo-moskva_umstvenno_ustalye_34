@@ -34,7 +34,8 @@ uv run --frozen python -m floodvalue.media worker    # фоновый сбор, 
 Без токена аналитика всё открыто только с этой машины (loopback). Разработка фронта:
 `cd web && npm run dev`, Vite проксирует `/api`, `/report` и `/media` на `:8000`.
 
-`make app` работает как прежде: только интерфейс оператора, без СМИ.
+`make app` запускает тот же общий локальный сайт, что и `make site`.
+Отдельно операторский API запускается через `uv run --frozen python -m floodvalue app`.
 
 ## Сервер
 

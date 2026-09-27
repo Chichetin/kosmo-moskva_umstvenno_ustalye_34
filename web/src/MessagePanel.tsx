@@ -165,7 +165,6 @@ export default function MessagePanel({
   const title = message.kind === "report"
     ? report?.category_label ?? String(p.category_label ?? "Обращение очевидца")
     : card?.event.title ?? String(p.title ?? "Сообщение");
-  const analystLink = `/media/analyst#${message.kind}=${encodeURIComponent(message.id)}`;
 
   return (
     <aside className="message-panel" aria-label="Содержание сообщения">
@@ -187,10 +186,6 @@ export default function MessagePanel({
           <LocateFixed size={16} />
           Приблизить к месту
         </button>
-        <a href={analystLink} target="_blank" rel="noopener noreferrer">
-          <ExternalLink size={16} />
-          Открыть в модерации
-        </a>
       </div>
 
       <p className="mp-note">{NOT_IN_MODEL}</p>

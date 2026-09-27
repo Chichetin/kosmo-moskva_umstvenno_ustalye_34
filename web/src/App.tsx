@@ -1327,11 +1327,6 @@ export default function App() {
                   assetName={assetName}
                   observationDate={date(scene?.observation_date ?? activeSession.observation_date)}
                 />
-                <div className="operator-context">
-                  <strong>Учебный портфель · {assets.length} объектов</strong>
-                  <p>Стоимость и уязвимость заданы сценарием. Карта показывает воду, включая постоянную; ожидаемый ущерб не является подтверждёнными потерями.</p>
-                  <p>Срок решения: <strong>{dateTimeUtc(activeSession.metadata.budget.decision_deadline)}</strong>. Цены и сроки получения дополнительных снимков сценарные.</p>
-                </div>
                 {unassessed.length > 0 && <div className="risk-missing" role="status">
                   <strong>Требуют проверки: недостаточно данных · {unassessed.length}</strong>
                   <p>Состояние неизвестно. Эти объекты не входят в оценённый ущерб и сценарные суммы; проверьте их осмотром или дополнительным снимком.</p>
@@ -1347,28 +1342,18 @@ export default function App() {
                       <summary>Что означает неопределённость карты?</summary>
                       {entropy ? (<>
                       <p>
-                        Насколько модель сомневается, есть ли вода в точке объекта. Считается по
-                        вероятности воды p (энтропия, в битах от 0 до 1): 0 — модель уверена
-                        (p около 0 или 1), 1 — не знает (p = 50 %).
+                        Неопределённость показывает, насколько модель уверена в наличии воды у объекта.
+                        0 бит — уверена, что вода есть или её нет; 1 бит — вероятность воды около 50 %.
                       </p>
                       <p>
-                        Высокая неопределённость — повод подтвердить объект осмотром или
-                        дополнительным снимком; снимок там может изменить решение «ехать / не ехать», поэтому такие объекты чаще попадают в план съёмки C (он выбирает по цене ошибки решения).
+                        Чем выше значение, тем полезнее проверить объект на месте или новым снимком.
+                        Показатель не подтверждает затопление и не оценивает ущерб.
                       </p>
-                      <p>
-                        Диапазон вероятности по пяти моделям ансамбля (от минимума до максимума) показывает, как
-                        сильно они расходятся; если порог маски попадает внутрь диапазона, маска в
-                        точке неустойчива.
-                      </p>
-                      <p>Это свойство карты воды в точке объекта: оно не подтверждает затопление и не показывает ущерб.</p>
                       </>) : (<>
                         <p>{activeSession.metadata.uncertainty?.meaning ?? "Методика неопределённости не указана в комплекте."}</p>
                         {activeSession.metadata.uncertainty?.units && <p>Единицы: {activeSession.metadata.uncertainty.units}.</p>}
                       </>)}
                     </details>
-                    <div className="inspection-controls">
-                      {inspection.size > 0 ? <><button className={assetSort.key === "inspection" ? "active" : ""} onClick={() => setAssetSort({ key: "inspection", descending: false })}>По очередности осмотра</button><details><summary>Правило осмотра</summary><p>{inspectionPriority?.rule}</p></details></> : <p>Рекомендации осмотра не сохранены в этом комплекте. Для сравнения доступны сортировки по ущербу и вероятности; это не готовое решение о выезде.</p>}
-                    </div>
                     <div className="table-scroll">
                       <table>
                         <thead>
@@ -1649,7 +1634,6 @@ export default function App() {
                 </div>
                 <SensitivityPanel
                   rows={activeSession.sensitivity}
-                  baseBudget={activeSession.metadata.budget.budget_rub}
                   baseLoss={totalLoss}
                 />
               </div>
