@@ -219,6 +219,10 @@ NaN/Inf; GeoJSON — WGS 84, [долгота, широта]. Дополните�
 
 `threshold` — порог основного метода (mask = 1 ⇔ p ≥ threshold, сравнение в float64
 значения float32), равен `methods.main.threshold`. `source.s1_files` содержит S1 чипа.
+Новые комплекты записывают `config_sha256` с SHA-256 файлов `configs/run.yaml` и
+`configs/pricing.yaml` на момент сборки. `/api/plan` сравнивает их с текущими файлами и
+возвращает `configuration_warning`, если расчёт может разойтись с файлами комплекта;
+для старых комплектов без отпечатков сообщает, что совпадение не проверено.
 Каждый файл `metrics.files` существует; `metrics.csv` (§7) содержит строки `baseline` и
 `main`, и в каждой паре (`split`, `event`) у них один `valid_mask_sha256` (критерий 12:
 «метрики двух методов»; ошибки приписываются `run_metadata.json`).

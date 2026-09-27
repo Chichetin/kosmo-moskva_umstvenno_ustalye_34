@@ -105,6 +105,7 @@ export type Comparison = {
 };
 
 export type Plan = {
+  configuration_warning?: string | null;
   priority?: {
     asset_ids: string[];
     covered_asset_ids: string[];

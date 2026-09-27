@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
 import math
@@ -32,7 +33,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
 from floodvalue.data.split import EVENT_PARTS  # exception (D-050): test sealing, as floodvalue.context
-from floodvalue.paths import REPO_ROOT, data_dir, output_dir
+from floodvalue.paths import CONFIGS_DIR, REPO_ROOT, data_dir, output_dir
 from floodvalue.procurement import plan, priority_plan  # public contract §10
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -284,9 +285,27 @@ def recalculated_plan(budget: float = Query(ge=0, le=1_000_000_000), run_id: str
         run_dir = _run_dir(run_id)
         result = (priority_plan(run_dir, budget, priority_asset_id)
                   if priority_asset_id else plan(run_dir, budget))
+        result["configuration_warning"] = _configuration_warning(run_dir)
         return JSONResponse(jsonable_encoder(result))
     except (ValueError, KeyError) as exc:
         raise HTTPException(422, str(exc)) from exc
+
+
+def _configuration_warning(run_dir: Path) -> str | None:
+    """Warn when the live configs used by plan() differ from those of the saved bundle."""
+    metadata = _json(run_dir / "run_metadata.json")
+    saved = metadata.get("config_sha256")
+    if not isinstance(saved, dict):
+        return "У комплекта нет отпечатков конфигурации: совпадение плана с файлами не проверено."
+    changed = []
+    for name in ("run.yaml", "pricing.yaml"):
+        path = CONFIGS_DIR / name
+        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != saved.get(name):
+            changed.append(f"configs/{name}")
+    if changed:
+        return ("Конфигурация изменилась после сборки комплекта (" + ", ".join(changed)
+                + "): пересчитанный план может отличаться от файлов комплекта.")
+    return None
 
 
 def _rgba(layer: str, values: np.ndarray, valid: np.ndarray) -> np.ndarray:

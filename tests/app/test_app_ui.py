@@ -13,7 +13,7 @@ from rasterio.transform import from_origin
 from rasterio.warp import transform
 
 from floodvalue.app import run
-from floodvalue.paths import REPO_ROOT
+from floodvalue.paths import CONFIGS_DIR, REPO_ROOT
 
 
 def _synthetic_s1_manifest(tmp_path, monkeypatch):
@@ -52,6 +52,39 @@ def test_budget_changes_plan_without_writing_rasters(tmp_path, monkeypatch):
     assert high["comparison"][2]["data_cost_rub"] <= 5000
     assert high["plans"]["C"] != low["plans"]["C"]
     assert before == {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in protected}
+
+
+def test_plan_warns_when_pricing_changed_after_bundle_creation(tmp_path, monkeypatch):
+    from floodvalue import contracts
+    from floodvalue.procurement import pricing
+
+    bundle = tmp_path / "bundle"
+    shutil.copytree(REPO_ROOT / "tests" / "fixtures" / "good", bundle)
+    monkeypatch.setenv("FLOODVALUE_APP_RUN_DIR", str(bundle))
+    _synthetic_s1_manifest(tmp_path, monkeypatch)
+    configs = tmp_path / "configs"
+    configs.mkdir()
+    for name in ("run.yaml", "pricing.yaml"):
+        shutil.copy(CONFIGS_DIR / name, configs / name)
+    monkeypatch.setattr(run, "CONFIGS_DIR", configs, raising=False)
+    monkeypatch.setattr(contracts, "CONFIGS_DIR", configs)
+    monkeypatch.setattr(pricing, "DEFAULT_CONFIG", configs / "pricing.yaml")
+    metadata_path = bundle / "run_metadata.json"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["config_sha256"] = {
+        name: hashlib.sha256((configs / name).read_bytes()).hexdigest()
+        for name in ("run.yaml", "pricing.yaml")
+    }
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+
+    same = json.loads(run.recalculated_plan(5000).body)
+    assert same["configuration_warning"] is None
+
+    pricing_path = configs / "pricing.yaml"
+    pricing_path.write_text(pricing_path.read_text(encoding="utf-8").replace(
+        "rub_per_km2: 788.64", "rub_per_km2: 900.00"), encoding="utf-8")
+    changed = json.loads(run.recalculated_plan(5000).body)
+    assert "pricing.yaml" in changed["configuration_warning"]
 
 
 def test_scene_catalog_and_selected_run_stay_consistent(tmp_path, monkeypatch):

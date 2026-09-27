@@ -366,6 +366,9 @@ def export(chip_id: str, work: Path, dest: Path | None = None,
         uncertainty_raster="uncertainty.tif" if (dest / "uncertainty.tif").is_file() else None,
         metrics_files=metrics_files, reproduce=reproduce, versions=package_versions(),
         warnings=warnings, proxy=proxy)
+    meta["config_sha256"] = {
+        name: _sha256(CONFIGS_DIR / name) for name in ("run.yaml", "pricing.yaml")
+    }
     _write_json(dest / F.RUN_METADATA, meta)
     return dest
 

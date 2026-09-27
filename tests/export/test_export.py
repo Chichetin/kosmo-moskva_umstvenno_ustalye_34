@@ -21,7 +21,7 @@ from floodvalue.contracts import load_run_config
 from floodvalue.export import assemble
 from floodvalue.export import run as export_run
 from floodvalue.export.validate import validate_run
-from floodvalue.paths import MODELS_DIR, SPLITS_DIR
+from floodvalue.paths import CONFIGS_DIR, MODELS_DIR, SPLITS_DIR
 from floodvalue.procurement import run as procure_run
 
 CHIP = "Fixture_000001"
@@ -338,6 +338,10 @@ def test_all_stages_to_valid_result_set(env):
         assert hashlib.sha256((dest / name).read_bytes()).digest() == \
             hashlib.sha256((work / name).read_bytes()).digest()  # copied, not recomputed
     meta = json.loads((dest / F.RUN_METADATA).read_text(encoding="utf-8"))
+    assert meta["config_sha256"] == {
+        name: hashlib.sha256((CONFIGS_DIR / name).read_bytes()).hexdigest()
+        for name in ("run.yaml", "pricing.yaml")
+    }
     pred = json.loads((work / "prediction.json").read_text(encoding="utf-8"))
     assert meta["run_id"] == dest.name and meta["chip_id"] == CHIP
     assert meta["threshold"] == pred["threshold"] == meta["methods"]["main"]["threshold"]
